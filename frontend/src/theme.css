@@ -1,0 +1,135 @@
+/* ============ LIGHT MODE (PADRÃO) ============ */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+  
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  
+  --border-color: #e5e7eb;
+  --border-light: #f3f4f6;
+  
+  --accent-primary: #10b981;
+  --accent-secondary: #3b82f6;
+  --accent-danger: #ef4444;
+  --accent-warning: #f59e0b;
+  --accent-info: #06b6d4;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============ DARK MODE ============ */
+:root.dark-mode {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  
+  --border-color: #334155;
+  --border-light: #1e293b;
+  
+  --accent-primary: #10b981;
+  --accent-secondary: #60a5fa;
+  --accent-danger: #f87171;
+  --accent-warning: #fbbf24;
+  --accent-info: #22d3ee;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+}
+
+/* ============ APLICAR TEMA GLOBALMENTE ============ */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: var(--transition);
+}
+
+/* Componentes comuns */
+.card,
+.modal,
+.sidebar,
+.navbar {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.input,
+.select,
+.textarea {
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.button-primary {
+  background-color: var(--accent-primary);
+  color: white;
+}
+
+.button-secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-tertiary {
+  color: var(--text-tertiary);
+}
+
+.border {
+  border-color: var(--border-color);
+}
+
+/* ============ RECHARTS DARK MODE ============ */
+:root.dark-mode .recharts-surface {
+  background-color: transparent !important;
+}
+
+:root.dark-mode .recharts-text {
+  fill: var(--text-secondary) !important;
+}
+
+:root.dark-mode .recharts-cartesian-axis-line {
+  stroke: var(--border-color) !important;
+}
+
+:root.dark-mode .recharts-cartesian-axis-tick-line {
+  stroke: var(--border-color) !important;
+}
+
+/* ============ SMOOTH TRANSITIONS ============ */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+input,
+select,
+textarea,
+button {
+  transition: all 0.2s ease;
+}
