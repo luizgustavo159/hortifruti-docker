@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./animations.css";
 import { Login } from "./pages/Login";
 import { Caixa } from "./pages/Caixa";
+import { CaixaFocusMode } from "./pages/CaixaFocusMode";
 import { Estoque } from "./pages/Estoque";
 import { Descontos } from "./pages/Descontos";
 import { AdminDashboard } from "./pages/AdminDashboard";
@@ -62,6 +63,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Caixa />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/caixa/focus"
+          element={
+            <ProtectedRoute>
+              <CaixaFocusMode />
             </ProtectedRoute>
           }
         />

@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import "./Caixa.css";
 
 export function Caixa() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -159,6 +161,15 @@ export function Caixa() {
     <PageShell
       title="Frente de Caixa"
       subtitle="Ponto de Venda - Registre vendas em tempo real"
+      actions={
+        <button 
+          className="btn-focus-mode" 
+          onClick={() => navigate('/caixa/focus')}
+          title="Modo Foco - Tela Cheia"
+        >
+          🎯 Modo Foco
+        </button>
+      }
     >
       <div className="pos-container">
         {/* Seção de Produtos */}
