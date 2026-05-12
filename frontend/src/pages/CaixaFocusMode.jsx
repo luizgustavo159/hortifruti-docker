@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import './CaixaFocusMode.css';
@@ -6,24 +6,17 @@ import './CaixaFocusMode.css';
 export function CaixaFocusMode() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
+  const [discounts, setDiscounts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayment, setSelectedPayment] = useState('dinheiro');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   useEffect(() => {
-    loadProducts();
-    // Tentar entrar em modo tela cheia
-    const enterFullscreen = async () => {
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        }
-      } catch (err) {
-        console.warn('Fullscreen não disponível:', err);
-      }
-    };
+    loadData();
     enterFullscreen();
 
     // Atalhos de teclado
@@ -43,21 +36,36 @@ export function CaixaFocusMode() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  const loadProducts = async () => {
+  const enterFullscreen = async () => {
     try {
-      const data = await apiFetch('/api/products');
-      setProducts(Array.isArray(data) ? data : []);
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen().catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Fullscreen não disponível:', err);
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      const [productsData, discountsData] = await Promise.all([
+        apiFetch('/api/products'),
+        apiFetch('/api/discounts'),
+      ]);
+      setProducts(Array.isArray(productsData) ? productsData : []);
+      setDiscounts(Array.isArray(discountsData) ? discountsData : []);
       setError('');
     } catch (err) {
-      console.error('Erro ao carregar produtos:', err);
-      setError('Erro ao carregar produtos');
+      console.error('Erro ao carregar dados:', err);
+      setError('Erro ao carregar dados do sistema');
       setProducts([]);
+      setDiscounts([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddToCart = (product) => {
+  const handleAddToCart = useCallback((product) => {
     const existing = cart.find((item) => item.id === product.id);
     if (existing) {
       setCart(
@@ -68,9 +76,9 @@ export function CaixaFocusMode() {
         )
       );
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, { ...product, quantity: 1, discount_id: null }]);
     }
-  };
+  }, [cart]);
 
   const handleRemoveFromCart = (productId) => {
     setCart(cart.filter((item) => item.id !== productId));
@@ -89,33 +97,82 @@ export function CaixaFocusMode() {
     }
   };
 
+  const handleApplyDiscount = (itemId, discountId) => {
+    setCart(
+      cart.map((item) =>
+        item.id === itemId
+          ? { ...item, discount_id: discountId === item.discount_id ? null : discountId }
+          : item
+      )
+    );
+  };
+
+  const calculateItemDiscount = (item) => {
+    if (!item.discount_id) return 0;
+    const discount = discounts.find((d) => d.id === item.discount_id);
+    if (!discount) return 0;
+
+    const itemTotal = item.price * item.quantity;
+    if (discount.type === 'percent') {
+      return itemTotal * (discount.value / 100);
+    } else if (discount.type === 'fixed') {
+      return Math.min(discount.value, itemTotal);
+    }
+    return 0;
+  };
+
+  const calculateTotal = () => {
+    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  };
+
+  const calculateTotalDiscount = () => {
+    return cart.reduce((sum, item) => sum + calculateItemDiscount(item), 0);
+  };
+
+  const total = calculateTotal();
+  const totalDiscount = calculateTotalDiscount();
+  const finalTotal = total - totalDiscount;
+
   const handleFinalizeSale = async () => {
     if (cart.length === 0) {
-      alert('Carrinho vazio!');
+      setError('Carrinho vazio!');
+      setTimeout(() => setError(''), 3000);
       return;
     }
 
-    try {
-      const saleData = {
-        items: cart.map((item) => ({
-          product_id: item.id,
-          quantity: item.quantity,
-          unit_price: item.price,
-        })),
-        payment_method: selectedPayment,
-        total: calculateTotal(),
-      };
+    setProcessingPayment(true);
+    setError('');
+    setSuccessMessage('');
 
-      await apiFetch('/api/sales', { 
-        method: 'POST', 
-        body: JSON.stringify(saleData) 
+    try {
+      const saleItems = cart.map((item) => ({
+        product_id: item.id,
+        quantity: item.quantity,
+        discount_id: item.discount_id,
+      }));
+
+      const response = await apiFetch('/api/sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: saleItems,
+          payment_method: selectedPayment,
+        }),
       });
-      alert('Venda finalizada com sucesso!');
+
+      setSuccessMessage(
+        `✅ Venda finalizada! Doc: ${response.document_number || response.id}`
+      );
       setCart([]);
       setSearchTerm('');
+      setSelectedPayment('dinheiro');
+
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Erro ao finalizar venda:', err);
-      alert('Erro ao finalizar venda: ' + err.message);
+      setError('Erro ao finalizar venda: ' + err.message);
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setProcessingPayment(false);
     }
   };
 
@@ -140,9 +197,6 @@ export function CaixaFocusMode() {
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const calculateTotal = () =>
-    cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
-
   if (loading) {
     return <div className="focus-loading">Carregando...</div>;
   }
@@ -157,19 +211,21 @@ export function CaixaFocusMode() {
         </button>
       </div>
 
+      {/* Mensagens */}
+      {error && <div className="focus-error">{error}</div>}
+      {successMessage && <div className="focus-success">{successMessage}</div>}
+
       <div className="focus-content">
         {/* Área de Produtos */}
         <div className="focus-products">
           <input
             type="text"
-            placeholder="🔍 Buscar produto..."
+            placeholder="🔍 Buscar produto (F1)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="focus-search"
             autoFocus
           />
-
-          {error && <div className="focus-error">{error}</div>}
 
           <div className="focus-products-grid">
             {filteredProducts.length > 0 ? (
@@ -178,10 +234,13 @@ export function CaixaFocusMode() {
                   key={product.id}
                   className="focus-product-btn"
                   onClick={() => handleAddToCart(product)}
+                  disabled={product.stock <= 0}
                 >
                   <div className="product-name">{product.name}</div>
                   <div className="product-price">R$ {(product.price || 0).toFixed(2)}</div>
-                  <div className="product-stock">Est: {product.stock || 0}</div>
+                  <div className="product-stock">
+                    {product.stock > 0 ? `Est: ${product.stock}` : 'Sem estoque'}
+                  </div>
                 </button>
               ))
             ) : (
@@ -192,7 +251,7 @@ export function CaixaFocusMode() {
 
         {/* Carrinho */}
         <div className="focus-cart">
-          <h2>💳 CARRINHO</h2>
+          <h2>💳 CARRINHO ({cart.length})</h2>
 
           <div className="focus-cart-items">
             {cart.length === 0 ? (
@@ -203,6 +262,11 @@ export function CaixaFocusMode() {
                   <div className="item-info">
                     <div className="item-name">{item.name}</div>
                     <div className="item-price">R$ {(item.price || 0).toFixed(2)}</div>
+                    {item.discount_id && (
+                      <div className="item-discount">
+                        -R$ {calculateItemDiscount(item).toFixed(2)}
+                      </div>
+                    )}
                   </div>
                   <div className="item-controls">
                     <button
@@ -228,21 +292,56 @@ export function CaixaFocusMode() {
                     </button>
                   </div>
                   <div className="item-total">
-                    R$ {((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                    R$ {((item.price || 0) * (item.quantity || 0) - calculateItemDiscount(item)).toFixed(2)}
                   </div>
+                  <button
+                    className="item-remove"
+                    onClick={() => handleRemoveFromCart(item.id)}
+                  >
+                    ✕
+                  </button>
                 </div>
               ))
             )}
           </div>
 
+          {/* Descontos */}
+          {cart.length > 0 && discounts.length > 0 && (
+            <div className="focus-discounts">
+              <label>Descontos Disponíveis:</label>
+              <div className="discounts-list">
+                {discounts.map((discount) => (
+                  <button
+                    key={discount.id}
+                    className="discount-btn"
+                    onClick={() => {
+                      if (cart.length > 0) {
+                        handleApplyDiscount(cart[0].id, discount.id);
+                      }
+                    }}
+                  >
+                    {discount.name} ({discount.value}
+                    {discount.type === 'percent' ? '%' : 'R$'})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="focus-cart-summary">
             <div className="summary-row">
               <span>Subtotal:</span>
-              <span>R$ {calculateTotal().toFixed(2)}</span>
+              <span>R$ {total.toFixed(2)}</span>
             </div>
+            {totalDiscount > 0 && (
+              <div className="summary-row discount">
+                <span>Desconto:</span>
+                <span>-R$ {totalDiscount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="summary-row total">
               <span>TOTAL:</span>
-              <span>R$ {calculateTotal().toFixed(2)}</span>
+              <span>R$ {finalTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -260,11 +359,19 @@ export function CaixaFocusMode() {
           </div>
 
           <div className="focus-actions">
-            <button className="btn-clear" onClick={handleClearCart}>
+            <button 
+              className="btn-clear" 
+              onClick={handleClearCart}
+              disabled={cart.length === 0}
+            >
               🗑️ Limpar
             </button>
-            <button className="btn-finalize" onClick={handleFinalizeSale}>
-              ✓ Finalizar Venda
+            <button 
+              className="btn-finalize" 
+              onClick={handleFinalizeSale}
+              disabled={cart.length === 0 || processingPayment}
+            >
+              {processingPayment ? '⏳ Processando...' : '✓ Finalizar (F10)'}
             </button>
           </div>
         </div>
