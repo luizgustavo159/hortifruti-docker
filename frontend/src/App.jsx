@@ -17,7 +17,7 @@ import { AdminFuncionarios } from "./pages/AdminFuncionarios";
 import { AdminConfiguracao } from "./pages/AdminConfiguracao";
 import { apiFetch } from "./lib/api";
 import { clearToken, clearUser, getUser, hasRequiredRole, isAuthenticated, setUser } from "./lib/auth";
-import ProtectedRoute from "./components/ProtectedRoute";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
@@ -30,7 +30,7 @@ function AppRoutes() {
     <Routes>
         <Route
           path="/"
-          element={isAuthenticated() ? <Navigate to="/caixa" replace /> : <Login />}
+          element={isAuthenticated ? <Navigate to="/caixa" replace /> : <Login />}
         />
         <Route
           path="/caixa"

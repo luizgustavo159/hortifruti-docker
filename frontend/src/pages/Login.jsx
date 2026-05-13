@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../lib/api";
-import { setToken, setUser } from "../lib/auth";
+import { useAuth } from "../context/AuthContext";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -9,19 +9,14 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const onSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const response = await apiFetch("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      setToken(response.token);
-      const currentUser = await apiFetch("/auth/me");
-      setUser(currentUser);
+      await login(email, password);
       navigate("/caixa");
     } catch (submitError) {
       setError(submitError.message || "Falha ao autenticar.");
