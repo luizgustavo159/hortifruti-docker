@@ -90,6 +90,31 @@ const logAudit = ({ action, details, performedBy, approvedBy }) => {
   );
 };
 
+const inferAuditType = (action = "") => {
+  if (action.includes("sale") || action.includes("cash") || action.includes("pos")) return "sale";
+  if (action.includes("stock") || action.includes("purchase")) return "stock";
+  if (action.includes("user") || action.includes("admin")) return "user";
+  if (action.includes("auth") || action.includes("login") || action.includes("password")) return "auth";
+  if (action.includes("finance") || action.includes("discount") || action.includes("approval")) return "system";
+  return "system";
+};
+
+const inferAuditLevel = (action = "") => {
+  if (action.includes("loss") || action.includes("cancel") || action.includes("override")) return "warning";
+  if (action.includes("failed") || action.includes("error")) return "error";
+  return "info";
+};
+
+const parseAuditDetails = (details) => {
+  if (!details) return "";
+  if (typeof details !== "string") return JSON.stringify(details);
+  try {
+    return JSON.stringify(JSON.parse(details));
+  } catch (_err) {
+    return details;
+  }
+};
+
 const getSettings = (keys, callback) => {
   if (!keys.length) {
     callback({});
@@ -1576,6 +1601,19 @@ router.post(
         }
         return res.status(500).json({ message: "Erro ao registrar venda." });
       }
+      logAudit({
+        action: "sale_created",
+        details: {
+          sale_ids: responsePayload.items.map((item) => item.id),
+          document_numbers: responsePayload.items.map((item) => item.document_number),
+          items: responsePayload.items,
+          total: responsePayload.total,
+          discount_amount: responsePayload.discount_amount,
+          final_total: responsePayload.final_total,
+          payment_method,
+        },
+        performedBy: req.user.id,
+      });
       return res.status(201).json(responsePayload);
     });
   }
@@ -1645,23 +1683,60 @@ router.get("/api/reports/summary", authenticateToken, (req, res) => {
   );
 });
 
-router.get("/api/audit-logs", authenticateToken, requireManager, (req, res) => {
+const auditLogsHandler = (req, res) => {
+  const { start, end, type = "all", level = "all" } = req.query;
+  const params = [];
+  const filters = [];
+
+  if (start) {
+    filters.push("audit_logs.created_at >= ?");
+    params.push(`${start}T00:00:00.000Z`);
+  }
+  if (end) {
+    filters.push("audit_logs.created_at <= ?");
+    params.push(`${end}T23:59:59.999Z`);
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
   db.all(
     `SELECT audit_logs.*, users.name AS performed_by_name, approvers.name AS approved_by_name
      FROM audit_logs
      LEFT JOIN users ON users.id = audit_logs.performed_by
      LEFT JOIN users AS approvers ON approvers.id = audit_logs.approved_by
+     ${whereClause}
      ORDER BY audit_logs.created_at DESC
-     LIMIT 100`,
-    [],
+     LIMIT 500`,
+    params,
     (err, rows) => {
       if (err) {
         return res.status(500).json({ message: "Erro ao buscar logs." });
       }
-      return res.json(rows);
+
+      const normalizedRows = rows.map((row) => {
+        const normalizedType = inferAuditType(row.action);
+        const normalizedLevel = inferAuditLevel(row.action);
+        return {
+          ...row,
+          type: normalizedType,
+          level: normalizedLevel,
+          user_name: row.performed_by_name || "Sistema",
+          approved_by_name: row.approved_by_name || null,
+          details: parseAuditDetails(row.details),
+        };
+      }).filter((row) => {
+        const matchesType = type === "all" || row.type === type;
+        const matchesLevel = level === "all" || row.level === level;
+        return matchesType && matchesLevel;
+      });
+
+      return res.json(normalizedRows);
     }
   );
-});
+};
+
+router.get("/api/audit-logs", authenticateToken, requireManager, auditLogsHandler);
+router.get("/api/logs", authenticateToken, requireManager, auditLogsHandler);
 
 router.post(
   "/api/finance/cashflow",

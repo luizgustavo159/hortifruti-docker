@@ -18,22 +18,6 @@ export function CaixaFocusMode() {
   useEffect(() => {
     loadData();
     enterFullscreen();
-
-    // Atalhos de teclado
-    const handleKeyPress = (e) => {
-      if (e.key === 'Escape') {
-        handleExitFocusMode();
-      } else if (e.key === 'F1') {
-        e.preventDefault();
-        document.querySelector('.focus-search')?.focus();
-      } else if (e.key === 'F10') {
-        e.preventDefault();
-        handleFinalizeSale();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
   const enterFullscreen = async () => {
@@ -49,8 +33,8 @@ export function CaixaFocusMode() {
   const loadData = async () => {
     try {
       const [productsData, discountsData] = await Promise.all([
-        apiFetch('/api/products'),
-        apiFetch('/api/discounts'),
+        apiFetch('/products'),
+        apiFetch('/discounts'),
       ]);
       setProducts(Array.isArray(productsData) ? productsData : []);
       setDiscounts(Array.isArray(discountsData) ? discountsData : []);
@@ -65,9 +49,24 @@ export function CaixaFocusMode() {
     }
   };
 
+  const getProductStock = (product) => Number(product.current_stock ?? product.stock ?? 0);
+  const formatCurrency = (value) => Number(value || 0).toFixed(2);
+
   const handleAddToCart = useCallback((product) => {
+    const availableStock = getProductStock(product);
+    if (availableStock <= 0) {
+      setError('Produto sem estoque disponível.');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
     const existing = cart.find((item) => item.id === product.id);
     if (existing) {
+      if (existing.quantity >= availableStock) {
+        setError('Quantidade maior que o estoque disponível.');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
       setCart(
         cart.map((item) =>
           item.id === product.id
@@ -89,9 +88,16 @@ export function CaixaFocusMode() {
     if (num <= 0) {
       handleRemoveFromCart(productId);
     } else {
+      const item = cart.find((cartItem) => cartItem.id === productId);
+      const availableStock = item ? getProductStock(item) : num;
+      const safeQuantity = Math.min(num, availableStock);
+      if (safeQuantity < num) {
+        setError('Quantidade ajustada ao estoque disponível.');
+        setTimeout(() => setError(''), 3000);
+      }
       setCart(
-        cart.map((item) =>
-          item.id === productId ? { ...item, quantity: num } : item
+        cart.map((cartItem) =>
+          cartItem.id === productId ? { ...cartItem, quantity: safeQuantity } : cartItem
         )
       );
     }
@@ -151,7 +157,7 @@ export function CaixaFocusMode() {
         discount_id: item.discount_id,
       }));
 
-      const response = await apiFetch('/api/sales', {
+      const response = await apiFetch('/sales', {
         method: 'POST',
         body: JSON.stringify({
           items: saleItems,
@@ -192,6 +198,23 @@ export function CaixaFocusMode() {
     }
     navigate('/caixa');
   };
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === 'Escape') {
+        handleExitFocusMode();
+      } else if (e.key === 'F1') {
+        e.preventDefault();
+        document.querySelector('.focus-search')?.focus();
+      } else if (e.key === 'F10') {
+        e.preventDefault();
+        handleFinalizeSale();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [cart, selectedPayment, processingPayment]);
 
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -234,12 +257,12 @@ export function CaixaFocusMode() {
                   key={product.id}
                   className="focus-product-btn"
                   onClick={() => handleAddToCart(product)}
-                  disabled={product.stock <= 0}
+                  disabled={getProductStock(product) <= 0}
                 >
                   <div className="product-name">{product.name}</div>
-                  <div className="product-price">R$ {(product.price || 0).toFixed(2)}</div>
+                  <div className="product-price">R$ {formatCurrency(product.price)}</div>
                   <div className="product-stock">
-                    {product.stock > 0 ? `Est: ${product.stock}` : 'Sem estoque'}
+                    {getProductStock(product) > 0 ? `Est: ${getProductStock(product)}` : 'Sem estoque'}
                   </div>
                 </button>
               ))
@@ -261,7 +284,7 @@ export function CaixaFocusMode() {
                 <div key={item.id} className="focus-cart-item">
                   <div className="item-info">
                     <div className="item-name">{item.name}</div>
-                    <div className="item-price">R$ {(item.price || 0).toFixed(2)}</div>
+                    <div className="item-price">R$ {formatCurrency(item.price)}</div>
                     {item.discount_id && (
                       <div className="item-discount">
                         -R$ {calculateItemDiscount(item).toFixed(2)}
