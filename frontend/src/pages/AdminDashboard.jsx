@@ -64,6 +64,15 @@ export function AdminDashboard() {
       subtitle="Visão geral de vendas, operadores e desempenho"
     >
       <div className="dashboard-container">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+          <button 
+            className="button" 
+            onClick={() => window.location.href = '/admin/advanced'}
+            style={{ backgroundColor: '#3b82f6' }}
+          >
+            Ver Dashboard Avançado (Gráficos)
+          </button>
+        </div>
         {/* Filtro de Data */}
         <div className="date-filter">
           <div className="date-group">

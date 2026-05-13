@@ -8,6 +8,7 @@ import { CaixaFocusMode } from "./pages/CaixaFocusMode";
 import { Estoque } from "./pages/Estoque";
 import { Descontos } from "./pages/Descontos";
 import { AdminDashboard } from "./pages/AdminDashboard";
+import { DashboardAdvanced } from "./pages/DashboardAdvanced";
 import { AdminLogs } from "./pages/AdminLogs";
 import { AdminPerfil } from "./pages/AdminPerfil";
 import { AdminPoliticas } from "./pages/AdminPoliticas";
@@ -68,6 +69,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute requiredRole="admin">
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/advanced"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <DashboardAdvanced />
             </ProtectedRoute>
           }
         />
