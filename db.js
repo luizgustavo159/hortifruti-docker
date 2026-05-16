@@ -4,7 +4,7 @@ const { newDb } = require("pg-mem");
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-const useInMemoryDb = NODE_ENV === "test" && !DATABASE_URL;
+const useInMemoryDb = true; // Forçado para emulação rápida
 
 if (!DATABASE_URL && NODE_ENV !== "development" && !useInMemoryDb) {
   throw new Error("DATABASE_URL não configurado. Defina a conexão com PostgreSQL.");

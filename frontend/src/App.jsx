@@ -15,8 +15,6 @@ import { AdminPoliticas } from "./pages/AdminPoliticas";
 import { AdminRelatorios } from "./pages/AdminRelatorios";
 import { AdminFuncionarios } from "./pages/AdminFuncionarios";
 import { AdminConfiguracao } from "./pages/AdminConfiguracao";
-import { apiFetch } from "./lib/api";
-import { clearToken, clearUser, getUser, hasRequiredRole, isAuthenticated, setUser } from "./lib/auth";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function AppRoutes() {
@@ -83,7 +81,7 @@ function AppRoutes() {
         <Route
           path="/admin/logs"
           element={
-            <ProtectedRoute requiredRole="admin">
+            <ProtectedRoute requiredRole="manager">
               <AdminLogs />
             </ProtectedRoute>
           }

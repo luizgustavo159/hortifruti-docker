@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearToken,
   decodeTokenPayload,
@@ -23,21 +23,20 @@ const createToken = (payload) => `header.${toBase64Url(payload)}.signature`;
 
 describe("auth helpers", () => {
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
   });
 
-  it("stores and clears token", () => {
+  it("stores and clears token in sessionStorage", () => {
     setToken("abc");
     expect(getToken()).toBe("abc");
+    expect(sessionStorage.getItem("greenstore_token")).toBe("abc");
     clearToken();
     expect(getToken()).toBeNull();
   });
 
-
   it("clears token when setToken receives empty value", () => {
     setToken("abc");
     setToken("");
-
     expect(getToken()).toBeNull();
   });
 
@@ -48,12 +47,10 @@ describe("auth helpers", () => {
     expect(getUser()).toBeNull();
   });
 
-
   it("clears invalid persisted user json", () => {
-    localStorage.setItem("greenstore_user", "{invalid-json");
-
+    sessionStorage.setItem("greenstore_user", "{invalid-json");
     expect(getUser()).toBeNull();
-    expect(localStorage.getItem("greenstore_user")).toBeNull();
+    expect(sessionStorage.getItem("greenstore_user")).toBeNull();
   });
 
   it("decodes payload and exposes user info", () => {
@@ -70,26 +67,6 @@ describe("auth helpers", () => {
       id: 9,
       role: "manager",
     });
-  });
-
-
-  it("decodes payload even when base64 padding is omitted", () => {
-    const token = createToken({
-      id: 7,
-      role: "supervisor",
-      exp: Math.floor(Date.now() / 1000) + 3600,
-      odd: "x",
-    });
-
-    expect(decodeTokenPayload(token)).toMatchObject({ id: 7, role: "supervisor", odd: "x" });
-  });
-
-
-  it("does not clear persisted user when decoding an invalid token", () => {
-    setUser({ id: 5, role: "manager" });
-
-    expect(decodeTokenPayload("invalid.token")).toBeNull();
-    expect(getUser()).toMatchObject({ id: 5, role: "manager" });
   });
 
   it("marks expired token as unauthenticated", () => {

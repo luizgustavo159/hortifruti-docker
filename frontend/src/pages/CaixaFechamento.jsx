@@ -23,11 +23,17 @@ export function CaixaFechamento() {
           apiFetch('/pos/cash-session/current'),
           apiFetch('/pos/cash-session/movement?limit=50'),
         ]);
-        setCaixaData(caixa);
+        
+        if (caixa) {
+          setCaixaData(caixa);
+          // No backend o campo é expected_amount
+          setTotalExpected(parseFloat(caixa.expected_amount || caixa.opening_amount || 0));
+        }
+        
         setMovements(movs.data || []);
-        setTotalExpected(caixa.total_expected || 0);
       } catch (error) {
-        toast.error('Erro ao carregar dados de caixa: ' + error.message);
+        console.error(error);
+        toast.error('Erro ao carregar dados de caixa');
       } finally {
         setLoading(false);
       }
@@ -43,26 +49,33 @@ export function CaixaFechamento() {
 
   // Registrar movimentação
   const addMovement = useCallback(async (type, amount) => {
+    if (!amount || isNaN(amount)) return;
+    
     try {
       const response = await apiFetch('/pos/cash-session/movement', {
         method: 'POST',
         body: JSON.stringify({
           type,
-          amount,
-          description: `${type === 'withdrawal' ? 'Sangria' : 'Suprimento'} - ${new Date().toLocaleTimeString()}`,
+          amount: parseFloat(amount),
+          reason: `${type === 'withdrawal' ? 'Sangria' : 'Suprimento'} manual`,
         }),
       });
       toast.success(`${type === 'withdrawal' ? 'Sangria' : 'Suprimento'} registrado com sucesso!`);
-      setMovements([response, ...movements]);
+      setMovements(prev => [response, ...prev]);
+      
+      // Recarregar valor esperado após movimentação
+      const updatedCaixa = await apiFetch('/pos/cash-session/current');
+      if (updatedCaixa) {
+        setTotalExpected(parseFloat(updatedCaixa.expected_amount || updatedCaixa.opening_amount || 0));
+      }
     } catch (error) {
       toast.error('Erro ao registrar movimentação: ' + error.message);
     }
-  }, [movements]);
+  }, []);
 
   // Fechar caixa
   const handleCloseCaixa = async () => {
-    if (!totalCounted) {
-      toast.error('Informe o valor contado em caixa');
+    if (totalCounted === 0 && !window.confirm('Deseja fechar o caixa com valor zero?')) {
       return;
     }
 
@@ -71,15 +84,13 @@ export function CaixaFechamento() {
       await apiFetch('/pos/cash-session/close', {
         method: 'POST',
         body: JSON.stringify({
-          total_counted: totalCounted,
-          difference,
+          closing_amount: totalCounted, // Corrigido para contrato do backend
           notes,
         }),
       });
       toast.success('Caixa fechado com sucesso!');
-      // Redirecionar ou resetar
       setTimeout(() => {
-        window.location.reload();
+        window.location.href = '/caixa';
       }, 1500);
     } catch (error) {
       toast.error('Erro ao fechar caixa: ' + error.message);
@@ -92,10 +103,21 @@ export function CaixaFechamento() {
     return <PageShell title="Fechamento de Caixa"><div className="loading">Carregando...</div></PageShell>;
   }
 
+  if (!caixaData) {
+    return (
+      <PageShell title="Fechamento de Caixa">
+        <div className="empty-state">
+          <p>Não há nenhum caixa aberto no momento.</p>
+          <button className="button" onClick={() => window.location.href = '/caixa'}>Voltar ao PDV</button>
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       title="Fechamento de Caixa"
-      subtitle="Encerre o turno e confira o caixa"
+      subtitle={`Operador: ${caixaData.operator_name || 'Atual'}`}
     >
       <div className="caixa-fechamento-container">
         {/* Resumo */}
@@ -115,54 +137,58 @@ export function CaixaFechamento() {
               step="0.01"
             />
           </div>
-          <div className={`resumo-card ${difference === 0 ? 'balanced' : difference > 0 ? 'surplus' : 'deficit'}`}>
+          <div className={`resumo-card ${Math.abs(difference) < 0.01 ? 'balanced' : difference > 0 ? 'surplus' : 'deficit'}`}>
             <h3>Diferença</h3>
             <p className="valor">R$ {difference.toFixed(2)}</p>
             <p className="status">
-              {difference === 0 && '✓ Caixa Balanceado'}
-              {difference > 0 && '↑ Sobra'}
-              {difference < 0 && '↓ Falta'}
+              {Math.abs(difference) < 0.01 && '✓ Caixa Balanceado'}
+              {difference > 0.01 && '↑ Sobra'}
+              {difference < -0.01 && '↓ Falta'}
             </p>
           </div>
         </div>
 
         {/* Movimentações */}
         <div className="movimentos-section">
-          <h3>Movimentações do Dia</h3>
+          <h3>Movimentações da Sessão</h3>
           <div className="movimento-buttons">
             <button
               className="btn-movimento btn-sangria"
-              onClick={() => addMovement('withdrawal', prompt('Valor da sangria:') || 0)}
+              onClick={() => addMovement('withdrawal', prompt('Valor da sangria (R$):'))}
             >
               💰 Sangria
             </button>
             <button
               className="btn-movimento btn-suprimento"
-              onClick={() => addMovement('deposit', prompt('Valor do suprimento:') || 0)}
+              onClick={() => addMovement('supply', prompt('Valor do suprimento (R$):'))}
             >
               ➕ Suprimento
             </button>
           </div>
 
           <div className="movimentos-list">
-            {movements.map((mov, idx) => (
-              <div key={idx} className={`movimento-item ${mov.type}`}>
-                <span className="tipo">{mov.type === 'withdrawal' ? 'Sangria' : 'Suprimento'}</span>
-                <span className="valor">R$ {mov.amount.toFixed(2)}</span>
-                <span className="hora">{new Date(mov.created_at).toLocaleTimeString()}</span>
-              </div>
-            ))}
+            {movements.length === 0 ? (
+              <p className="empty-mov">Nenhuma movimentação manual registrada.</p>
+            ) : (
+              movements.map((mov, idx) => (
+                <div key={idx} className={`movimento-item ${mov.type}`}>
+                  <span className="tipo">{mov.type === 'withdrawal' ? 'Sangria' : 'Suprimento'}</span>
+                  <span className="valor">R$ {parseFloat(mov.amount).toFixed(2)}</span>
+                  <span className="hora">{new Date(mov.created_at).toLocaleTimeString()}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         {/* Observações */}
         <div className="notas-section">
-          <label>Observações</label>
+          <label>Observações de Fechamento</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Adicione observações sobre o fechamento..."
-            rows="4"
+            placeholder="Ex: Diferença de R$ 0,50 devido a arredondamento de troco..."
+            rows="3"
           />
         </div>
 
@@ -173,10 +199,10 @@ export function CaixaFechamento() {
             onClick={handleCloseCaixa}
             disabled={processing}
           >
-            {processing ? 'Fechando...' : 'Fechar Caixa'}
+            {processing ? 'Processando...' : 'Confirmar Fechamento'}
           </button>
           <button className="btn-cancelar" onClick={() => window.history.back()}>
-            Cancelar
+            Voltar
           </button>
         </div>
       </div>

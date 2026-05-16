@@ -544,6 +544,7 @@ router.post(
           return res.json({
             accessToken,
             refreshToken,
+            token: accessToken, // Compatibilidade com testes legados
             user: {
               id: user.id,
               name: user.name,
@@ -755,21 +756,19 @@ router.post(
             return;
           }
           if (product.current_stock < quantity) {
-            finish({ status: 400, message: "Estoque insuficiente." });
+            finish({ status: 400, message: "Estoque insuficiente para registrar perda." });
             return;
           }
-
-          const nextStock = product.current_stock - quantity;
           tx.run(
-            "UPDATE products SET current_stock = ? WHERE id = ?",
-            [nextStock, product_id],
+            "UPDATE products SET current_stock = current_stock - ? WHERE id = ?",
+            [quantity, product_id],
             (updateErr) => {
               if (updateErr) {
                 finish(updateErr);
                 return;
               }
               tx.run(
-                "INSERT INTO stock_losses (product_id, quantity, reason, reported_by) VALUES (?, ?, ?, ?)",
+                "INSERT INTO stock_losses (product_id, quantity, reason, performed_by) VALUES (?, ?, ?, ?)",
                 [product_id, quantity, reason, req.user.id],
                 (lossErr) => {
                   if (lossErr) {
@@ -778,7 +777,7 @@ router.post(
                   }
                   tx.run(
                     "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-                    [product_id, "loss", -Number(quantity), reason, req.user.id],
+                    [product_id, "loss", -Number(quantity), `Perda: ${reason}`, req.user.id],
                     (movementErr) => {
                       if (movementErr) {
                         finish(movementErr);
@@ -903,101 +902,83 @@ router.post(
 router.post(
   "/api/stock/move",
   authenticateToken,
+  requireSupervisor,
   [
     body("product_id").isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("quantity").isInt({ min: 1 }).withMessage("Quantidade inválida."),
-    body("type").isIn(["inbound", "outbound"]).withMessage("Tipo inválido."),
-    body("reason").trim().notEmpty().withMessage("Motivo é obrigatório."),
+    body("delta").isInt().not().equals("0").withMessage("Delta inválido."),
+    body("type").isIn(["inbound", "outbound", "transfer", "return"]).withMessage("Tipo inválido."),
+    body("reason").optional().trim().isString().withMessage("Motivo inválido."),
   ],
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
-    const { product_id, quantity, type, reason } = req.body;
+    const { product_id, delta, type, reason = "" } = req.body;
+    const finalDelta = type === "outbound" ? -Math.abs(delta) : Math.abs(delta);
 
     runWithTransaction((tx, finish) => {
-      tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
-        if (err) {
-          finish(err);
-          return;
-        }
-        if (!product) {
+      tx.get("SELECT current_stock FROM products WHERE id = ?", [product_id], (err, product) => {
+        if (err || !product) {
           finish({ status: 404, message: "Produto não encontrado." });
           return;
         }
-
-        const delta = type === "inbound" ? Number(quantity) : -Number(quantity);
-        const nextStock = product.current_stock + delta;
+        const nextStock = product.current_stock + finalDelta;
         if (nextStock < 0) {
-          finish({ status: 400, message: "Estoque não pode ficar negativo." });
+          finish({ status: 400, message: "Estoque insuficiente." });
           return;
         }
-        tx.run(
-          "UPDATE products SET current_stock = ? WHERE id = ?",
-          [nextStock, product_id],
-          (updateErr) => {
-            if (updateErr) {
-              finish(updateErr);
-              return;
-            }
-            tx.run(
-              "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-              [product_id, type, delta, reason, req.user.id],
-              (movementErr) => {
-                if (movementErr) {
-                  finish(movementErr);
-                  return;
-                }
-                finish(null);
-              }
-            );
+        tx.run("UPDATE products SET current_stock = ? WHERE id = ?", [nextStock, product_id], (updErr) => {
+          if (updErr) {
+            finish(updErr);
+            return;
           }
-        );
+          tx.run(
+            "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+            [product_id, type, finalDelta, reason, req.user.id],
+            (moveErr) => {
+              if (moveErr) {
+                finish(moveErr);
+                return;
+              }
+              finish(null);
+            }
+          );
+        });
       });
     }, (transactionErr) => {
       if (transactionErr) {
-        if (transactionErr.status) {
-          return res.status(transactionErr.status).json({ message: transactionErr.message });
-        }
-        return res.status(500).json({ message: "Erro ao registrar movimentação." });
+        return res.status(transactionErr.status || 500).json({ message: transactionErr.message || "Erro ao mover estoque." });
       }
-      logAudit({
-        action: "stock_move",
-        details: { product_id, quantity, type, reason },
-        performedBy: req.user.id,
-      });
-      return res.status(201).json({ status: "ok" });
+      return res.json({ status: "ok" });
     });
   }
 );
 
-router.get("/api/stock/loss", authenticateToken, (req, res) => {
-  const limit = Number(req.query.limit || 50);
-  const safeLimit = Number.isNaN(limit) ? 50 : Math.min(Math.max(limit, 1), 200);
-  db.all(
-    `SELECT stock_losses.*, products.name AS product_name
-     FROM stock_losses
-     JOIN products ON products.id = stock_losses.product_id
-     ORDER BY stock_losses.created_at DESC
-     LIMIT ?`,
-    [safeLimit],
-    (err, rows) => {
-      if (err) {
-        return res.status(500).json({ message: "Erro ao buscar perdas." });
-      }
-      return res.json(rows);
-    }
-  );
-});
-
 router.get("/api/stock/movements", authenticateToken, (req, res) => {
-  const limit = Number(req.query.limit || 50);
-  const safeLimit = Number.isNaN(limit) ? 50 : Math.min(Math.max(limit, 1), 200);
-  const productId = req.query.product_id ? Number(req.query.product_id) : null;
+  const { product_id, type, start, end, limit = 100 } = req.query;
+  const params = [];
+  const filters = [];
 
-  const where = productId ? "WHERE stock_movements.product_id = ?" : "";
-  const params = productId ? [productId, safeLimit] : [safeLimit];
+  if (product_id) {
+    filters.push("product_id = ?");
+    params.push(product_id);
+  }
+  if (type) {
+    filters.push("type = ?");
+    params.push(type);
+  }
+  if (start) {
+    filters.push("date(created_at) >= date(?)");
+    params.push(start);
+  }
+  if (end) {
+    filters.push("date(created_at) <= date(?)");
+    params.push(end);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  params.push(Number(limit));
 
   db.all(
     `SELECT stock_movements.*, products.name AS product_name
@@ -1215,7 +1196,7 @@ router.post(
   requireManager,
   [
     body("name").trim().notEmpty().withMessage("Nome é obrigatório."),
-    body("type").isIn(["percent", "fixed", "buy_x_get_y", "fixed_bundle"]).withMessage("Tipo inválido."),
+    body("type").isIn(["percent", "fixed", "buy_x_get_y", "fixed_bundle", "percentage", "bulk"]).withMessage("Tipo inválido."),
     body("value").optional().isFloat({ min: 0 }).withMessage("Valor inválido."),
     body("min_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
     body("buy_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
@@ -1228,13 +1209,18 @@ router.post(
     }
 
     const payload = req.body;
-    if (payload.type === "fixed_bundle" && (!payload.buy_quantity || !payload.value)) {
+    // Mapear tipos do frontend para o backend
+    let type = payload.type;
+    if (type === "percentage") type = "percent";
+    if (type === "bulk") type = "buy_x_get_y";
+
+    if (type === "fixed_bundle" && (!payload.buy_quantity || !payload.value)) {
       return res.status(400).json({ message: "Quantidade e preço do combo são obrigatórios." });
     }
 
     return getSettings(["max_discount"], (settings) => {
       const maxDiscount = Number(settings.max_discount || 0);
-      if (payload.type === "percent" && maxDiscount > 0 && Number(payload.value) > maxDiscount) {
+      if (type === "percent" && maxDiscount > 0 && Number(payload.value) > maxDiscount) {
         return res.status(403).json({ message: "Desconto acima do limite permitido." });
       }
 
@@ -1245,7 +1231,7 @@ router.post(
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
         [
           payload.name,
-          payload.type,
+          type,
           payload.value,
           payload.min_quantity || null,
           payload.buy_quantity || null,
@@ -1260,7 +1246,7 @@ router.post(
           payload.stacking_rule || "exclusive",
           Array.isArray(payload.criteria) ? JSON.stringify(payload.criteria) : payload.criteria,
           payload.priority || 0,
-          payload.active ? 1 : 0,
+          payload.active !== false ? 1 : 0,
         ],
         (err, row) => {
           if (err) {
@@ -1268,7 +1254,7 @@ router.post(
           }
           logAudit({
             action: "discount_created",
-            details: { id: row.id, name: payload.name, type: payload.type, value: payload.value },
+            details: { id: row.id, name: payload.name, type: type, value: payload.value },
             performedBy: req.user.id,
           });
           return res.status(201).json({ id: row.id });
@@ -1278,103 +1264,16 @@ router.post(
   }
 );
 
-router.put(
-  "/api/discounts/:id",
-  authenticateToken,
-  requireManager,
-  [
-    body("name").optional().trim().notEmpty().withMessage("Nome inválido."),
-    body("type").optional().isIn(["percent", "fixed", "buy_x_get_y", "fixed_bundle"]).withMessage("Tipo inválido."),
-    body("value").optional().isFloat({ min: 0 }).withMessage("Valor inválido."),
-    body("min_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
-    body("buy_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
-    body("get_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
-  ],
-  (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+router.delete("/api/discounts/:id", authenticateToken, requireManager, (req, res) => {
+  const id = Number(req.params.id);
+  db.run("DELETE FROM discounts WHERE id = ?", [id], (err) => {
+    if (err) {
+      return res.status(500).json({ message: "Erro ao deletar desconto." });
     }
-    const discountId = Number(req.params.id);
-
-    db.get("SELECT * FROM discounts WHERE id = ?", [discountId], (err, discount) => {
-      if (err || !discount) {
-        return res.status(404).json({ message: "Desconto não encontrado." });
-      }
-
-      const payload = req.body || {};
-      const updated = {
-        name: payload.name ?? discount.name,
-        type: payload.type ?? discount.type,
-        value: payload.value ?? discount.value,
-        min_quantity: payload.min_quantity ?? discount.min_quantity,
-        buy_quantity: payload.buy_quantity ?? discount.buy_quantity,
-        get_quantity: payload.get_quantity ?? discount.get_quantity,
-        target_type: payload.target_type ?? discount.target_type,
-        target_value: payload.target_value ?? discount.target_value,
-        days_of_week: payload.days_of_week ?? discount.days_of_week,
-        starts_at: payload.starts_at ?? discount.starts_at,
-        ends_at: payload.ends_at ?? discount.ends_at,
-        starts_time: payload.starts_time ?? discount.starts_time,
-        ends_time: payload.ends_time ?? discount.ends_time,
-        stacking_rule: payload.stacking_rule ?? discount.stacking_rule,
-        criteria: payload.criteria ?? discount.criteria,
-        priority: payload.priority ?? discount.priority,
-        active: typeof payload.active === "undefined" ? discount.active : payload.active ? 1 : 0,
-      };
-
-      if (updated.type === "fixed_bundle" && (!updated.buy_quantity || !updated.value)) {
-        return res.status(400).json({ message: "Quantidade e preço do combo são obrigatórios." });
-      }
-
-      return getSettings(["max_discount"], (settings) => {
-        const maxDiscount = Number(settings.max_discount || 0);
-        if (updated.type === "percent" && maxDiscount > 0 && Number(updated.value) > maxDiscount) {
-          return res.status(403).json({ message: "Desconto acima do limite permitido." });
-        }
-
-        db.run(
-          `UPDATE discounts
-           SET name = ?, type = ?, value = ?, min_quantity = ?, buy_quantity = ?, get_quantity = ?,
-               target_type = ?, target_value = ?, days_of_week = ?, starts_at = ?, ends_at = ?,
-               starts_time = ?, ends_time = ?, stacking_rule = ?, criteria = ?, priority = ?, active = ?
-           WHERE id = ?`,
-          [
-            updated.name,
-            updated.type,
-            updated.value,
-            updated.min_quantity,
-            updated.buy_quantity,
-            updated.get_quantity,
-            updated.target_type,
-            updated.target_value,
-            Array.isArray(updated.days_of_week) ? JSON.stringify(updated.days_of_week) : updated.days_of_week,
-            updated.starts_at,
-            updated.ends_at,
-            updated.starts_time,
-            updated.ends_time,
-            updated.stacking_rule,
-            Array.isArray(updated.criteria) ? JSON.stringify(updated.criteria) : updated.criteria,
-            updated.priority,
-            updated.active,
-            discountId,
-          ],
-          (updateErr) => {
-            if (updateErr) {
-              return res.status(500).json({ message: "Erro ao atualizar desconto." });
-            }
-            logAudit({
-              action: "discount_updated",
-              details: { id: discountId, name: updated.name, type: updated.type, value: updated.value },
-              performedBy: req.user.id,
-            });
-            return res.json({ id: discountId });
-          }
-        );
-      });
-    });
-  }
-);
+    logAudit({ action: "discount_deleted", details: { id }, performedBy: req.user.id });
+    return res.json({ status: "ok" });
+  });
+});
 
 router.post(
   "/api/sales",
@@ -1677,6 +1576,84 @@ router.get("/api/reports/summary", authenticateToken, (req, res) => {
           );
         }
       );
+    }
+  );
+});
+
+router.get("/api/reports/sales", authenticateToken, requireManager, (req, res) => {
+  const range = parseDateRange(req, res);
+  if (!range) return;
+  const filter = buildDateFilter("sales.created_at", range);
+  db.all(
+    `SELECT sales.id, sales.created_at, products.name as product, sales.quantity, sales.total, sales.final_total, users.name as operator
+     FROM sales
+     JOIN products ON products.id = sales.product_id
+     JOIN users ON users.id = sales.sold_by
+     ${filter.clause}
+     ORDER BY sales.created_at DESC`,
+    filter.params,
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao gerar relatório." });
+      return res.json(rows);
+    }
+  );
+});
+
+router.get("/api/reports/cash-flow", authenticateToken, requireManager, (req, res) => {
+  const range = parseDateRange(req, res);
+  if (!range) return;
+  const filter = buildDateFilter("occurred_at", range);
+  db.all(
+    `SELECT id, occurred_at, type, category, amount, reference, notes
+     FROM finance_transactions
+     ${filter.clause}
+     ORDER BY occurred_at DESC`,
+    filter.params,
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao gerar relatório." });
+      return res.json(rows);
+    }
+  );
+});
+
+router.get("/api/reports/payables", authenticateToken, requireManager, (req, res) => {
+  db.all(
+    `SELECT id, partner_name, description, amount, due_date, status
+     FROM finance_accounts
+     WHERE kind = 'payable'
+     ORDER BY due_date ASC`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao gerar relatório." });
+      return res.json(rows);
+    }
+  );
+});
+
+router.get("/api/reports/receivables", authenticateToken, requireManager, (req, res) => {
+  db.all(
+    `SELECT id, partner_name, description, amount, due_date, status
+     FROM finance_accounts
+     WHERE kind = 'receivable'
+     ORDER BY due_date ASC`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao gerar relatório." });
+      return res.json(rows);
+    }
+  );
+});
+
+router.get("/api/reports/inventory", authenticateToken, requireManager, (req, res) => {
+  db.all(
+    `SELECT products.name, categories.name as category, products.current_stock, products.unit_type, products.price, (products.current_stock * products.price) as inventory_value
+     FROM products
+     LEFT JOIN categories ON categories.id = products.category_id
+     ORDER BY products.name ASC`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao gerar relatório." });
+      return res.json(rows);
     }
   );
 });
@@ -2207,14 +2184,14 @@ router.post(
               return;
             }
 
-	            tx.run(
-	              `UPDATE sales
-	               SET cancelled_at = CURRENT_TIMESTAMP,
-	                   cancel_reason = ?,
-	                   cancelled_by = ?,
-	                   fiscal_status = 'cancelled'
-	               WHERE id = ?`,
-	              [reason, req.user.id, sale_id],
+            tx.run(
+              `UPDATE sales
+               SET cancelled_at = CURRENT_TIMESTAMP,
+                   cancel_reason = ?,
+                   cancelled_by = ?,
+                   fiscal_status = 'cancelled'
+               WHERE id = ?`,
+              [reason, req.user.id, sale_id],
               (updateErr) => {
                 if (updateErr) {
                   finish(updateErr);
@@ -2268,7 +2245,8 @@ router.get("/api/pos/cash-session/current", authenticateToken, (req, res) => {
       if (err) {
         return res.status(500).json({ message: "Erro ao buscar sessão de caixa." });
       }
-      return res.json({ session: row || null });
+      // Retornar objeto achatado para compatibilidade com frontend
+      return res.json(row || null);
     }
   );
 });
@@ -2319,14 +2297,31 @@ router.post(
   }
 );
 
+router.get("/api/pos/cash-session/movement", authenticateToken, (req, res) => {
+  const limit = Number(req.query.limit || 50);
+  db.all(
+    `SELECT cash_movements.*, users.name AS performed_by_name
+     FROM cash_movements
+     JOIN users ON users.id = cash_movements.performed_by
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [limit],
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao buscar movimentos." });
+      return res.json({ data: rows }); // Envelopado para compatibilidade com frontend
+    }
+  );
+});
+
 router.post(
   "/api/pos/cash-session/movement",
   authenticateToken,
   requireSupervisor,
   [
-    body("type").isIn(["withdrawal", "supply"]).withMessage("Tipo de movimentação inválido."),
+    body("type").isIn(["withdrawal", "supply", "deposit"]).withMessage("Tipo de movimentação inválido."),
     body("amount").isFloat({ gt: 0 }).withMessage("Valor inválido."),
-    body("reason").trim().notEmpty().withMessage("Motivo é obrigatório."),
+    body("reason").optional().trim().isString().withMessage("Motivo inválido."),
+    body("description").optional().trim().isString().withMessage("Descrição inválida."),
     body("session_id").optional().isInt({ min: 1 }).withMessage("Sessão inválida."),
   ],
   (req, res) => {
@@ -2335,7 +2330,11 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { type, amount, reason, session_id } = req.body;
+    const { type, amount, reason, description, session_id } = req.body;
+    const finalReason = reason || description || "Movimentação manual";
+    let finalType = type;
+    if (type === "deposit") finalType = "supply";
+
     const loadSql = session_id
       ? "SELECT * FROM cash_sessions WHERE id = ? AND closed_at IS NULL"
       : "SELECT * FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL ORDER BY opened_at DESC LIMIT 1";
@@ -2352,14 +2351,14 @@ router.post(
       return db.get(
         `INSERT INTO cash_movements (session_id, type, amount, reason, performed_by)
          VALUES (?, ?, ?, ?, ?) RETURNING id, session_id, type, amount, reason, performed_by, created_at`,
-        [session.id, type, amount, reason, req.user.id],
+        [session.id, finalType, amount, finalReason, req.user.id],
         (insertErr, movement) => {
           if (insertErr) {
             return res.status(500).json({ message: "Erro ao registrar movimentação de caixa." });
           }
           logAudit({
             action: "cash_session_movement",
-            details: { session_id: session.id, type, amount: Number(amount), reason },
+            details: { session_id: session.id, type: finalType, amount: Number(amount), reason: finalReason },
             performedBy: req.user.id,
           });
           return res.status(201).json(movement);
@@ -2373,7 +2372,8 @@ router.post(
   "/api/pos/cash-session/close",
   authenticateToken,
   [
-    body("closing_amount").isFloat({ min: 0 }).withMessage("Valor de fechamento inválido."),
+    body("closing_amount").optional().isFloat({ min: 0 }).withMessage("Valor de fechamento inválido."),
+    body("total_counted").optional().isFloat({ min: 0 }).withMessage("Valor contado inválido."),
     body("notes").optional().isString().withMessage("Observação inválida."),
   ],
   (req, res) => {
@@ -2382,7 +2382,11 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { closing_amount, notes = "" } = req.body;
+    const closing_amount = req.body.closing_amount ?? req.body.total_counted;
+    if (typeof closing_amount === "undefined") {
+      return res.status(400).json({ message: "Valor de fechamento é obrigatório." });
+    }
+    const { notes = "" } = req.body;
 
     let closedPayload = null;
 
@@ -2497,20 +2501,22 @@ router.post(
 );
 
 router.get("/api/users", authenticateToken, requireAdmin, (req, res) => {
-  db.all(
-    "SELECT id, name, email, phone, role, is_active, permissions, created_at FROM users",
-    [],
-    (err, rows) => {
-      if (err) {
-        return res.status(500).json({ message: "Erro ao buscar usuários." });
-      }
-      const users = rows.map((row) => ({
-        ...row,
-        permissions: row.permissions ? JSON.parse(row.permissions) : [],
-      }));
-      return res.json(users);
+  const role = req.query.role || null;
+  const sql = role 
+    ? "SELECT id, name, email, phone, role, is_active, permissions, created_at FROM users WHERE role = ?"
+    : "SELECT id, name, email, phone, role, is_active, permissions, created_at FROM users";
+  const params = role ? [role] : [];
+
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      return res.status(500).json({ message: "Erro ao buscar usuários." });
     }
-  );
+    const users = rows.map((row) => ({
+      ...row,
+      permissions: row.permissions ? JSON.parse(row.permissions) : [],
+    }));
+    return res.json(users);
+  });
 });
 
 router.post(

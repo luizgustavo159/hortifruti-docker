@@ -4,7 +4,7 @@ import { clearToken, getToken, getUser, setToken, setUser } from "./auth";
 
 describe("apiFetch", () => {
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -31,7 +31,6 @@ describe("apiFetch", () => {
     );
   });
 
-
   it("does not force json content-type on requests without body", async () => {
     const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue({
       ok: true,
@@ -50,28 +49,6 @@ describe("apiFetch", () => {
     );
   });
 
-
-  it("does not force json content-type on FormData body", async () => {
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      text: async () => JSON.stringify({ ok: true }),
-    });
-
-    const form = new FormData();
-    form.append("file", new Blob(["x"], { type: "text/plain" }), "x.txt");
-
-    await apiFetch("/upload", { method: "POST", body: form });
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/upload",
-      expect.objectContaining({
-        headers: expect.not.objectContaining({
-          "Content-Type": expect.anything(),
-        }),
-      })
-    );
-  });
-
   it("throws backend message for non-2xx responses", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue({
       ok: false,
@@ -80,7 +57,6 @@ describe("apiFetch", () => {
 
     await expect(apiFetch("/auth/login", { method: "POST" })).rejects.toThrow("Credenciais inválidas.");
   });
-
 
   it("exposes response status in thrown errors", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue({

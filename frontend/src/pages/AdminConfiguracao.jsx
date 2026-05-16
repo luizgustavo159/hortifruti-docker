@@ -4,6 +4,11 @@ import { apiFetch } from "../lib/api";
 import "./AdminConfiguracao.css";
 
 export function AdminConfiguracao() {
+  // Mapeamento de chaves: UI -> Backend
+  // discount_max_percent -> max_discount
+  // low_stock_alert -> alert_threshold (ou similar)
+  // session_timeout -> lock_minutes (usado para bloqueio, mas aqui como timeout)
+  
   const [settings, setSettings] = useState({
     store_name: "GreenStore",
     store_cnpj: "00.000.000/0000-00",
@@ -12,8 +17,11 @@ export function AdminConfiguracao() {
     store_email: "contato@greenstore.com",
     currency: "BRL",
     tax_rate: 0,
-    discount_max_percent: 50,
-    low_stock_alert: 20,
+    max_discount: 50, // Corrigido para chave do backend
+    max_losses: 10,   // Nova chave do backend
+    max_stock_adjust: 100, // Nova chave do backend
+    login_attempts: 5, // Nova chave do backend
+    lock_minutes: 10,  // Nova chave do backend
     backup_enabled: true,
     backup_frequency: "daily",
     session_timeout: 30,
@@ -31,7 +39,16 @@ export function AdminConfiguracao() {
       try {
         const data = await apiFetch("/settings");
         if (data) {
-          setSettings({ ...settings, ...data });
+          // Converter valores vindos como string do backend para tipos corretos
+          const typedData = {};
+          Object.keys(data).forEach(key => {
+            const val = data[key];
+            if (val === "true") typedData[key] = true;
+            else if (val === "false") typedData[key] = false;
+            else if (!isNaN(val) && val !== "") typedData[key] = parseFloat(val);
+            else typedData[key] = val;
+          });
+          setSettings(prev => ({ ...prev, ...typedData }));
         }
       } catch (err) {
         console.error("Erro ao carregar configurações:", err);
@@ -66,7 +83,7 @@ export function AdminConfiguracao() {
   // Resetar para padrão
   const handleResetToDefault = () => {
     if (window.confirm("Tem certeza que deseja resetar todas as configurações para o padrão?")) {
-      setSettings({
+      const defaults = {
         store_name: "GreenStore",
         store_cnpj: "00.000.000/0000-00",
         store_address: "Rua Principal, 123",
@@ -74,13 +91,17 @@ export function AdminConfiguracao() {
         store_email: "contato@greenstore.com",
         currency: "BRL",
         tax_rate: 0,
-        discount_max_percent: 50,
-        low_stock_alert: 20,
+        max_discount: 50,
+        max_losses: 10,
+        max_stock_adjust: 100,
+        login_attempts: 5,
+        lock_minutes: 10,
         backup_enabled: true,
         backup_frequency: "daily",
         session_timeout: 30,
         language: "pt-BR",
-      });
+      };
+      setSettings(defaults);
       setSuccessMessage("Configurações resetadas para o padrão!");
       setTimeout(() => setSuccessMessage(""), 3000);
     }
@@ -174,9 +195,9 @@ export function AdminConfiguracao() {
           </div>
         </div>
 
-        {/* Seção: Configurações Financeiras */}
+        {/* Seção: Configurações Financeiras e Regras */}
         <div className="settings-section">
-          <h2>Configurações Financeiras</h2>
+          <h2>Regras de Negócio e Financeiro</h2>
           <div className="settings-grid">
             <div className="form-group">
               <label>Moeda</label>
@@ -193,71 +214,107 @@ export function AdminConfiguracao() {
             </div>
 
             <div className="form-group">
-              <label>Taxa de Imposto (%)</label>
+              <label>Desconto Máximo (%)</label>
               <input
                 type="number"
-                value={settings.tax_rate}
+                value={settings.max_discount}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
-                    tax_rate: parseFloat(e.target.value) || 0,
-                  })
-                }
-                placeholder="0"
-                min="0"
-                max="100"
-                step="0.1"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Desconto Máximo Permitido (%)</label>
-              <input
-                type="number"
-                value={settings.discount_max_percent}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    discount_max_percent: parseFloat(e.target.value) || 0,
+                    max_discount: parseFloat(e.target.value) || 0,
                   })
                 }
                 placeholder="50"
                 min="0"
                 max="100"
-                step="1"
               />
+              <small>Limite para descontos sem aprovação</small>
             </div>
-          </div>
-        </div>
 
-        {/* Seção: Configurações de Estoque */}
-        <div className="settings-section">
-          <h2>Configurações de Estoque</h2>
-          <div className="settings-grid">
             <div className="form-group">
-              <label>Alerta de Estoque Baixo (%)</label>
+              <label>Limite de Perda S/ Aprovação</label>
               <input
                 type="number"
-                value={settings.low_stock_alert}
+                value={settings.max_losses}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
-                    low_stock_alert: parseFloat(e.target.value) || 0,
+                    max_losses: parseInt(e.target.value) || 0,
                   })
                 }
-                placeholder="20"
-                min="0"
-                max="100"
-                step="1"
               />
-              <small>Percentual do estoque mínimo para gerar alerta</small>
+              <small>Qtd máxima de perda manual</small>
+            </div>
+
+            <div className="form-group">
+              <label>Limite Ajuste Estoque S/ Aprovação</label>
+              <input
+                type="number"
+                value={settings.max_stock_adjust}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    max_stock_adjust: parseInt(e.target.value) || 0,
+                  })
+                }
+              />
+              <small>Delta máximo de ajuste manual</small>
             </div>
           </div>
         </div>
 
-        {/* Seção: Backup e Segurança */}
+        {/* Seção: Segurança e Acesso */}
         <div className="settings-section">
-          <h2>Backup e Segurança</h2>
+          <h2>Segurança e Acesso</h2>
+          <div className="settings-grid">
+            <div className="form-group">
+              <label>Tentativas de Login</label>
+              <input
+                type="number"
+                value={settings.login_attempts}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    login_attempts: parseInt(e.target.value) || 5,
+                  })
+                }
+              />
+              <small>Tentativas antes do bloqueio</small>
+            </div>
+
+            <div className="form-group">
+              <label>Tempo de Bloqueio (minutos)</label>
+              <input
+                type="number"
+                value={settings.lock_minutes}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    lock_minutes: parseInt(e.target.value) || 10,
+                  })
+                }
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Tempo de Sessão (minutos)</label>
+              <input
+                type="number"
+                value={settings.session_timeout}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    session_timeout: parseInt(e.target.value) || 30,
+                  })
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Seção: Backup e Preferências */}
+        <div className="settings-section">
+          <h2>Backup e Preferências</h2>
           <div className="settings-grid">
             <div className="form-group">
               <label>
@@ -275,51 +332,6 @@ export function AdminConfiguracao() {
               </label>
             </div>
 
-            {settings.backup_enabled && (
-              <div className="form-group">
-                <label>Frequência de Backup</label>
-                <select
-                  value={settings.backup_frequency}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      backup_frequency: e.target.value,
-                    })
-                  }
-                >
-                  <option value="hourly">A cada hora</option>
-                  <option value="daily">Diariamente</option>
-                  <option value="weekly">Semanalmente</option>
-                  <option value="monthly">Mensalmente</option>
-                </select>
-              </div>
-            )}
-
-            <div className="form-group">
-              <label>Tempo de Sessão (minutos)</label>
-              <input
-                type="number"
-                value={settings.session_timeout}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    session_timeout: parseInt(e.target.value) || 30,
-                  })
-                }
-                placeholder="30"
-                min="5"
-                max="480"
-                step="5"
-              />
-              <small>Tempo de inatividade antes de desconectar</small>
-            </div>
-          </div>
-        </div>
-
-        {/* Seção: Preferências */}
-        <div className="settings-section">
-          <h2>Preferências</h2>
-          <div className="settings-grid">
             <div className="form-group">
               <label>Idioma</label>
               <select
@@ -345,18 +357,12 @@ export function AdminConfiguracao() {
               <span className="info-value">1.0.0</span>
             </div>
             <div className="info-item">
-              <span className="info-label">Última Atualização:</span>
-              <span className="info-value">
-                {new Date().toLocaleDateString("pt-BR")}
-              </span>
-            </div>
-            <div className="info-item">
               <span className="info-label">Status:</span>
               <span className="info-value status-ok">Operacional</span>
             </div>
             <div className="info-item">
               <span className="info-label">Banco de Dados:</span>
-              <span className="info-value">PostgreSQL 12+</span>
+              <span className="info-value">SQLite (Emulação) / PostgreSQL</span>
             </div>
           </div>
         </div>
