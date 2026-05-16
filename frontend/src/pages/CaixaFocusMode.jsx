@@ -32,6 +32,17 @@ export function CaixaFocusMode() {
 
   const loadData = async () => {
     try {
+      setLoading(true);
+      setError('');
+      
+      // Verificar se o caixa está aberto primeiro
+      const currentCaixa = await apiFetch('/pos/cash-session/current');
+      if (!currentCaixa) {
+        setError('O caixa precisa estar aberto para usar o Modo Foco.');
+        setTimeout(() => navigate('/caixa'), 3000);
+        return;
+      }
+
       const promises = [apiFetch('/products')];
       
       const user = JSON.parse(sessionStorage.getItem('greenstore_user') || '{}');
@@ -44,21 +55,19 @@ export function CaixaFocusMode() {
       const results = await Promise.allSettled(promises);
       
       if (results[0].status === 'fulfilled') {
-        setProducts(Array.isArray(results[0].value) ? results[0].value : []);
+        const prodData = results[0].value;
+        setProducts(Array.isArray(prodData) ? prodData : (prodData?.data || []));
       } else {
         throw new Error(results[0].reason?.message || 'Falha ao carregar produtos');
       }
 
       if (canSeeDiscounts && results[1]?.status === 'fulfilled') {
-        setDiscounts(Array.isArray(results[1].value) ? results[1].value : []);
+        const discData = results[1].value;
+        setDiscounts(Array.isArray(discData) ? discData : (discData?.data || []));
       }
-      
-      setError('');
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
       setError('Erro ao carregar dados do sistema: ' + err.message);
-      setProducts([]);
-      setDiscounts([]);
     } finally {
       setLoading(false);
     }

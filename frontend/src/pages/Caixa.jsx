@@ -162,11 +162,12 @@ export function Caixa() {
   const handleAberturaAprovada = async (token) => {
     try {
       setLoading(true);
+      setError("");
       await apiFetch("/pos/cash-session/open", {
         method: "POST",
         body: JSON.stringify({
           opening_amount: parseFloat(openingAmount),
-          notes: openingNotes,
+          notes: openingNotes || "Abertura de caixa",
           approval_token: token
         })
       });
@@ -174,9 +175,15 @@ export function Caixa() {
       setShowAberturaModal(false);
       setShowApprovalModal(false);
       setSuccessMessage("Caixa aberto com sucesso!");
+      
+      // Recarregar status do caixa
+      const currentCaixa = await apiFetch("/pos/cash-session/current");
+      if (currentCaixa) setCaixaAberto(true);
+      
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       setError(err.message || "Erro ao abrir caixa.");
+      setShowApprovalModal(false);
     } finally {
       setLoading(false);
     }

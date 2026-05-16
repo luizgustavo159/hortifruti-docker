@@ -1,61 +1,72 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import "./Descontos.css";
 
 export function Descontos() {
   const [discounts, setDiscounts] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [showModal, setShowModal] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: "",
     type: "percent",
     value: 0,
     description: "",
-    buy_quantity: "",
-    get_quantity: "",
-    min_quantity: ""
+    target_type: "all", // all, product, category
+    target_value: "", // ID do produto ou categoria
+    selected_ids: [] // Para múltiplos produtos
   });
 
-  // Carregar descontos
-  useEffect(() => {
-    loadDiscounts();
-  }, []);
-
-  const loadDiscounts = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch("/discounts");
-      setDiscounts(Array.isArray(data) ? data : []);
+      const [discountsData, productsData, categoriesData] = await Promise.all([
+        apiFetch("/discounts"),
+        apiFetch("/products"),
+        apiFetch("/categories")
+      ]);
+      setDiscounts(Array.isArray(discountsData) ? discountsData : []);
+      setProducts(Array.isArray(productsData) ? productsData : []);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     } catch (err) {
-      console.error("Erro ao carregar descontos:", err);
-      setDiscounts([]);
+      console.error("Erro ao carregar dados:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Criar novo desconto
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   const handleCreateDiscount = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccessMessage("");
-
+    
     if (!formData.name) {
       setError("O nome do desconto é obrigatório.");
       return;
     }
 
+    if (formData.target_type === "product" && formData.selected_ids.length === 0) {
+      setError("Selecione pelo menos um produto.");
+      return;
+    }
+
     setLoading(true);
     try {
+      // Se for múltiplos produtos, o backend pode precisar tratar target_value como JSON string de IDs
       const payload = {
         ...formData,
-        value: formData.value ? parseFloat(formData.value) : 0,
-        buy_quantity: formData.buy_quantity ? parseInt(formData.buy_quantity) : null,
-        get_quantity: formData.get_quantity ? parseInt(formData.get_quantity) : null,
-        min_quantity: formData.min_quantity ? parseInt(formData.min_quantity) : null
+        target_value: formData.target_type === "product" 
+          ? JSON.stringify(formData.selected_ids) 
+          : formData.target_value,
+        value: parseFloat(formData.value) || 0
       };
 
       await apiFetch("/discounts", {
@@ -64,12 +75,9 @@ export function Descontos() {
       });
 
       setSuccessMessage("Desconto criado com sucesso!");
-      setFormData({ 
-        name: "", type: "percent", value: 0, description: "", 
-        buy_quantity: "", get_quantity: "", min_quantity: "" 
-      });
+      setFormData({ name: "", type: "percent", value: 0, description: "", target_type: "all", target_value: "", selected_ids: [] });
       setShowModal(false);
-      loadDiscounts();
+      loadData();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       setError(err.message || "Erro ao criar desconto.");
@@ -78,252 +86,102 @@ export function Descontos() {
     }
   };
 
-  // Deletar desconto
-  const handleDeleteDiscount = async (id) => {
-    if (window.confirm("Tem certeza que deseja deletar este desconto?")) {
-      try {
-        await apiFetch(`/discounts/${id}`, { method: "DELETE" });
-        setSuccessMessage("Desconto deletado com sucesso!");
-        loadDiscounts();
-        setTimeout(() => setSuccessMessage(""), 3000);
-      } catch (err) {
-        setError(err.message || "Erro ao deletar desconto.");
-      }
-    }
+  const toggleProductId = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      selected_ids: prev.selected_ids.includes(id)
+        ? prev.selected_ids.filter(i => i !== id)
+        : [...prev.selected_ids, id]
+    }));
   };
-
-  const getTypeName = (type) => {
-    const types = {
-      percent: 'Porcentagem',
-      fixed: 'Valor Fixo',
-      buy_x_get_y: 'Leve X Pague Y',
-      fixed_bundle: 'Combo Fixo'
-    };
-    return types[type] || type;
-  };
-
-  const activeDiscounts = discounts.filter((d) => d.active !== false).length;
-  const totalDiscounts = discounts.length;
 
   return (
     <PageShell
       title="Gestão de Descontos"
-      subtitle="Crie e gerencie campanhas de desconto para aumentar vendas"
-      actions={
-        <button
-          className="button"
-          onClick={() => setShowModal(true)}
-          style={{ marginBottom: "0" }}
-        >
-          + Novo Desconto
-        </button>
-      }
+      subtitle="Crie campanhas para produtos específicos ou categorias"
+      actions={<button className="button" onClick={() => setShowModal(true)}>+ Novo Desconto</button>}
     >
-      {/* Mensagens */}
       {error && <div className="error-message">{error}</div>}
       {successMessage && <div className="success-message">{successMessage}</div>}
 
-      {/* Cards de Resumo */}
       <div className="card-grid">
-        <div className="card">
-          <h3>Descontos Ativos</h3>
-          <strong>{activeDiscounts}</strong>
-          <p>Campanhas em execução</p>
-        </div>
-        <div className="card">
-          <h3>Total de Descontos</h3>
-          <strong>{totalDiscounts}</strong>
-          <p>Cadastrados no sistema</p>
-        </div>
-        <div className="card">
-          <h3>Desconto Máximo</h3>
-          <strong>50%</strong>
-          <p>Limite configurável</p>
-        </div>
-        <div className="card">
-          <h3>Impacto Médio</h3>
-          <strong>+15%</strong>
-          <p>Aumento de giro</p>
-        </div>
+        <div className="card"><h3>Ativos</h3><strong>{discounts.length}</strong></div>
       </div>
 
-      {/* Modal de Criar Desconto */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Criar Novo Desconto</h2>
-              <button
-                className="modal-close"
-                onClick={() => setShowModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+            <h2>Novo Desconto</h2>
             <form onSubmit={handleCreateDiscount} className="form-grid">
               <div className="form-group full-width">
-                <label>Nome do Desconto *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Ex: Quarta Verde"
-                  required
-                />
+                <label>Nome *</label>
+                <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
               </div>
 
               <div className="form-group">
-                <label>Tipo de Desconto *</label>
-                <select
-                  value={formData.type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, type: e.target.value })
-                  }
-                >
+                <label>Tipo</label>
+                <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                   <option value="percent">Percentual (%)</option>
-                  <option value="fixed">Valor Fixo (R$)</option>
-                  <option value="buy_x_get_y">Leve X Pague Y</option>
-                  <option value="fixed_bundle">Combo Fixo (Ex: 3 por R$ 10)</option>
+                  <option value="fixed">Fixo (R$)</option>
                 </select>
               </div>
 
-              {(formData.type === 'percent' || formData.type === 'fixed' || formData.type === 'fixed_bundle') && (
-                <div className="form-group">
-                  <label>{formData.type === 'fixed_bundle' ? 'Preço do Combo (R$)' : 'Valor *'}</label>
-                  <input
-                    type="number"
-                    value={formData.value}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        value: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    placeholder="Ex: 15"
-                    min="0"
-                    step="0.1"
-                    required
-                  />
-                </div>
-              )}
-
-              {(formData.type === 'buy_x_get_y' || formData.type === 'fixed_bundle') && (
-                <div className="form-group">
-                  <label>Quantidade Necessária *</label>
-                  <input
-                    type="number"
-                    value={formData.buy_quantity}
-                    onChange={(e) =>
-                      setFormData({ ...formData, buy_quantity: e.target.value })
-                    }
-                    placeholder="Ex: 3"
-                    required
-                  />
-                </div>
-              )}
-
-              {formData.type === 'buy_x_get_y' && (
-                <div className="form-group">
-                  <label>Quantidade Grátis *</label>
-                  <input
-                    type="number"
-                    value={formData.get_quantity}
-                    onChange={(e) =>
-                      setFormData({ ...formData, get_quantity: e.target.value })
-                    }
-                    placeholder="Ex: 1"
-                    required
-                  />
-                </div>
-              )}
-
-              <div className="form-group full-width">
-                <label>Descrição</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Detalhes da campanha..."
-                  rows="3"
-                />
+              <div className="form-group">
+                <label>Valor</label>
+                <input type="number" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} required />
               </div>
 
+              <div className="form-group full-width">
+                <label>Aplicar a:</label>
+                <select value={formData.target_type} onChange={e => setFormData({...formData, target_type: e.target.value, selected_ids: [], target_value: ""})}>
+                  <option value="all">Todos os Produtos</option>
+                  <option value="category">Uma Categoria</option>
+                  <option value="product">Produtos Específicos</option>
+                </select>
+              </div>
+
+              {formData.target_type === "category" && (
+                <div className="form-group full-width">
+                  <label>Selecione a Categoria</label>
+                  <select value={formData.target_value} onChange={e => setFormData({...formData, target_value: e.target.value})} required>
+                    <option value="">Selecione...</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {formData.target_type === "product" && (
+                <div className="form-group full-width">
+                  <label>Selecione os Produtos (Checkboxes)</label>
+                  <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #ddd', padding: '10px', borderRadius: '8px', background: '#f9f9f9' }}>
+                    {products.map(p => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <input type="checkbox" checked={formData.selected_ids.includes(p.id)} onChange={() => toggleProductId(p.id)} />
+                        <span style={{ fontSize: '14px' }}>{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="button" disabled={loading}>
-                  {loading ? "Criando..." : "Criar Desconto"}
-                </button>
+                <button type="submit" className="button">Criar Desconto</button>
+                <button type="button" className="button-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Lista de Descontos */}
-      <div className="discounts-section">
-        <h2>Descontos Cadastrados</h2>
-
-        {loading && <p style={{ textAlign: "center", color: "#999" }}>Carregando...</p>}
-
-        {!loading && discounts.length === 0 && (
-          <div className="empty-state">
-            <p>Nenhum desconto cadastrado ainda.</p>
-            <button className="button" onClick={() => setShowModal(true)}>
-              Criar Primeiro Desconto
-            </button>
+      <div className="discounts-grid">
+        {discounts.map(d => (
+          <div key={d.id} className="discount-card">
+            <h3>{d.name}</h3>
+            <p>{d.type === 'percent' ? `${d.value}%` : `R$ ${d.value}`}</p>
+            <p><small>Alvo: {d.target_type === 'all' ? 'Todos' : d.target_type === 'category' ? 'Categoria' : 'Produtos'}</small></p>
+            <button className="btn-delete" onClick={async () => { if(window.confirm('Excluir?')) { await apiFetch(`/discounts/${d.id}`, {method: 'DELETE'}); loadData(); } }}>Excluir</button>
           </div>
-        )}
-
-        {!loading && discounts.length > 0 && (
-          <div className="discounts-grid">
-            {discounts.map((discount) => (
-              <div key={discount.id} className="discount-card">
-                <div className="discount-header">
-                  <h3>{discount.name}</h3>
-                  <span className="discount-type">{getTypeName(discount.type)}</span>
-                </div>
-
-                <div className="discount-value">
-                  {discount.type === "percent" && (
-                    <span className="value">{discount.value}%</span>
-                  )}
-                  {discount.type === "fixed" && (
-                    <span className="value">R$ {parseFloat(discount.value).toFixed(2)}</span>
-                  )}
-                  {discount.type === "buy_x_get_y" && (
-                    <span className="value">Leve {discount.buy_quantity} Pague {discount.buy_quantity - (discount.get_quantity || 0)}</span>
-                  )}
-                  {discount.type === "fixed_bundle" && (
-                    <span className="value">{discount.buy_quantity} por R$ {parseFloat(discount.value).toFixed(2)}</span>
-                  )}
-                </div>
-
-                {discount.description && (
-                  <p className="discount-description">{discount.description}</p>
-                )}
-
-                <div className="discount-footer">
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDeleteDiscount(discount.id)}
-                  >
-                    Deletar
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        ))}
       </div>
     </PageShell>
   );

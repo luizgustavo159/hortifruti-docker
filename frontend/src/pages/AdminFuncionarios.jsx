@@ -65,7 +65,11 @@ export function AdminFuncionarios() {
         email: formData.email,
         password: formData.password,
         role: formData.role,
-        is_active: formData.is_active,
+        is_active: formData.is_active ? 1 : 0,
+        phone: "",
+        permissions: formData.role === 'admin' 
+          ? ["admin", "logs", "relatorios", "descontos", "estoque", "caixa"]
+          : ["caixa", "estoque"]
       };
 
       await apiFetch("/users", {
