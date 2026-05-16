@@ -47,7 +47,7 @@ export function AdminLogs() {
         if (filterType !== "all") params.append("type", filterType);
         if (filterLevel !== "all") params.append("level", filterLevel);
 
-        const data = await apiFetch(`/api/logs?${params}`);
+        const data = await apiFetch(`/logs?${params}`);
         setLogs(Array.isArray(data) ? data : []);
       } catch (loadError) {
         console.error("Erro ao carregar logs:", loadError);

@@ -9,7 +9,7 @@ export function CaixaFocusMode() {
   const [discounts, setDiscounts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPayment, setSelectedPayment] = useState('dinheiro');
+  const [selectedPayment, setSelectedPayment] = useState('cash');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -170,7 +170,7 @@ export function CaixaFocusMode() {
       );
       setCart([]);
       setSearchTerm('');
-      setSelectedPayment('dinheiro');
+      setSelectedPayment('cash');
 
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -374,9 +374,9 @@ export function CaixaFocusMode() {
               value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
             >
-              <option value="dinheiro">💵 Dinheiro</option>
-              <option value="credito">💳 Crédito</option>
-              <option value="debito">🏧 Débito</option>
+              <option value="cash">💵 Dinheiro</option>
+              <option value="credit">💳 Crédito</option>
+              <option value="debit">🏧 Débito</option>
               <option value="pix">📱 PIX</option>
             </select>
           </div>

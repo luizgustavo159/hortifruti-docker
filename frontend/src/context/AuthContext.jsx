@@ -14,14 +14,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem('accessToken');
+        const token = localStorage.getItem('greenstore_token');
         if (!token) {
           setLoading(false);
           return;
         }
 
         // Tentar recuperar usuário do localStorage primeiro para renderização rápida
-        const savedUser = localStorage.getItem('user');
+        const savedUser = localStorage.getItem('greenstore_user');
         if (savedUser) {
           setUser(JSON.parse(savedUser));
         }
@@ -29,12 +29,12 @@ export function AuthProvider({ children }) {
         // Verificar se token ainda é válido em segundo plano
         const response = await apiFetch('/auth/me');
         setUser(response);
-        localStorage.setItem('user', JSON.stringify(response));
+        localStorage.setItem('greenstore_user', JSON.stringify(response));
       } catch (err) {
         console.error('Erro na verificação de autenticação:', err);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        localStorage.removeItem('greenstore_token');
+        localStorage.removeItem('greenstore_refresh_token');
+        localStorage.removeItem('greenstore_user');
         setUser(null);
       } finally {
         setLoading(false);
@@ -54,9 +54,9 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ email, password }),
       });
 
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('greenstore_token', response.accessToken);
+      localStorage.setItem('greenstore_refresh_token', response.refreshToken);
+      localStorage.setItem('greenstore_user', JSON.stringify(response.user));
       setUser(response.user);
       navigate('/caixa');
       return response;
@@ -75,9 +75,9 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error('Erro ao fazer logout:', err);
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      localStorage.removeItem('greenstore_token');
+      localStorage.removeItem('greenstore_refresh_token');
+      localStorage.removeItem('greenstore_user');
       setUser(null);
       navigate('/');
     }
@@ -86,7 +86,7 @@ export function AuthProvider({ children }) {
   // Renovar token
   const refreshToken = useCallback(async () => {
     try {
-      const refreshTokenValue = localStorage.getItem('refreshToken');
+      const refreshTokenValue = localStorage.getItem('greenstore_refresh_token');
       if (!refreshTokenValue) {
         throw new Error('No refresh token available');
       }
@@ -96,9 +96,9 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ refreshToken: refreshTokenValue }),
       });
 
-      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('greenstore_token', response.accessToken);
       if (response.refreshToken) {
-        localStorage.setItem('refreshToken', response.refreshToken);
+        localStorage.setItem('greenstore_refresh_token', response.refreshToken);
       }
 
       return response.accessToken;

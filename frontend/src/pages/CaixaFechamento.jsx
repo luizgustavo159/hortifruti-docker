@@ -20,8 +20,8 @@ export function CaixaFechamento() {
       try {
         setLoading(true);
         const [caixa, movs] = await Promise.all([
-          apiFetch('/api/pos/cash-session/current'),
-          apiFetch('/api/pos/cash-movements?limit=50'),
+          apiFetch('/pos/cash-session/current'),
+          apiFetch('/pos/cash-session/movement?limit=50'),
         ]);
         setCaixaData(caixa);
         setMovements(movs.data || []);
@@ -44,7 +44,7 @@ export function CaixaFechamento() {
   // Registrar movimentação
   const addMovement = useCallback(async (type, amount) => {
     try {
-      const response = await apiFetch('/api/pos/cash-session/movement', {
+      const response = await apiFetch('/pos/cash-session/movement', {
         method: 'POST',
         body: JSON.stringify({
           type,
@@ -68,7 +68,7 @@ export function CaixaFechamento() {
 
     setProcessing(true);
     try {
-      await apiFetch('/api/pos/cash-session/close', {
+      await apiFetch('/pos/cash-session/close', {
         method: 'POST',
         body: JSON.stringify({
           total_counted: totalCounted,
