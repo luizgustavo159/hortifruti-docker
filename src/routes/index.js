@@ -910,7 +910,8 @@ router.post(
   requireSupervisor,
   [
     body("product_id").isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("delta").isInt().not().equals("0").withMessage("Delta inválido."),
+    body("delta").optional().isInt().not().equals("0").withMessage("Delta inválido."),
+    body("quantity").optional().isInt({ min: 1 }).withMessage("Quantidade inválida."),
     body("type").isIn(["inbound", "outbound", "transfer", "return"]).withMessage("Tipo inválido."),
     body("reason").optional().trim().isString().withMessage("Motivo inválido."),
   ],
@@ -919,8 +920,9 @@ router.post(
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
-    const { product_id, delta, type, reason = "" } = req.body;
-    const finalDelta = type === "outbound" ? -Math.abs(delta) : Math.abs(delta);
+    const { product_id, delta, quantity, type, reason = "" } = req.body;
+    const deltaValue = delta !== undefined ? delta : (quantity !== undefined ? quantity : 0);
+    const finalDelta = type === "outbound" ? -Math.abs(deltaValue) : Math.abs(deltaValue);
 
     runWithTransaction((tx, finish) => {
       tx.get("SELECT current_stock FROM products WHERE id = ?", [product_id], (err, product) => {
@@ -2255,8 +2257,28 @@ router.get("/api/pos/cash-session/current", authenticateToken, (req, res) => {
       if (err) {
         return res.status(500).json({ message: "Erro ao buscar sessão de caixa." });
       }
-      // Retornar objeto achatado para compatibilidade com frontend
-      return res.json(row || null);
+      if (!row) {
+        return res.json(null);
+      }
+      // Calcular expected_amount dinamicamente
+      db.all(
+        "SELECT type, amount FROM cash_movements WHERE session_id = ?",
+        [row.id],
+        (moveErr, movements) => {
+          if (moveErr) {
+            return res.json(row);
+          }
+          const movementNet = (movements || []).reduce((acc, movement) => {
+            const value = Number(movement.amount || 0);
+            return movement.type === "supply" ? acc + value : acc - value;
+          }, 0);
+          const expectedAmount = Number(row.opening_amount || 0) + movementNet;
+          return res.json({
+            ...row,
+            expected_amount: expectedAmount
+          });
+        }
+      );
     }
   );
 });
