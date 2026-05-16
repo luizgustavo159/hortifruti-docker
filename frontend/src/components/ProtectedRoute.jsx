@@ -13,7 +13,7 @@ export function ProtectedRoute({ children, requiredRole = null }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (requiredRole && !hasRole(requiredRole)) {

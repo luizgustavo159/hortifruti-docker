@@ -23,12 +23,27 @@ export function Caixa() {
       setLoading(true);
       setError("");
       try {
-        const [productsData, discountsData] = await Promise.all([
-          apiFetch("/products"),
-          apiFetch("/discounts"),
-        ]);
-        setProducts(productsData || []);
-        setDiscounts(discountsData || []);
+        const promises = [apiFetch("/products")];
+        
+        // Apenas gerentes e acima podem ver descontos
+        const user = JSON.parse(sessionStorage.getItem('greenstore_user') || '{}');
+        const canSeeDiscounts = ['manager', 'admin'].includes(user.role);
+        
+        if (canSeeDiscounts) {
+          promises.push(apiFetch("/discounts"));
+        }
+
+        const results = await Promise.allSettled(promises);
+        
+        if (results[0].status === 'fulfilled') {
+          setProducts(results[0].value || []);
+        } else {
+          throw new Error(results[0].reason?.message || "Falha ao carregar produtos.");
+        }
+
+        if (canSeeDiscounts && results[1]?.status === 'fulfilled') {
+          setDiscounts(results[1].value || []);
+        }
       } catch (loadError) {
         setError(loadError.message || "Falha ao carregar dados.");
       } finally {
