@@ -30,7 +30,8 @@ export function CaixaFechamento() {
           setTotalExpected(parseFloat(caixa.expected_amount || caixa.opening_amount || 0));
         }
         
-        setMovements(movs.data || []);
+        // O backend retorna { data: [...] } para movimentos
+        setMovements(Array.isArray(movs) ? movs : (movs.data || []));
       } catch (error) {
         console.error(error);
         toast.error('Erro ao carregar dados de caixa');

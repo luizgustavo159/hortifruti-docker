@@ -125,7 +125,7 @@ export function DashboardAdvanced() {
             </div>
             <div className="summary-card">
               <h4>Itens Críticos</h4>
-              <p className="value">{summaryData.critical_items?.length || 0}</p>
+              <p className="value">{summaryData.low_stock?.length || 0}</p>
             </div>
           </div>
         )}
@@ -222,11 +222,11 @@ export function DashboardAdvanced() {
                 <p className="insight-desc">R$ {categoryData[0]?.value.toFixed(2) || "0.00"}</p>
               </div>
             )}
-            {summaryData?.critical_items && summaryData.critical_items.length > 0 && (
+            {summaryData?.low_stock && summaryData.low_stock.length > 0 && (
               <div className="insight-card">
                 <h4>Produto Crítico</h4>
-                <p className="insight-value">{summaryData.critical_items[0]?.name || "N/A"}</p>
-                <p className="insight-desc">Estoque: {summaryData.critical_items[0]?.current_stock || 0}</p>
+                <p className="insight-value">{summaryData.low_stock[0]?.name || "N/A"}</p>
+                <p className="insight-desc">Estoque: {summaryData.low_stock[0]?.current_stock || 0}</p>
               </div>
             )}
             {summaryData && (
