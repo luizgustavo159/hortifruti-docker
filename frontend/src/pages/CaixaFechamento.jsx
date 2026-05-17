@@ -20,26 +20,32 @@ export function CaixaFechamento() {
   const [pendingMovement, setPendingMovement] = useState(null);
 
   // Carregar dados de caixa
-  useEffect(() => {
+    useEffect(() => {
     const loadCaixaData = async () => {
       try {
         setLoading(true);
-        const [caixa, movs] = await Promise.all([
-          apiFetch('/pos/cash-session/current'),
-          apiFetch('/pos/cash-session/movement?limit=50'),
-        ]);
-        
-        if (caixa) {
-          setCaixaData(caixa);
-          // No backend o campo é expected_amount
-          setTotalExpected(parseFloat(caixa.expected_amount || caixa.opening_amount || 0));
+        // Tentar carregar caixa atual
+        try {
+          const caixa = await apiFetch('/pos/cash-session/current');
+          if (caixa) {
+            setCaixaData(caixa);
+            setTotalExpected(parseFloat(caixa.expected_amount || caixa.opening_amount || 0));
+          }
+        } catch (e) {
+          console.error('Erro ao buscar caixa atual:', e);
         }
-        
-        // O backend retorna { data: [...] } para movimentos
-        setMovements(Array.isArray(movs) ? movs : (movs.data || []));
+
+        // Tentar carregar movimentos
+        try {
+          const movs = await apiFetch('/pos/cash-session/movement?limit=50');
+          setMovements(Array.isArray(movs) ? movs : (movs.data || []));
+        } catch (e) {
+          console.error('Erro ao buscar movimentos:', e);
+        }
       } catch (error) {
         console.error(error);
-        toast.error('Erro ao carregar dados de caixa');
+        // Só mostrar toast se realmente for um erro crítico não tratado
+        if (caixaData) toast.error('Erro ao carregar dados complementares');
       } finally {
         setLoading(false);
       }
@@ -48,46 +54,37 @@ export function CaixaFechamento() {
   }, []);
 
   // Calcular diferença
-  useEffect(() => {
-    const diff = totalCounted - totalExpected;
-    setDifference(diff);
-  }, [totalCounted, totalExpected]);
+    useEffect(() => {
+    const loadCaixaData = async () => {
+      try {
+        setLoading(true);
+        // Tentar carregar caixa atual
+        try {
+          const caixa = await apiFetch('/pos/cash-session/current');
+          if (caixa) {
+            setCaixaData(caixa);
+            setTotalExpected(parseFloat(caixa.expected_amount || caixa.opening_amount || 0));
+          }
+        } catch (e) {
+          console.error('Erro ao buscar caixa atual:', e);
+        }
 
-  // Registrar movimentação
-  const addMovement = useCallback(async (type, amount, approvalToken = null) => {
-    if (!amount || isNaN(amount)) return;
-
-    // Sangria exige aprovação
-    if (type === 'withdrawal' && !approvalToken) {
-      setPendingMovement({ type, amount });
-      setShowApprovalModal(true);
-      return;
-    }
-    
-    try {
-      const response = await apiFetch('/pos/cash-session/movement', {
-        method: 'POST',
-        body: JSON.stringify({
-          type,
-          amount: parseFloat(amount),
-          reason: `${type === 'withdrawal' ? 'Sangria' : 'Suprimento'} manual`,
-          approval_token: approvalToken
-        }),
-      });
-      toast.success(`${type === 'withdrawal' ? 'Sangria' : 'Suprimento'} registrado com sucesso!`);
-      setMovements(prev => [response, ...prev]);
-      
-      // Recarregar valor esperado após movimentação
-      const updatedCaixa = await apiFetch('/pos/cash-session/current');
-      if (updatedCaixa) {
-        setTotalExpected(parseFloat(updatedCaixa.expected_amount || updatedCaixa.opening_amount || 0));
+        // Tentar carregar movimentos
+        try {
+          const movs = await apiFetch('/pos/cash-session/movement?limit=50');
+          setMovements(Array.isArray(movs) ? movs : (movs.data || []));
+        } catch (e) {
+          console.error('Erro ao buscar movimentos:', e);
+        }
+      } catch (error) {
+        console.error(error);
+        // Só mostrar toast se realmente for um erro crítico não tratado
+        if (caixaData) toast.error('Erro ao carregar dados complementares');
+      } finally {
+        setLoading(false);
       }
-      
-      setShowApprovalModal(false);
-      setPendingMovement(null);
-    } catch (error) {
-      toast.error('Erro ao registrar movimentação: ' + error.message);
-    }
+    };
+    loadCaixaData();
   }, []);
 
   const handleMovementApproved = (token) => {
