@@ -223,13 +223,15 @@ export function Estoque() {
             <div className="table-wrapper">
               <table className="table">
                 <thead>
-                  <tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Mínimo</th><th>Status</th><th>Ações</th></tr>
+                  <tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Fornecedor</th>
+                      <th>Mínimo</th><th>Status</th><th>Ações</th></tr>
                 </thead>
                 <tbody>
                   {filteredProducts.map((product) => (
                     <tr key={product.id}>
                       <td>{product.name}</td>
                       <td>{product.category_name || "-"}</td>
+                      <td>{product.supplier_name || "-"}</td>
                       <td>R$ {Number(product.price).toFixed(2)}</td>
                       <td>{product.current_stock}</td>
                       <td>{product.min_stock}</td>
