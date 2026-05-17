@@ -37,7 +37,7 @@ export function Caixa() {
           setCaixaAberto(true);
         } else {
           setCaixaAberto(false);
-          setShowAberturaModal(true);
+          // setShowAberturaModal(true);
         }
 
         const promises = [apiFetch("/products")];

@@ -6,6 +6,7 @@ import "./animations.css";
 import { Login } from "./pages/Login";
 import { Caixa } from "./pages/Caixa";
 import { CaixaFocusMode } from "./pages/CaixaFocusMode";
+import { CaixaFechamento } from "./pages/CaixaFechamento";
 import { Estoque } from "./pages/Estoque";
 import { Descontos } from "./pages/Descontos";
 import { AdminDashboard } from "./pages/AdminDashboard";
@@ -17,6 +18,7 @@ import { AdminRelatorios } from "./pages/AdminRelatorios";
 import { AdminFuncionarios } from "./pages/AdminFuncionarios";
 import { AdminConfiguracao } from "./pages/AdminConfiguracao";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Toaster } from "sonner";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
@@ -36,6 +38,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Caixa />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/caixa/fechamento"
+          element={
+            <ProtectedRoute>
+              <CaixaFechamento />
             </ProtectedRoute>
           }
         />
@@ -137,6 +147,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />
+          <Toaster position="top-right" richColors />
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
