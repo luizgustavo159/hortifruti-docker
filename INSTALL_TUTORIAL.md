@@ -30,6 +30,16 @@ sudo apt install -y nodejs npm postgresql postgresql-contrib redis-server git
    GRANT ALL PRIVILEGES ON DATABASE greenstore TO greenstore;
    \q
    ```
+3. **Importante:** Edite o arquivo de configuração do PostgreSQL (`/etc/postgresql/<versao>/main/pg_hba.conf`) para permitir conexões locais com o método `trust` ou `md5` para o usuário `greenstore`.
+   Exemplo (adicione no início do arquivo):
+   ```
+   local   all             greenstore                               trust
+   host    all             greenstore        127.0.0.1/32          trust
+   ```
+   Reinicie o PostgreSQL após a alteração:
+   ```bash
+   sudo service postgresql restart
+   ```
 
 ## 4. Clonagem e Configuração do Projeto
 
@@ -47,7 +57,7 @@ sudo apt install -y nodejs npm postgresql postgresql-contrib redis-server git
    - Edite o `.env` e configure a `DATABASE_URL`:
      `DATABASE_URL=postgres://greenstore:sua_senha_aqui@localhost:5432/greenstore`
    - Configure o `JWT_SECRET` com uma chave segura.
-   - Configure `USE_IN_MEMORY_DB=false` para persistência real.
+   - **Para usar o PostgreSQL, defina `USE_IN_MEMORY_DB=false`. Para testes rápidos com banco em memória, defina `USE_IN_MEMORY_DB=true`.**
 
 ## 5. Migrações e Inicialização
 
@@ -55,10 +65,16 @@ sudo apt install -y nodejs npm postgresql postgresql-contrib redis-server git
    ```bash
    npm run migrate
    ```
-2. (Opcional) Crie um usuário administrador inicial:
+2. Crie um usuário administrador inicial (se não existir):
    ```bash
-   npm run bootstrap:admin
+   curl -X POST http://localhost:3000/api/auth/bootstrap \
+     -H "Content-Type: application/json" \
+     -d 
    ```
+   **Credenciais Padrão:**
+   - **E-mail:** `admin@admin.com`
+   - **Senha:** `admin123456`
+
 3. Inicie o servidor backend:
    ```bash
    npm start
@@ -76,4 +92,3 @@ O frontend já vem pré-compilado na pasta `public` do backend. Se desejar recom
 
 Por padrão, o sistema estará disponível em `http://seu-ip:3000`.
 Recomenda-se o uso de um proxy reverso como **Nginx** para produção.
-
