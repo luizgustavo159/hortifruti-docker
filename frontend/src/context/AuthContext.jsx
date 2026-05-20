@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
+import { getDefaultRoute, hasRequiredRole as checkRequiredRole } from '../lib/auth';
 
 const AuthContext = createContext();
 
@@ -81,7 +82,9 @@ export function AuthProvider({ children }) {
       sessionStorage.setItem('greenstore_refresh_token', response.refreshToken);
       sessionStorage.setItem('greenstore_user', JSON.stringify(response.user));
       setUser(response.user);
-      navigate('/caixa');
+      // Redirecionar para a rota padrão do usuário baseado no seu role
+      const defaultRoute = getDefaultRoute();
+      navigate(defaultRoute);
       return response;
     } catch (err) {
       setError(err.message || 'Falha ao fazer login');
@@ -132,7 +135,7 @@ export function AuthProvider({ children }) {
     }
   }, [logout]);
 
-  // Verificar se usuário tem permissão
+  // Verificar se usuário tem permissão (usa a lógica unificada de lib/auth.js)
   const hasRole = useCallback((role) => {
     if (!user) return false;
     const roles = {
@@ -141,7 +144,9 @@ export function AuthProvider({ children }) {
       manager: 3,
       admin: 4,
     };
-    return roles[user.role] >= roles[role];
+    const userLevel = roles[user.role] || 0;
+    const requiredLevel = roles[role] || Number.MAX_SAFE_INTEGER;
+    return userLevel >= requiredLevel;
   }, [user]);
 
   // Verificar se usuário tem permissão exata

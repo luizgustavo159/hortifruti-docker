@@ -1,10 +1,27 @@
 const TOKEN_KEY = "greenstore_token";
 const USER_KEY = "greenstore_user";
+// Hierarquia de roles: cada nível superior tem acesso a tudo do nível inferior
 const roleLevels = {
   operator: 1,
   supervisor: 2,
   manager: 3,
   admin: 4,
+};
+
+// Definição de permissões específicas por role (para controle granular)
+const rolePermissions = {
+  operator: ['caixa', 'estoque'],
+  supervisor: ['caixa', 'estoque', 'descontos', 'admin', 'relatorios', 'logs'],
+  manager: ['caixa', 'estoque', 'descontos', 'admin', 'relatorios', 'logs'],
+  admin: ['caixa', 'estoque', 'descontos', 'admin', 'relatorios', 'logs', 'funcionarios', 'configuracao'],
+};
+
+// Rota padrão para cada role após login
+const defaultRoutes = {
+  operator: '/caixa',
+  supervisor: '/admin',
+  manager: '/admin',
+  admin: '/admin',
 };
 
 export const getToken = () => sessionStorage.getItem(TOKEN_KEY);
@@ -98,6 +115,21 @@ export const hasRequiredRole = (requiredRole) => {
   const currentLevel = roleLevels[user?.role] || 0;
   const requiredLevel = roleLevels[requiredRole] || Number.MAX_SAFE_INTEGER;
   return currentLevel >= requiredLevel;
+};
+
+// Verificar se o usuário tem uma permissão específica
+export const hasPermission = (permission) => {
+  const user = getAuthUser();
+  if (!user?.role) return false;
+  const permissions = rolePermissions[user.role] || [];
+  return permissions.includes(permission);
+};
+
+// Obter a rota padrão para o usuário
+export const getDefaultRoute = () => {
+  const user = getAuthUser();
+  if (!user?.role) return '/';
+  return defaultRoutes[user.role] || '/caixa';
 };
 
 export const isAuthenticated = () => {

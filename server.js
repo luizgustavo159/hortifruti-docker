@@ -71,6 +71,32 @@ async function seedInMemoryDb() {
       });
     });
 
+    // Seed de usuários de teste
+    const testUsers = [
+      { name: 'Gerente', email: 'manager@hortifruti.com', password: 'manager123456', role: 'manager' },
+      { name: 'Supervisor', email: 'supervisor@hortifruti.com', password: 'supervisor123456', role: 'supervisor' },
+      { name: 'Operador', email: 'operator@hortifruti.com', password: 'operator123456', role: 'operator' }
+    ];
+
+    for (const user of testUsers) {
+      const userExists = await new Promise((resolve) => {
+        targetDb.query("SELECT id FROM users WHERE email = $1", [user.email], (err, res) => {
+          resolve(res && res.rows && res.rows.length > 0);
+        });
+      });
+
+      if (!userExists) {
+        const userPasswordHash = bcrypt.hashSync(user.password, 10);
+        await new Promise((resolve, reject) => {
+          const sql = "INSERT INTO users (name, email, password_hash, role, is_active) VALUES ($1, $2, $3, $4, 1)";
+          targetDb.query(sql, [user.name, user.email, userPasswordHash, user.role], (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      }
+    }
+
     if (productCount === 0) {
       const products = [
         ['Maçã Fuji', 'SKU001', 'kg', 5.99, 100],
