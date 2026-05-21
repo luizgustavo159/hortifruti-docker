@@ -743,6 +743,7 @@ router.post(
     });
 
     function saveLoss() {
+      let productData = null;
       runWithTransaction((tx, finish) => {
         tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
           if (err) {
@@ -753,13 +754,17 @@ router.post(
             finish({ status: 404, message: "Produto não encontrado." });
             return;
           }
+          productData = product;
           if (product.current_stock < quantity) {
             finish({ status: 400, message: "Estoque insuficiente para registrar perda." });
             return;
           }
+          
+          const nextStock = product.current_stock - Number(quantity);
+          
           tx.run(
-            "UPDATE products SET current_stock = current_stock - ? WHERE id = ?",
-            [quantity, product_id],
+            "UPDATE products SET current_stock = ? WHERE id = ?",
+            [nextStock, product_id],
             (updateErr) => {
               if (updateErr) {
                 finish(updateErr);
@@ -798,7 +803,14 @@ router.post(
         }
         logAudit({
           action: "stock_loss",
-          details: { product_id, quantity, reason },
+          details: { 
+            product_id, 
+            product_name: productData?.name, 
+            quantity, 
+            reason,
+            prev_stock: productData?.current_stock,
+            next_stock: productData?.current_stock - quantity
+          },
           performedBy: req.user.id,
         });
         return res.status(201).json({ status: "ok" });
@@ -838,6 +850,7 @@ router.post(
 
     function saveAdjustment(approval) {
       let updatedStock = null;
+      let productData = null;
       runWithTransaction((tx, finish) => {
         tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
           if (err) {
@@ -848,6 +861,7 @@ router.post(
             finish({ status: 404, message: "Produto não encontrado." });
             return;
           }
+          productData = product;
 
           const nextStock = product.current_stock + Number(delta);
           updatedStock = nextStock;
@@ -887,7 +901,14 @@ router.post(
         }
         logAudit({
           action: "stock_adjust",
-          details: { product_id, delta, reason },
+          details: { 
+            product_id, 
+            product_name: productData?.name,
+            delta, 
+            reason,
+            prev_stock: productData?.current_stock,
+            next_stock: updatedStock
+          },
           performedBy: req.user.id,
           approvedBy: approval?.approved_by || null,
         });

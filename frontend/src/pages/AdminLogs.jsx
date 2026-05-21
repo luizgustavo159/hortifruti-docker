@@ -51,11 +51,21 @@ const formatDetails = (details, action) => {
     const parsed = typeof details === "string" ? JSON.parse(details) : details;
     
     // Criar descrição amigável baseada na ação
-    if (action.includes("sale")) {
-      return `Venda ID: ${parsed.id || "N/A"} | Valor: R$ ${parsed.total || "0.00"}`;
+    if (action === "sale_created") {
+      const id = parsed.id || (parsed.sale_ids ? parsed.sale_ids.join(",") : "N/A");
+      const itemsCount = parsed.items_count || (parsed.items ? parsed.items.length : "N/A");
+      const totalVal = parsed.final_total || parsed.total || 0;
+      return `VENDA #${id} | Total: R$ ${Number(totalVal).toFixed(2)} | Itens: ${itemsCount} | Pagto: ${parsed.payment_method || "N/A"}`;
+    }
+    if (action === "stock_loss") {
+      return `PERDA: ${parsed.product_name || "N/A"} | Qtd: ${parsed.quantity} | Motivo: ${parsed.reason || "N/A"} | Estoque: ${parsed.prev_stock} -> ${parsed.next_stock}`;
+    }
+    if (action === "stock_adjust") {
+      const type = Number(parsed.delta) > 0 ? "ENTRADA" : "SAÍDA";
+      return `${type}: ${parsed.product_name || "N/A"} | Qtd: ${Math.abs(parsed.delta)} | Motivo: ${parsed.reason || "N/A"} | Estoque: ${parsed.prev_stock} -> ${parsed.next_stock}`;
     }
     if (action.includes("stock")) {
-      return `Produto: ${parsed.product_name || "N/A"} | Quantidade: ${parsed.quantity || "N/A"}`;
+      return `Produto: ${parsed.product_name || "N/A"} | Quantidade: ${parsed.quantity || parsed.delta || "N/A"}`;
     }
     if (action.includes("user")) {
       return `Usuário: ${parsed.email || parsed.name || "N/A"} | Perfil: ${parsed.role || "N/A"}`;
