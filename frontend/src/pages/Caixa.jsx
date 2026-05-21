@@ -287,6 +287,11 @@ export function Caixa() {
 
   // Finalizar venda
   const handleCheckout = async () => {
+    if (!caixaAberto) {
+      setError("O caixa está fechado. Abra o caixa para realizar vendas.");
+      return;
+    }
+
     if (cartItems.length === 0) {
       setError("Adicione itens ao carrinho antes de finalizar.");
       return;
@@ -355,7 +360,13 @@ export function Caixa() {
           </button>
           <button 
             className="btn-focus-mode" 
-            onClick={() => navigate('/caixa/focus')}
+            onClick={() => {
+              if (!caixaAberto) {
+                setError("O Modo Foco só pode ser aberto se o caixa estiver aberto.");
+                return;
+              }
+              navigate('/caixa/focus');
+            }}
             title="Modo Foco - Tela Cheia"
           >
             🎯 Modo Foco

@@ -222,6 +222,19 @@ export function CaixaFocusMode() {
   const finalTotal = total - totalDiscount;
 
   const handleFinalizeSale = async () => {
+    // Verificar se o caixa está aberto (segurança extra)
+    try {
+      const currentCaixa = await apiFetch('/pos/cash-session/current');
+      if (!currentCaixa) {
+        setError('O caixa foi fechado em outra aba ou sessão. Não é possível vender.');
+        setTimeout(() => navigate('/caixa'), 3000);
+        return;
+      }
+    } catch (e) {
+      setError('Erro ao validar status do caixa.');
+      return;
+    }
+
     if (cart.length === 0) {
       setError('Carrinho vazio!');
       setTimeout(() => setError(''), 3000);

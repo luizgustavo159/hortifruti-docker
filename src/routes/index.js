@@ -1408,6 +1408,32 @@ router.post(
       return res.status(400).json({ message: "Todos os itens devem ter produto e quantidade válidos." });
     }
 
+    // Verificar se o operador possui caixa aberto antes de registrar a venda
+    return db.get(
+      "SELECT id FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL ORDER BY opened_at DESC LIMIT 1",
+      [req.user.id],
+      (cashErr, cashSession) => {
+        if (cashErr) {
+          return res.status(500).json({ message: "Erro ao verificar sessão de caixa." });
+        }
+        if (!cashSession) {
+          logAudit({
+            action: "sale_attempt_failed_cash_closed",
+            details: {
+              reason: "Caixa fechado",
+              items_count: itemsFromBody.length,
+              payment_method
+            },
+            performedBy: req.user.id
+          });
+          return res.status(400).json({ message: "O caixa precisa estar aberto para registrar vendas. Abra o caixa antes de continuar." });
+        }
+
+        return processSale();
+      }
+    );
+
+    function processSale() {
     let responsePayload = null;
     const saleItems = [];
 
@@ -1649,6 +1675,7 @@ router.post(
       return res.status(201).json(responsePayload);
     });
   });
+    } // fim processSale
 });
 
 router.get("/api/reports/summary", authenticateToken, requireSupervisor, (req, res) => {
