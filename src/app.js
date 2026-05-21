@@ -58,17 +58,17 @@ app.use((req, res, next) => {
     if (isSlow || isError || (res.statusCode >= 400 && res.statusCode < 500)) {
       const level = res.statusCode >= 500 ? "error" : (isSlow ? "warning" : "info");
       const message = res.statusCode >= 500 
-        ? "Erro Crítico no Servidor (O sistema encontrou um problema interno)" 
-        : (isSlow ? "Alerta de Lentidão (A operação demorou mais que o esperado)" : "Aviso de Erro do Usuário (Requisição inválida ou negada)");
+        ? "O servidor encontrou um problema interno ao processar sua solicitação" 
+        : (isSlow ? "A operação demorou mais tempo que o normal para ser concluída" : "O sistema recusou uma ação por falta de permissão ou dados inválidos");
       
       const context = {
-        metodo_http: req.method,
-        caminho_acessado: req.path,
-        codigo_status: res.statusCode,
-        tempo_resposta_ms: Math.round(durationMs),
+        metodo: req.method,
+        pagina: req.path,
+        status: res.statusCode,
+        duracao: Math.round(durationMs),
         id_requisicao: req.requestId,
         id_usuario: req.user?.id || null,
-        descricao_amigavel: message
+        mensagem: message
       };
 
       // Registrar Alerta para erros graves ou lentidão
@@ -96,8 +96,8 @@ app.use((req, res, next) => {
             res.statusCode >= 500 ? "erro_sistema" : "erro_cliente",
             JSON.stringify({
               ...context,
-              mensagem_erro: res.statusMessage || "Erro não especificado",
-              detalhe: `Ocorreu um erro ${res.statusCode} ao tentar acessar ${req.path}`
+              erro: res.statusMessage || "Não especificado",
+              detalhe: `Falha ao tentar acessar a página ${req.path}`
             }),
             req.user?.id || null
           ]

@@ -38,11 +38,11 @@ const ACTION_DESCRIPTIONS = {
   "caixa_aberto": "Abertura de Caixa",
   "caixa_fechado": "Fechamento de Caixa",
   "movimentacao_caixa": "Movimentação de Caixa",
-  "tentativa_venda_caixa_fechado": "Tentativa de Venda (Caixa Fechado)",
+  "tentativa_venda_caixa_fechado": "Venda Bloqueada (Caixa Fechado)",
   "erro_sistema": "Erro Crítico no Servidor",
-  "erro_cliente": "Aviso de Erro do Usuário",
+  "erro_cliente": "Aviso de Uso do Sistema",
   "excecao_nao_tratada": "Falha Grave Inesperada",
-  "erro_migracao": "Erro de Estrutura (Banco)",
+  "erro_migracao": "Erro de Estrutura do Banco",
   "erro_seed": "Erro de Dados Iniciais",
   "erro_fatal_inicializacao": "Erro Fatal ao Iniciar",
   "solicitacao_recuperacao_senha": "Pedido de Nova Senha",
@@ -86,10 +86,10 @@ const ACTION_DESCRIPTIONS = {
   "admin_bootstrap": "Sistema Inicializado",
   "cash_session_opened": "Abertura de Caixa",
   "cash_session_closed": "Fechamento de Caixa",
-  "sale_attempt_failed_cash_closed": "Tentativa de Venda (Caixa Fechado)",
-  "client_error": "Aviso de Erro do Usuário",
+  "sale_attempt_failed_cash_closed": "Venda Bloqueada (Caixa Fechado)",
+  "client_error": "Aviso de Uso do Sistema",
   "system_error": "Erro Crítico no Servidor",
-  "migration_error": "Erro de Estrutura (Banco)",
+  "migration_error": "Erro de Estrutura do Banco",
   "unhandled_exception": "Falha Grave Inesperada"
 };
 
@@ -114,77 +114,96 @@ const formatDetails = (details, action) => {
   try {
     const parsed = typeof details === "string" ? JSON.parse(details) : details;
     
+    // TRADUÇÃO AGRESSIVA PARA HUMANO (Sem termos técnicos)
+    if (action === "erro_cliente" || action === "client_error") {
+      const status = parsed.status || parsed.codigo_status || "400";
+      const path = parsed.path || parsed.caminho_acessado || "uma página";
+      return `O sistema recusou um acesso em ${path} (Código: ${status}). Isso geralmente ocorre por falta de permissão ou dados inválidos.`;
+    }
+
+    if (action === "erro_sistema" || action === "system_error") {
+      return `O servidor encontrou uma falha interna ao processar uma solicitação. O suporte técnico foi notificado automaticamente.`;
+    }
+
+    if (action === "erro_migracao" || action === "migration_error") {
+      return `Falha crítica ao atualizar a estrutura do banco de dados. Verifique os arquivos de sistema.`;
+    }
+
+    if (action === "tentativa_venda_caixa_fechado" || action === "sale_attempt_failed_cash_closed") {
+      return `Venda bloqueada: Um operador tentou vender com o caixa fechado. O caixa deve ser aberto primeiro.`;
+    }
+
     // Mapeamento de chaves técnicas para nomes amigáveis em português
     const KEY_MAP = {
-      "id_venda": "ID da Venda",
-      "numero_documento": "Nº Documento",
-      "valor_total": "Valor Total",
-      "valor_final": "Valor Final",
-      "valor_final_com_desconto": "Valor Final",
-      "forma_pagamento": "Forma de Pagamento",
+      "id_venda": "Venda #",
+      "numero_documento": "Documento",
+      "valor_total": "Subtotal",
+      "valor_final": "Total",
+      "valor_final_com_desconto": "Total Final",
+      "forma_pagamento": "Pagamento",
       "quantidade_itens": "Qtd Itens",
       "mensagem": "Informação",
-      "id_produto": "ID do Produto",
+      "id_produto": "Cód. Produto",
       "nome_produto": "Produto",
       "quantidade_perda": "Qtd Perda",
-      "motivo_perda": "Motivo da Perda",
-      "estoque_anterior": "Estoque Anterior",
-      "estoque_atual": "Estoque Atual",
-      "variacao_estoque": "Variação",
-      "motivo_ajuste": "Motivo do Ajuste",
-      "id_usuario": "ID do Usuário",
+      "motivo_perda": "Motivo",
+      "estoque_anterior": "Estoque Ant.",
+      "estoque_atual": "Estoque Novo",
+      "variacao_estoque": "Ajuste",
+      "motivo_ajuste": "Motivo",
+      "id_usuario": "Cód. Usuário",
       "email_usuario": "E-mail",
       "perfil_usuario": "Perfil",
-      "id_sessao": "ID da Sessão",
-      "valor_abertura": "Valor Abertura",
-      "valor_fechamento": "Valor Fechamento",
-      "valor_esperado": "Valor Esperado",
+      "id_sessao": "Cód. Caixa",
+      "valor_abertura": "Abertura",
+      "valor_fechamento": "Fechamento",
+      "valor_esperado": "Esperado",
       "diferenca_valor": "Diferença",
       "tipo_movimentacao": "Tipo",
       "valor": "Valor",
       "motivo": "Motivo",
-      "id_aprovacao": "ID Aprovação",
+      "id_aprovacao": "Cód. Aprovação",
       "acao_aprovada": "Ação Autorizada",
       "acao_autorizada": "Ação Autorizada",
       "metodo_http": "Método",
-      "caminho_acessado": "Caminho",
-      "codigo_status": "Status HTTP",
-      "tempo_resposta_ms": "Duração (ms)",
-      "id_requisicao": "ID Requisição",
+      "caminho_acessado": "Página",
+      "codigo_status": "Status",
+      "tempo_resposta_ms": "Tempo (ms)",
+      "id_requisicao": "ID Req.",
       "mensagem_erro": "Erro",
-      "detalhe": "Detalhe do Erro",
+      "detalhe": "Detalhe",
       "erro_tecnico": "Erro Técnico",
       "orientacao": "Orientação",
       // Legado
-      "sale_id": "ID da Venda",
-      "document_number": "Nº Documento",
-      "total": "Total",
-      "final_total": "Total Final",
+      "sale_id": "Venda #",
+      "document_number": "Documento",
+      "total": "Subtotal",
+      "final_total": "Total",
       "payment_method": "Pagamento",
       "items_count": "Qtd Itens",
-      "product_id": "ID Produto",
+      "product_id": "Cód. Produto",
       "product_name": "Produto",
       "quantity": "Quantidade",
       "reason": "Motivo",
       "prev_stock": "Estoque Ant.",
-      "next_stock": "Estoque Atual",
-      "user_id": "ID Usuário",
+      "next_stock": "Estoque Novo",
+      "user_id": "Cód. Usuário",
       "email": "E-mail",
       "role": "Perfil",
-      "session_id": "ID Sessão",
-      "opening_amount": "Valor Abertura",
-      "closing_amount": "Valor Fechamento",
-      "expected_amount": "Valor Esperado",
+      "session_id": "Cód. Caixa",
+      "opening_amount": "Abertura",
+      "closing_amount": "Fechamento",
+      "expected_amount": "Esperado",
       "difference_amount": "Diferença",
       "type": "Tipo",
       "amount": "Valor",
       "notes": "Observações",
       "status": "Status",
       "method": "Método",
-      "path": "Caminho",
-      "duration_ms": "Duração (ms)",
-      "request_id": "ID Requisição",
-      "error_message": "Mensagem de Erro"
+      "path": "Página",
+      "duration_ms": "Tempo (ms)",
+      "request_id": "ID Req.",
+      "error_message": "Erro"
     };
 
     // Se houver uma mensagem principal, usá-la como destaque
@@ -192,14 +211,23 @@ const formatDetails = (details, action) => {
     
     // Filtrar chaves para não repetir a mensagem principal e chaves técnicas irrelevantes
     const detailEntries = Object.entries(parsed).filter(([k]) => 
-      k !== "mensagem" && k !== "detalhe" && k !== "descricao_amigavel" && k !== "pilha_erro"
+      k !== "mensagem" && k !== "detalhe" && k !== "descricao_amigavel" && k !== "pilha_erro" && k !== "request_id" && k !== "id_requisicao"
     );
 
     if (detailEntries.length === 0) return mainMessage || "Sem detalhes";
 
     const detailsString = detailEntries.map(([k, v]) => {
       const label = KEY_MAP[k] || k.replace(/_/g, ' ').toUpperCase();
-      const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+      let val = typeof v === "object" ? JSON.stringify(v) : String(v);
+      
+      // Traduzir valores comuns
+      if (val === "cash") val = "Dinheiro";
+      if (val === "credit_card") val = "Cartão de Crédito";
+      if (val === "debit_card") val = "Cartão de Débito";
+      if (val === "pix") val = "PIX";
+      if (val === "in") val = "Entrada";
+      if (val === "out") val = "Saída";
+      
       return `${label}: ${val}`;
     }).join(" | ");
 
