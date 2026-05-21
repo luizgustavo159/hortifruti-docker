@@ -335,7 +335,7 @@ router.post(
             return res.status(500).json({ message: "Erro ao criar administrador." });
           }
           logAudit({
-            action: "admin_bootstrap",
+            action: "inicializacao_admin",
             details: { user_id: row.id, email },
             performedBy: row.id,
             approvedBy: row.id,
@@ -383,7 +383,7 @@ router.post(
           sendPasswordResetNotification({ user, token, expiresAt })
             .then(() => {
               logAudit({
-                action: "password_reset_requested",
+                action: "solicitacao_recuperacao_senha",
                 details: { user_id: user.id },
                 performedBy: user.id,
               });
@@ -461,7 +461,7 @@ router.post(
             return res.status(500).json({ message: "Erro ao atualizar senha." });
           }
           logAudit({
-            action: "password_reset_completed",
+            action: "recuperacao_senha_concluida",
             details: { user_id: reset.user_id },
             performedBy: reset.user_id,
           });
@@ -704,7 +704,7 @@ router.post(
           return res.status(400).json({ message: "Erro ao cadastrar produto." });
         }
         logAudit({
-          action: "product_created",
+          action: "produto_criado",
           details: { product_id: row.id, name: payload.name, sku: payload.sku },
           performedBy: req.user.id
         });
@@ -803,7 +803,7 @@ router.post(
           return res.status(500).json({ message: "Erro ao registrar perda." });
         }
         logAudit({
-          action: "stock_loss",
+          action: "perda_estoque",
           details: { 
             product_id, 
             product_name: productData?.name, 
@@ -901,7 +901,7 @@ router.post(
           return res.status(500).json({ message: "Erro ao ajustar estoque." });
         }
         logAudit({
-          action: "stock_adjust",
+          action: "ajuste_estoque",
           details: { 
             product_id, 
             product_name: productData?.name,
@@ -973,7 +973,7 @@ router.post(
         return res.status(transactionErr.status || 500).json({ message: transactionErr.message || "Erro ao mover estoque." });
       }
       logAudit({
-        action: "stock_move",
+        action: "movimentacao_estoque",
         details: { product_id, delta: finalDelta, type, reason },
         performedBy: req.user.id
       });
@@ -1199,7 +1199,7 @@ router.post(
         return res.status(transactionErr.status || 500).json({ message: transactionErr.message || "Erro ao receber pedido." });
       }
       logAudit({
-        action: "purchase_order_received",
+        action: "pedido_compra_recebido",
         details: { id: orderId },
         performedBy: req.user.id,
       });
@@ -1284,7 +1284,7 @@ router.post(
             return res.status(500).json({ message: "Erro ao cadastrar desconto." });
           }
           logAudit({
-            action: "discount_created",
+            action: "desconto_criado",
             details: { id: row.id, name: payload.name, type: type, value: payload.value },
             performedBy: req.user.id,
           });
@@ -1347,7 +1347,7 @@ router.put(
           return res.status(500).json({ message: "Erro ao atualizar desconto." });
         }
         logAudit({
-          action: "discount_updated",
+          action: "desconto_atualizado",
           details: { id, name: payload.name, type, value: payload.value },
           performedBy: req.user.id,
         });
@@ -1363,7 +1363,7 @@ router.delete("/api/discounts/:id", authenticateToken, requireSupervisor, (req, 
     if (err) {
       return res.status(500).json({ message: "Erro ao deletar desconto." });
     }
-    logAudit({ action: "discount_deleted", details: { id }, performedBy: req.user.id });
+    logAudit({ action: "desconto_deletado", details: { id }, performedBy: req.user.id });
     return res.json({ status: "ok" });
   });
 });
@@ -1418,7 +1418,7 @@ router.post(
         }
         if (!cashSession) {
           logAudit({
-            action: "sale_attempt_failed_cash_closed",
+            action: "tentativa_venda_caixa_fechado",
             details: {
               reason: "Caixa fechado",
               items_count: itemsFromBody.length,
@@ -1660,7 +1660,7 @@ router.post(
         return res.status(500).json({ message: "Erro ao registrar venda." });
       }
       logAudit({
-        action: "sale_created",
+        action: "venda_realizada",
         details: {
           sale_ids: responsePayload.items.map((item) => item.id),
           document_numbers: responsePayload.items.map((item) => item.document_number),
@@ -1927,7 +1927,7 @@ router.post(
           return res.status(500).json({ message: "Erro ao registrar fluxo de caixa." });
         }
         logAudit({
-          action: "finance_cashflow_recorded",
+          action: "fluxo_caixa_registrado",
           details: { id: row.id, type, category, amount: Number(amount), reference },
           performedBy: req.user.id,
         });
@@ -2050,7 +2050,7 @@ router.post(
           return res.status(500).json({ message: "Erro ao registrar conta." });
         }
         logAudit({
-          action: "finance_account_created",
+          action: "conta_financeira_criada",
           details: { id: row.id, kind, partner_name, amount: Number(amount), due_date },
           performedBy: req.user.id,
         });
@@ -2144,7 +2144,7 @@ router.post("/api/finance/accounts/:id/settle", authenticateToken, requireSuperv
       return res.status(500).json({ message: "Erro ao liquidar conta." });
     }
     logAudit({
-      action: "finance_account_settled",
+      action: "conta_financeira_liquidada",
       details: { account_id: accountId },
       performedBy: req.user.id,
     });
@@ -2239,7 +2239,7 @@ router.post(
             return res.status(500).json({ message: "Erro ao registrar aprovação." });
           }
           logAudit({
-            action: "approval_granted",
+            action: "aprovacao_concedida",
             details: { action, reason, metadata },
             performedBy: user.id,
             approvedBy: user.id,
@@ -2267,7 +2267,7 @@ router.post(
 
     const { item, reason } = req.body;
     logAudit({
-      action: "remove_item",
+      action: "item_removido",
       details: { item, reason },
       performedBy: req.user.id,
       approvedBy: req.approval?.approved_by,
@@ -2308,7 +2308,7 @@ router.post(
 
       const finalize = (approval) => {
         logAudit({
-          action: "discount_override",
+          action: "desconto_manual_autorizado",
           details: { amount, reason, subtotal: baseTotal, percent: discountPercent },
           performedBy: req.user.id,
           approvedBy: approval?.approved_by,
@@ -2406,7 +2406,7 @@ router.post(
         return res.status(500).json({ message: "Erro ao cancelar venda." });
       }
       logAudit({
-        action: "cancel_sale",
+        action: "venda_cancelada",
         details: { reason, sale_id },
         performedBy: req.user.id,
         approvedBy: req.approval?.approved_by,
@@ -2498,7 +2498,7 @@ router.post(
                 return res.status(500).json({ message: "Erro ao abrir caixa." });
               }
               logAudit({
-                action: "cash_session_opened",
+                action: "caixa_aberto",
                 details: { 
                   session_id: session.id, 
                   opening_amount: Number(opening_amount), 
@@ -2581,7 +2581,7 @@ router.post(
               return res.status(500).json({ message: "Erro ao registrar movimentação de caixa." });
             }
             logAudit({
-              action: "cash_session_movement",
+              action: "movimentacao_caixa",
               details: { 
                 session_id: session.id, 
                 type: finalType, 
@@ -2696,7 +2696,7 @@ router.post(
         return res.status(500).json({ message: "Erro ao fechar caixa." });
       }
       logAudit({
-        action: "cash_session_closed",
+        action: "caixa_fechado",
         details: closedPayload,
         performedBy: req.user.id,
       });
@@ -2795,7 +2795,7 @@ router.post(
         if (err) {
           return res.status(400).json({ message: "Email já cadastrado." });
         }
-        logAudit({ action: "user_created", details: { id: row.id, email }, performedBy: req.user.id });
+        logAudit({ action: "usuario_criado", details: { id: row.id, email }, performedBy: req.user.id });
         return res.status(201).json({ id: row.id });
       }
     );
@@ -2852,7 +2852,7 @@ router.put(
             return res.status(500).json({ message: "Erro ao atualizar usuário." });
           }
           logAudit({
-            action: "user_update",
+            action: "usuario_atualizado",
             details: { id: userId, email: updated.email, role: updated.role },
             performedBy: req.user.id,
           });
@@ -2963,7 +2963,7 @@ router.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
         return res.status(500).json({ message: "Erro ao excluir usuário." });
       }
       logAudit({
-        action: "user_deleted",
+        action: "usuario_deletado",
         details: { user_id: userId },
         performedBy: req.user.id
       });

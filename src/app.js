@@ -135,7 +135,7 @@ app.use((err, req, res, _next) => {
   db.run(
     "INSERT INTO audit_logs (action, details, performed_by) VALUES (?, ?, ?)",
     [
-      "unhandled_exception",
+      "excecao_nao_tratada",
       JSON.stringify({
         message: err.message,
         stack: err.stack,

@@ -5,38 +5,52 @@ import "./AdminLogs.css";
 
 // Mapeamento de ações técnicas para descrições amigáveis
 const ACTION_DESCRIPTIONS = {
-  "sale_created": "Venda Realizada",
-  "sale_cancelled": "Venda Cancelada",
-  "sale_refunded": "Reembolso Processado",
-  "stock_adjusted": "Estoque Ajustado",
-  "stock_adjust": "Ajuste de Estoque",
-  "stock_received": "Estoque Recebido",
-  "stock_loss": "Perda de Estoque",
-  "stock_move": "Movimentação de Estoque",
-  "product_created": "Produto Cadastrado",
-  "product_updated": "Produto Atualizado",
-  "product_deleted": "Produto Removido",
-  "category_created": "Categoria Criada",
-  "supplier_created": "Fornecedor Cadastrado",
-  "purchase_order_created": "Pedido de Compra Criado",
-  "purchase_order_approved": "Pedido de Compra Aprovado",
-  "purchase_order_received": "Pedido de Compra Recebido",
-  "user_created": "Usuário Criado",
-  "user_updated": "Usuário Atualizado",
-  "user_deleted": "Usuário Deletado",
-  "password_reset": "Senha Redefinida",
-  "login_success": "Login Bem-sucedido",
-  "login_failed": "Falha de Login",
-  "discount_created": "Desconto Criado",
-  "discount_updated": "Desconto Atualizado",
-  "discount_deleted": "Desconto Deletado",
-  "approval_requested": "Aprovação Solicitada",
-  "approval_granted": "Aprovação Concedida",
-  "approval_denied": "Aprovação Negada",
-  "settings_changed": "Configurações Alteradas",
-  "admin_bootstrap": "Sistema Inicializado",
-  "cash_session_opened": "Abertura de Caixa",
-  "cash_session_closed": "Fechamento de Caixa",
+  "venda_realizada": "Venda Realizada",
+  "venda_cancelada": "Venda Cancelada",
+  "reembolso_processado": "Reembolso Processado",
+  "ajuste_estoque": "Ajuste de Estoque",
+  "estoque_recebido": "Estoque Recebido",
+  "perda_estoque": "Perda de Estoque",
+  "movimentacao_estoque": "Movimentação de Estoque",
+  "produto_criado": "Produto Cadastrado",
+  "produto_atualizado": "Produto Atualizado",
+  "produto_deletado": "Produto Removido",
+  "categoria_criada": "Categoria Criada",
+  "fornecedor_cadastrado": "Fornecedor Cadastrado",
+  "pedido_compra_criado": "Pedido de Compra Criado",
+  "pedido_compra_aprovado": "Pedido de Compra Aprovado",
+  "pedido_compra_recebido": "Pedido de Compra Recebido",
+  "usuario_criado": "Usuário Criado",
+  "usuario_atualizado": "Usuário Atualizado",
+  "usuario_deletado": "Usuário Deletado",
+  "senha_redefinida": "Senha Redefinida",
+  "login_sucesso": "Login Bem-sucedido",
+  "login_falha": "Falha de Login",
+  "desconto_criado": "Desconto Criado",
+  "desconto_atualizado": "Desconto Atualizado",
+  "desconto_deletado": "Desconto Deletado",
+  "aprovacao_solicitada": "Aprovação Solicitada",
+  "aprovacao_concedida": "Aprovação Concedida",
+  "aprovacao_negada": "Aprovação Negada",
+  "configuracoes_alteradas": "Configurações Alteradas",
+  "inicializacao_admin": "Sistema Inicializado",
+  "caixa_aberto": "Abertura de Caixa",
+  "caixa_fechado": "Fechamento de Caixa",
+  "movimentacao_caixa": "Movimentação de Caixa",
+  "tentativa_venda_caixa_fechado": "Tentativa de Venda (Caixa Fechado)",
+  "erro_sistema": "Erro de Sistema (5xx)",
+  "erro_cliente": "Erro de Cliente (4xx)",
+  "excecao_nao_tratada": "Exceção Não Tratada",
+  "erro_migracao": "Erro de Migração",
+  "erro_seed": "Erro de Seed",
+  "erro_fatal_inicializacao": "Erro Fatal na Inicialização",
+  "solicitacao_recuperacao_senha": "Solicitação de Recuperação de Senha",
+  "recuperacao_senha_concluida": "Recuperação de Senha Concluída",
+  "item_removido": "Item Removido do Carrinho",
+  "desconto_manual_autorizado": "Desconto Manual Autorizado",
+  "fluxo_caixa_registrado": "Fluxo de Caixa Registrado",
+  "conta_financeira_criada": "Conta Financeira Criada",
+  "conta_financeira_liquidada": "Conta Financeira Liquidada"
 };
 
 const getActionDescription = (action) => {
@@ -61,16 +75,16 @@ const formatDetails = (details, action) => {
     const parsed = typeof details === "string" ? JSON.parse(details) : details;
     
     // Criar descrição amigável baseada na ação
-    if (action === "sale_created") {
+    if (action === "venda_realizada") {
       const id = parsed.id || (parsed.sale_ids ? parsed.sale_ids.join(",") : "N/A");
       const itemsCount = parsed.items_count || (parsed.items ? parsed.items.length : "N/A");
       const totalVal = parsed.final_total || parsed.total || 0;
       return `VENDA #${id} | Total: R$ ${Number(totalVal).toFixed(2)} | Itens: ${itemsCount} | Pagto: ${parsed.payment_method || "N/A"}`;
     }
-    if (action === "stock_loss") {
+    if (action === "perda_estoque") {
       return `PERDA: ${parsed.product_name || "N/A"} | Qtd: ${parsed.quantity} | Motivo: ${parsed.reason || "N/A"} | Estoque: ${parsed.prev_stock} -> ${parsed.next_stock}`;
     }
-    if (action === "stock_adjust") {
+    if (action === "ajuste_estoque") {
       const type = Number(parsed.delta) > 0 ? "ENTRADA" : "SAÍDA";
       return `${type}: ${parsed.product_name || "N/A"} | Qtd: ${Math.abs(parsed.delta)} | Motivo: ${parsed.reason || "N/A"} | Estoque: ${parsed.prev_stock} -> ${parsed.next_stock}`;
     }

@@ -34,7 +34,7 @@ async function runMigrations(targetDb) {
       if (!err.message.includes("already exists") && !err.message.includes("já existe")) {
         console.error(`Erro no comando em ${file}:`, err.message);
         db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
-          "migration_error",
+          "erro_migracao",
           JSON.stringify({ file, error: err.message })
         ]);
       }
@@ -122,7 +122,7 @@ async function seedInMemoryDb() {
   } catch (err) {
     console.error("Erro no seed:", err.message);
     db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
-      "seed_error",
+      "erro_seed",
       JSON.stringify({ error: err.message })
     ]);
   }
@@ -140,7 +140,7 @@ if (require.main === module) {
     .catch(err => {
       console.error("Erro fatal na inicialização:", err);
       db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
-        "startup_fatal_error",
+        "erro_fatal_inicializacao",
         JSON.stringify({ error: err.message, stack: err.stack })
       ], () => {
         process.exit(1);
