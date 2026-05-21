@@ -45,12 +45,8 @@ export function CaixaFocusMode() {
 
       const promises = [apiFetch('/products')];
       
-      const user = JSON.parse(sessionStorage.getItem('greenstore_user') || '{}');
-      const canSeeDiscounts = ['manager', 'admin'].includes(user.role);
-      
-      if (canSeeDiscounts) {
-        promises.push(apiFetch('/discounts'));
-      }
+      // Todos os operadores precisam ver descontos para que sejam aplicados no caixa
+      promises.push(apiFetch('/discounts'));
 
       const results = await Promise.allSettled(promises);
       
@@ -61,7 +57,7 @@ export function CaixaFocusMode() {
         throw new Error(results[0].reason?.message || 'Falha ao carregar produtos');
       }
 
-      if (canSeeDiscounts && results[1]?.status === 'fulfilled') {
+      if (results[1]?.status === 'fulfilled') {
         const discData = results[1].value;
         setDiscounts(Array.isArray(discData) ? discData : (discData?.data || []));
       }
@@ -85,6 +81,23 @@ export function CaixaFocusMode() {
     }
 
     const existing = cart.find((item) => item.id === product.id);
+
+    // Tentar encontrar um desconto automático para este produto
+    const autoDiscount = discounts.find(d => {
+      if (d.active !== 1 && d.active !== true) return false;
+      if (d.target_type === 'all') return true;
+      if (d.target_type === 'product') {
+        try {
+          const ids = JSON.parse(d.target_value || "[]");
+          return ids.includes(product.id);
+        } catch { return false; }
+      }
+      if (d.target_type === 'category') {
+        return String(d.target_value) === String(product.category_id);
+      }
+      return false;
+    });
+
     if (existing) {
       if (existing.quantity >= availableStock) {
         setError('Quantidade maior que o estoque disponível.');
@@ -94,14 +107,14 @@ export function CaixaFocusMode() {
       setCart(
         cart.map((item) =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + 1, discount_id: item.discount_id || autoDiscount?.id || null }
             : item
         )
       );
     } else {
-      setCart([...cart, { ...product, quantity: 1, discount_id: null }]);
+      setCart([...cart, { ...product, quantity: 1, discount_id: autoDiscount?.id || null }]);
     }
-  }, [cart]);
+  }, [cart, discounts]);
 
   const handleRemoveFromCart = (productId) => {
     setCart(cart.filter((item) => item.id !== productId));
@@ -120,9 +133,30 @@ export function CaixaFocusMode() {
         setTimeout(() => setError(''), 3000);
       }
       setCart(
-        cart.map((cartItem) =>
-          cartItem.id === productId ? { ...cartItem, quantity: safeQuantity } : cartItem
-        )
+        cart.map((cartItem) => {
+          if (cartItem.id !== productId) return cartItem;
+          
+          let discountId = cartItem.discount_id;
+          if (!discountId) {
+            const autoDiscount = discounts.find(d => {
+              if (d.active !== 1 && d.active !== true) return false;
+              if (d.target_type === 'all') return true;
+              if (d.target_type === 'product') {
+                try {
+                  const ids = JSON.parse(d.target_value || "[]");
+                  return ids.includes(cartItem.id);
+                } catch { return false; }
+              }
+              if (d.target_type === 'category') {
+                return String(d.target_value) === String(cartItem.category_id);
+              }
+              return false;
+            });
+            discountId = autoDiscount?.id || null;
+          }
+          
+          return { ...cartItem, quantity: safeQuantity, discount_id: discountId };
+        })
       );
     }
   };
@@ -143,12 +177,36 @@ export function CaixaFocusMode() {
     if (!discount) return 0;
 
     const itemTotal = item.price * item.quantity;
+    const quantity = item.quantity;
+    let discountAmount = 0;
+
     if (discount.type === 'percent') {
-      return itemTotal * (discount.value / 100);
+      discountAmount = itemTotal * (Number(discount.value) / 100);
     } else if (discount.type === 'fixed') {
-      return Math.min(discount.value, itemTotal);
+      discountAmount = Number(discount.value);
+    } else if (discount.type === 'buy_x_get_y') {
+      const buyQty = Number(discount.buy_quantity);
+      const getQty = Number(discount.get_quantity);
+      if (buyQty > 0 && quantity >= buyQty) {
+        discountAmount = Number(item.price) * getQty;
+      }
+    } else if (discount.type === 'fixed_bundle') {
+      const bundleQty = Number(discount.buy_quantity);
+      const bundlePrice = Number(discount.value);
+      if (bundleQty > 0 && bundlePrice >= 0) {
+        const bundles = Math.floor(quantity / bundleQty);
+        const remainder = quantity % bundleQty;
+        const bundleTotal = bundles * bundlePrice;
+        const remainderTotal = remainder * Number(item.price);
+        discountAmount = itemTotal - (bundleTotal + remainderTotal);
+      }
     }
-    return 0;
+
+    if (discount.min_quantity && quantity < Number(discount.min_quantity)) {
+      discountAmount = 0;
+    }
+
+    return Math.max(discountAmount, 0);
   };
 
   const calculateTotal = () => {
@@ -179,6 +237,7 @@ export function CaixaFocusMode() {
         product_id: item.id,
         quantity: item.quantity,
         discount_id: item.discount_id,
+        calculated_discount: calculateItemDiscount(item)
       }));
 
       const response = await apiFetch('/sales', {
@@ -388,10 +447,30 @@ export function CaixaFocusMode() {
             </div>
             {totalDiscount > 0 && (
               <div className="summary-row discount">
-                <span>Desconto:</span>
+                <span>Desc. Auto:</span>
                 <span>-R$ {totalDiscount.toFixed(2)}</span>
               </div>
             )}
+            <div className="summary-row discount manual" style={{ borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+              <span>Desc. Manual (R$):</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0"
+                  value={manualDiscount}
+                  onChange={(e) => setManualDiscount(e.target.value)}
+                  onBlur={() => {
+                    if (parseFloat(manualDiscount) > 0 && !tempApprovalToken) {
+                      setShowManualDiscountApproval(true);
+                    }
+                  }}
+                  placeholder="0.00"
+                  style={{ width: '80px', textAlign: 'right', padding: '4px', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid #444' }}
+                />
+                {tempApprovalToken && <span title="Autorizado" style={{ color: '#10b981' }}>✅</span>}
+              </div>
+            </div>
             <div className="summary-row total">
               <span>TOTAL:</span>
               <span>R$ {finalTotal.toFixed(2)}</span>
