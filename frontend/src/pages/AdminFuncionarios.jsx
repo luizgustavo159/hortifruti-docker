@@ -106,13 +106,22 @@ export function AdminFuncionarios() {
         is_active: formData.is_active,
       };
 
+      // Incluir senha apenas se foi fornecida
+      if (formData.password && formData.password.trim().length > 0) {
+        if (formData.password.length < 8) {
+          setError("A senha deve ter pelo menos 8 caracteres.");
+          return;
+        }
+        updatedEmployee.password = formData.password;
+      }
+
       await apiFetch(`/users/${selectedEmployee.id}`, {
         method: "PUT",
         body: JSON.stringify(updatedEmployee),
       });
 
       setSuccessMessage("Funcionário atualizado com sucesso!");
-      setFormData({ name: "", email: "", role: "operator", is_active: true });
+      setFormData({ name: "", email: "", password: "", role: "operator", is_active: true });
       setShowEditModal(false);
       setSelectedEmployee(null);
 
@@ -163,6 +172,7 @@ export function AdminFuncionarios() {
   const resetForm = () => {
     setFormData({ name: "", email: "", password: "", role: "operator", is_active: true });
     setError("");
+    setSuccessMessage("");
   };
 
   const getRoleLabel = (role) => {
