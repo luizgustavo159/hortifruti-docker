@@ -97,11 +97,12 @@ const logAudit = ({ action, details, performedBy, approvedBy }) => {
 };
 
 const inferAuditType = (action = "") => {
-  if (action.includes("sale") || action.includes("cash") || action.includes("pos")) return "sale";
+  if (action.includes("sale")) return "sale";
   if (action.includes("stock") || action.includes("purchase")) return "stock";
   if (action.includes("user") || action.includes("admin")) return "user";
   if (action.includes("auth") || action.includes("login") || action.includes("password")) return "auth";
-  if (action.includes("finance") || action.includes("discount") || action.includes("approval")) return "system";
+  if (action.includes("discount")) return "discount";
+  if (action.includes("finance") || action.includes("approval")) return "system";
   return "system";
 };
 

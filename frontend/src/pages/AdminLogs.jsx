@@ -117,6 +117,7 @@ export function AdminLogs() {
     { value: "all", label: "📋 Todos os Tipos" },
     { value: "sale", label: "💰 Vendas" },
     { value: "stock", label: "📦 Estoque" },
+    { value: "discount", label: "🏷️ Descontos" },
     { value: "user", label: "👤 Usuários" },
     { value: "auth", label: "🔐 Autenticação" },
     { value: "system", label: "⚙️ Sistema" },
