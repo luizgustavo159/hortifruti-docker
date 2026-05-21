@@ -35,7 +35,12 @@ async function runMigrations(targetDb) {
         console.error(`Erro no comando em ${file}:`, err.message);
         db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
           "erro_migracao",
-          JSON.stringify({ file, error: err.message })
+          JSON.stringify({ 
+            mensagem: "Falha ao atualizar a estrutura do banco de dados",
+            arquivo_falha: file, 
+            erro_detalhado: err.message,
+            orientacao: "Verifique se o arquivo SQL está correto e se o banco de dados está acessível"
+          })
         ]);
       }
     }
@@ -123,7 +128,11 @@ async function seedInMemoryDb() {
     console.error("Erro no seed:", err.message);
     db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
       "erro_seed",
-      JSON.stringify({ error: err.message })
+      JSON.stringify({ 
+        mensagem: "Falha ao inserir dados iniciais no sistema",
+        erro_detalhado: err.message,
+        orientacao: "Isso pode ocorrer se os dados já existirem ou se houver erro de conexão"
+      })
     ]);
   }
 }
@@ -141,7 +150,12 @@ if (require.main === module) {
       console.error("Erro fatal na inicialização:", err);
       db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
         "erro_fatal_inicializacao",
-        JSON.stringify({ error: err.message, stack: err.stack })
+        JSON.stringify({ 
+          mensagem: "O sistema não pôde ser iniciado devido a um erro crítico",
+          erro_tecnico: err.message, 
+          pilha_erro: err.stack,
+          orientacao: "Verifique as configurações de ambiente (.env) e a conexão com o banco de dados"
+        })
       ], () => {
         process.exit(1);
       });

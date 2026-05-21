@@ -101,9 +101,17 @@ const formatDetails = (details, action) => {
       return `Pedido ID: ${parsed.id || "N/A"} | Status: ${parsed.status || "N/A"}`;
     }
     
-    // Fallback: mostrar principais campos
-    const keys = Object.keys(parsed).slice(0, 2);
-    return keys.map(k => `${k}: ${parsed[k]}`).join(" | ") || "Sem detalhes";
+    // Priorizar campo 'mensagem' ou 'detalhe' se existirem
+    if (parsed.mensagem) return parsed.mensagem;
+    if (parsed.detalhe) return parsed.detalhe;
+    if (parsed.descricao_amigavel) return parsed.descricao_amigavel;
+
+    // Fallback: mostrar principais campos traduzidos
+    const keys = Object.keys(parsed).slice(0, 3);
+    return keys.map(k => {
+      const label = k.replace(/_/g, ' ').toUpperCase();
+      return `${label}: ${parsed[k]}`;
+    }).join(" | ") || "Sem detalhes";
   } catch {
     return details;
   }

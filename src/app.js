@@ -57,14 +57,18 @@ app.use((req, res, next) => {
     const isError = res.statusCode >= 500;
     if (isSlow || isError || (res.statusCode >= 400 && res.statusCode < 500)) {
       const level = res.statusCode >= 500 ? "error" : (isSlow ? "warning" : "info");
-      const message = res.statusCode >= 500 ? "Erro de API" : (isSlow ? "Resposta lenta" : "Erro de Cliente");
+      const message = res.statusCode >= 500 
+        ? "Erro Crítico no Servidor (O sistema encontrou um problema interno)" 
+        : (isSlow ? "Alerta de Lentidão (A operação demorou mais que o esperado)" : "Aviso de Erro do Usuário (Requisição inválida ou negada)");
+      
       const context = {
-        method: req.method,
-        path: req.path,
-        status: res.statusCode,
-        duration_ms: Math.round(durationMs),
-        request_id: req.requestId,
-        user_id: req.user?.id || null
+        metodo_http: req.method,
+        caminho_acessado: req.path,
+        codigo_status: res.statusCode,
+        tempo_resposta_ms: Math.round(durationMs),
+        id_requisicao: req.requestId,
+        id_usuario: req.user?.id || null,
+        descricao_amigavel: message
       };
 
       // Registrar Alerta para erros graves ou lentidão
@@ -89,10 +93,11 @@ app.use((req, res, next) => {
         db.run(
           "INSERT INTO audit_logs (action, details, performed_by) VALUES (?, ?, ?)",
           [
-            res.statusCode >= 500 ? "system_error" : "client_error",
+            res.statusCode >= 500 ? "erro_sistema" : "erro_cliente",
             JSON.stringify({
               ...context,
-              error_message: res.statusMessage || "Error"
+              mensagem_erro: res.statusMessage || "Erro não especificado",
+              detalhe: `Ocorreu um erro ${res.statusCode} ao tentar acessar ${req.path}`
             }),
             req.user?.id || null
           ]
@@ -137,11 +142,13 @@ app.use((err, req, res, _next) => {
     [
       "excecao_nao_tratada",
       JSON.stringify({
-        message: err.message,
-        stack: err.stack,
-        path: req.path,
-        method: req.method,
-        requestId: req.requestId
+        mensagem: "Ocorreu uma falha grave inesperada no sistema",
+        erro_tecnico: err.message,
+        pilha_erro: err.stack,
+        caminho: req.path,
+        metodo: req.method,
+        id_requisicao: req.requestId,
+        orientacao: "Verifique os logs do servidor para mais detalhes técnicos"
       }),
       req.user?.id || null
     ]

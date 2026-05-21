@@ -1420,9 +1420,10 @@ router.post(
           logAudit({
             action: "tentativa_venda_caixa_fechado",
             details: {
-              reason: "Caixa fechado",
-              items_count: itemsFromBody.length,
-              payment_method
+              mensagem: "Tentativa de venda bloqueada: o caixa está fechado",
+              quantidade_itens: itemsFromBody.length,
+              forma_pagamento: payment_method,
+              orientacao: "O operador deve abrir o caixa antes de realizar qualquer venda"
             },
             performedBy: req.user.id
           });
