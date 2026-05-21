@@ -1210,9 +1210,9 @@ router.post(
     body("name").trim().notEmpty().withMessage("Nome é obrigatório."),
     body("type").isIn(["percent", "fixed", "buy_x_get_y", "fixed_bundle", "percentage", "bulk"]).withMessage("Tipo inválido."),
     body("value").optional().isFloat({ min: 0 }).withMessage("Valor inválido."),
-    body("min_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
-    body("buy_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
-    body("get_quantity").optional().isInt({ min: 0 }).withMessage("Quantidade inválida."),
+    body("min_quantity").optional().toInt().isInt({ min: 0 }).withMessage("Quantidade inválida."),
+    body("buy_quantity").optional().toInt().isInt({ min: 1 }).withMessage("Quantidade inválida."),
+    body("get_quantity").optional().toInt().isInt({ min: 1 }).withMessage("Quantidade inválida."),
   ],
   (req, res) => {
     const errors = validationResult(req);
@@ -1228,6 +1228,9 @@ router.post(
 
     if (type === "fixed_bundle" && (!payload.buy_quantity || !payload.value)) {
       return res.status(400).json({ message: "Quantidade e preço do combo são obrigatórios." });
+    }
+    if (type === "buy_x_get_y" && (!payload.buy_quantity || !payload.get_quantity)) {
+      return res.status(400).json({ message: "Informe a quantidade de compra e quantidade grátis." });
     }
 
     return getSettings(["max_discount"], (settings) => {
