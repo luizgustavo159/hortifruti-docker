@@ -1299,6 +1299,9 @@ router.post(
     body("items.*.product_id").optional().isInt({ min: 1 }).withMessage("Produto inválido."),
     body("items.*.quantity").optional().isInt({ min: 1 }).withMessage("Quantidade inválida."),
     body("items.*.discount_id").optional({ nullable: true }).isInt({ min: 1 }).withMessage("Desconto inválido."),
+    body("items.*.manual_discount").optional({ nullable: true }).isFloat({ min: 0 }).withMessage("Desconto manual inválido."),
+    body("manual_discount").optional({ nullable: true }).isFloat({ min: 0 }).withMessage("Desconto manual inválido."),
+    body("approval_token").optional({ nullable: true }).trim(),
   ],
   (req, res) => {
     const errors = validationResult(req);
@@ -1306,10 +1309,15 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { payment_method } = req.body;
+    const { payment_method, manual_discount: globalManualDiscount, approval_token } = req.body;
     const itemsFromBody = Array.isArray(req.body.items)
       ? req.body.items
-      : [{ product_id: req.body.product_id, quantity: req.body.quantity, discount_id: req.body.discount_id ?? null }];
+      : [{ 
+          product_id: req.body.product_id, 
+          quantity: req.body.quantity, 
+          discount_id: req.body.discount_id ?? null,
+          manual_discount: req.body.manual_discount ?? null
+        }];
 
     const hasInvalidItems = itemsFromBody.some((item) => !item?.product_id || !item?.quantity);
     if (hasInvalidItems) {
@@ -1320,7 +1328,7 @@ router.post(
     const saleItems = [];
 
     const processSaleItem = (tx, item, done) => {
-      const { product_id, quantity, discount_id = null } = item;
+      const { product_id, quantity, discount_id = null, manual_discount = null } = item;
 
       tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
         if (err) {
@@ -1405,6 +1413,11 @@ router.post(
           );
         };
 
+        if (manual_discount > 0) {
+          applySale(null, Number(manual_discount));
+          return;
+        }
+
         if (!discount_id) {
           applySale(null, 0);
           return;
@@ -1464,8 +1477,27 @@ router.post(
       });
     };
 
-    runWithTransaction((tx, finish) => {
-      const processNext = (index) => {
+    const checkApproval = (callback) => {
+      const hasManualDiscount = itemsFromBody.some(i => i.manual_discount > 0) || globalManualDiscount > 0;
+      if (!hasManualDiscount) return callback(null);
+      
+      if (!approval_token) {
+        return res.status(403).json({ message: "Desconto manual requer autorização do supervisor." });
+      }
+      
+      verifyApprovalToken(approval_token, "discount_override", (err, approval) => {
+        if (err || !approval) {
+          return res.status(403).json({ message: "Token de autorização inválido ou expirado." });
+        }
+        callback(null);
+      });
+    };
+
+    checkApproval((err) => {
+      if (err) return;
+
+      runWithTransaction((tx, finish) => {
+        const processNext = (index) => {
         if (index >= itemsFromBody.length) {
           const totals = saleItems.reduce(
             (acc, item) => {
@@ -1476,9 +1508,14 @@ router.post(
             },
             { total: 0, discount_amount: 0, final_total: 0 }
           );
+          const globalDiscount = Number(globalManualDiscount || 0);
+          totals.discount_amount += globalDiscount;
+          totals.final_total = Math.max(totals.final_total - globalDiscount, 0);
+
           responsePayload = {
             items: saleItems,
             ...totals,
+            global_manual_discount: globalDiscount
           };
           if (saleItems.length === 1) {
             responsePayload = {
@@ -1522,8 +1559,8 @@ router.post(
       });
       return res.status(201).json(responsePayload);
     });
-  }
-);
+  });
+});
 
 router.get("/api/reports/summary", authenticateToken, requireSupervisor, (req, res) => {
   const range = parseDateRange(req, res);

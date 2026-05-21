@@ -17,6 +17,9 @@ export function Caixa() {
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedDiscount, setSelectedDiscount] = useState(null);
   const [discounts, setDiscounts] = useState([]);
+  const [manualDiscount, setManualDiscount] = useState("");
+  const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
+  const [tempApprovalToken, setTempApprovalToken] = useState(null);
 
   // Estado do Caixa
   const [caixaAberto, setCaixaAberto] = useState(false);
@@ -133,21 +136,42 @@ export function Caixa() {
       if (!discount) return sum;
 
       const itemTotal = item.price * item.quantity;
+      const quantity = item.quantity;
       let discountAmount = 0;
 
       if (discount.type === "percent") {
-        discountAmount = itemTotal * (discount.value / 100);
+        discountAmount = itemTotal * (Number(discount.value) / 100);
       } else if (discount.type === "fixed") {
-        discountAmount = Math.min(discount.value, itemTotal);
+        discountAmount = Number(discount.value);
+      } else if (discount.type === "buy_x_get_y") {
+        const buyQty = Number(discount.buy_quantity);
+        const getQty = Number(discount.get_quantity);
+        if (buyQty > 0 && quantity >= buyQty) {
+          discountAmount = Number(item.price) * getQty;
+        }
+      } else if (discount.type === "fixed_bundle") {
+        const bundleQty = Number(discount.buy_quantity);
+        const bundlePrice = Number(discount.value);
+        if (bundleQty > 0 && bundlePrice >= 0) {
+          const bundles = Math.floor(quantity / bundleQty);
+          const remainder = quantity % bundleQty;
+          const bundleTotal = bundles * bundlePrice;
+          const remainderTotal = remainder * Number(item.price);
+          discountAmount = itemTotal - (bundleTotal + remainderTotal);
+        }
       }
 
-      return sum + discountAmount;
+      if (discount.min_quantity && quantity < Number(discount.min_quantity)) {
+        discountAmount = 0;
+      }
+
+      return sum + Math.max(discountAmount, 0);
     }, 0);
   };
 
   const total = calculateTotal();
   const totalDiscount = calculateTotalDiscount();
-  const finalTotal = total - totalDiscount;
+  const finalTotal = Math.max(total - totalDiscount - (parseFloat(manualDiscount) || 0), 0);
 
   // Lógica de Abertura de Caixa
   const handleOpenCaixaRequest = (e) => {
@@ -207,12 +231,19 @@ export function Caixa() {
         discount_id: item.discount_id,
       }));
 
+      const payload = {
+        items: saleItems,
+        payment_method: paymentMethod,
+      };
+
+      if (parseFloat(manualDiscount) > 0) {
+        payload.manual_discount = parseFloat(manualDiscount);
+        payload.approval_token = tempApprovalToken;
+      }
+
       const response = await apiFetch("/sales", {
         method: "POST",
-        body: JSON.stringify({
-          items: saleItems,
-          payment_method: paymentMethod,
-        }),
+        body: JSON.stringify(payload),
       });
 
       // Tratar resposta corretamente - pode ser multi-item ou single-item
@@ -226,6 +257,8 @@ export function Caixa() {
       );
       setCartItems([]);
       setPaymentMethod("cash");
+      setManualDiscount("");
+      setTempApprovalToken(null);
 
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (checkoutError) {
@@ -303,6 +336,24 @@ export function Caixa() {
           message={`O operador está solicitando a abertura do caixa com R$ ${parseFloat(openingAmount).toFixed(2)}. Um gerente deve autorizar.`}
           onApproved={handleAberturaAprovada}
           onCancel={() => setShowApprovalModal(false)}
+        />
+      )}
+
+      {showManualDiscountApproval && (
+        <ApprovalModal
+          action="discount_override"
+          title="Autorização de Desconto Manual"
+          message={`O operador está solicitando um desconto manual de R$ ${parseFloat(manualDiscount).toFixed(2)}. Um gerente deve autorizar.`}
+          onApproved={(token) => {
+            setTempApprovalToken(token);
+            setShowManualDiscountApproval(false);
+            setSuccessMessage("Desconto manual autorizado!");
+            setTimeout(() => setSuccessMessage(""), 3000);
+          }}
+          onCancel={() => {
+            setShowManualDiscountApproval(false);
+            setManualDiscount("");
+          }}
         />
       )}
 
@@ -415,6 +466,20 @@ export function Caixa() {
 
                         <div className="item-total">
                       R$ {(item.price * item.quantity).toFixed(2)}
+                      {discounts.length > 0 && (
+                        <div className="item-discount-selector">
+                          <select 
+                            value={item.discount_id || ""} 
+                            onChange={(e) => applyDiscountToItem(item.id, parseInt(e.target.value) || null)}
+                            style={{ fontSize: '11px', marginTop: '4px', width: '100%' }}
+                          >
+                            <option value="">Sem desc. auto.</option>
+                            {discounts.map(d => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     <button
@@ -434,10 +499,32 @@ export function Caixa() {
                 </div>
                 {totalDiscount > 0 && (
                   <div className="summary-row discount">
-                    <span>Desconto:</span>
+                    <span>Descontos Automáticos:</span>
                     <span>-R$ {totalDiscount.toFixed(2)}</span>
                   </div>
                 )}
+                
+                <div className="summary-row discount manual" style={{ borderTop: '1px dashed #eee', paddingTop: '8px' }}>
+                  <span>Desconto Manual (R$):</span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      value={manualDiscount}
+                      onChange={(e) => setManualDiscount(e.target.value)}
+                      onBlur={() => {
+                        if (parseFloat(manualDiscount) > 0 && !tempApprovalToken) {
+                          setShowManualDiscountApproval(true);
+                        }
+                      }}
+                      placeholder="0.00"
+                      style={{ width: '80px', textAlign: 'right', padding: '4px' }}
+                    />
+                    {tempApprovalToken && <span title="Autorizado" style={{ color: '#10b981' }}>✅</span>}
+                  </div>
+                </div>
+
                 <div className="summary-row total">
                   <span>Total:</span>
                   <span>R$ {finalTotal.toFixed(2)}</span>
