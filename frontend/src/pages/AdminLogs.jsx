@@ -1,14 +1,91 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import "./AdminLogs.css";
 
+// Mapeamento de ações técnicas para descrições amigáveis
+const ACTION_DESCRIPTIONS = {
+  "sale_created": "Venda Realizada",
+  "sale_cancelled": "Venda Cancelada",
+  "sale_refunded": "Reembolso Processado",
+  "stock_adjusted": "Estoque Ajustado",
+  "stock_received": "Estoque Recebido",
+  "stock_loss": "Perda de Estoque",
+  "purchase_order_created": "Pedido de Compra Criado",
+  "purchase_order_approved": "Pedido de Compra Aprovado",
+  "user_created": "Usuário Criado",
+  "user_updated": "Usuário Atualizado",
+  "user_deleted": "Usuário Deletado",
+  "password_reset": "Senha Redefinida",
+  "login_success": "Login Bem-sucedido",
+  "login_failed": "Falha de Login",
+  "discount_created": "Desconto Criado",
+  "discount_updated": "Desconto Atualizado",
+  "discount_deleted": "Desconto Deletado",
+  "approval_requested": "Aprovação Solicitada",
+  "approval_granted": "Aprovação Concedida",
+  "approval_denied": "Aprovação Negada",
+  "settings_changed": "Configurações Alteradas",
+  "admin_bootstrap": "Sistema Inicializado",
+};
+
+const getActionDescription = (action) => {
+  return ACTION_DESCRIPTIONS[action] || action || "Ação Desconhecida";
+};
+
+const getActionIcon = (action) => {
+  if (action.includes("sale")) return "💰";
+  if (action.includes("stock")) return "📦";
+  if (action.includes("user")) return "👤";
+  if (action.includes("auth") || action.includes("login")) return "🔐";
+  if (action.includes("discount")) return "🏷️";
+  if (action.includes("approval")) return "✅";
+  if (action.includes("settings")) return "⚙️";
+  return "📋";
+};
+
+const formatDetails = (details, action) => {
+  if (!details) return "Sem detalhes adicionais";
+  
+  try {
+    const parsed = typeof details === "string" ? JSON.parse(details) : details;
+    
+    // Criar descrição amigável baseada na ação
+    if (action.includes("sale")) {
+      return `Venda ID: ${parsed.id || "N/A"} | Valor: R$ ${parsed.total || "0.00"}`;
+    }
+    if (action.includes("stock")) {
+      return `Produto: ${parsed.product_name || "N/A"} | Quantidade: ${parsed.quantity || "N/A"}`;
+    }
+    if (action.includes("user")) {
+      return `Usuário: ${parsed.email || parsed.name || "N/A"} | Perfil: ${parsed.role || "N/A"}`;
+    }
+    if (action.includes("discount")) {
+      return `Desconto: ${parsed.name || "N/A"} | Tipo: ${parsed.type || "N/A"} | Valor: ${parsed.value || "N/A"}`;
+    }
+    if (action.includes("approval")) {
+      return `Pedido ID: ${parsed.id || "N/A"} | Status: ${parsed.status || "N/A"}`;
+    }
+    
+    // Fallback: mostrar principais campos
+    const keys = Object.keys(parsed).slice(0, 2);
+    return keys.map(k => `${k}: ${parsed[k]}`).join(" | ") || "Sem detalhes";
+  } catch {
+    return details;
+  }
+};
+
 export function AdminLogs() {
   const [logs, setLogs] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Filtros
   const [filterType, setFilterType] = useState("all");
   const [filterLevel, setFilterLevel] = useState("all");
+  const [filterUser, setFilterUser] = useState("all");
+  const [searchText, setSearchText] = useState("");
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -17,21 +94,34 @@ export function AdminLogs() {
   });
 
   const logTypes = [
-    { value: "all", label: "Todos os Tipos" },
-    { value: "sale", label: "Vendas" },
-    { value: "stock", label: "Estoque" },
-    { value: "user", label: "Usuários" },
-    { value: "auth", label: "Autenticação" },
-    { value: "system", label: "Sistema" },
+    { value: "all", label: "📋 Todos os Tipos" },
+    { value: "sale", label: "💰 Vendas" },
+    { value: "stock", label: "📦 Estoque" },
+    { value: "user", label: "👤 Usuários" },
+    { value: "auth", label: "🔐 Autenticação" },
+    { value: "system", label: "⚙️ Sistema" },
   ];
 
   const logLevels = [
     { value: "all", label: "Todos os Níveis" },
-    { value: "info", label: "Informação" },
-    { value: "warning", label: "Aviso" },
-    { value: "error", label: "Erro" },
-    { value: "critical", label: "Crítico" },
+    { value: "info", label: "ℹ️ Informação" },
+    { value: "warning", label: "⚠️ Aviso" },
+    { value: "error", label: "❌ Erro" },
+    { value: "critical", label: "🚨 Crítico" },
   ];
+
+  // Carregar usuários
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const data = await apiFetch("/users");
+        setUsers(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Erro ao carregar usuários:", err);
+      }
+    };
+    loadUsers();
+  }, []);
 
   // Carregar logs
   useEffect(() => {
@@ -60,24 +150,52 @@ export function AdminLogs() {
     loadLogs();
   }, [filterType, filterLevel, dateRange]);
 
+  // Filtrar logs localmente (texto, usuário)
+  const filteredLogs = useCallback(() => {
+    return logs.filter(log => {
+      // Filtro por usuário
+      if (filterUser !== "all" && log.performed_by !== parseInt(filterUser)) {
+        return false;
+      }
+      
+      // Filtro por texto (busca em ação e detalhes)
+      if (searchText.trim()) {
+        const searchLower = searchText.toLowerCase();
+        const actionDesc = getActionDescription(log.action).toLowerCase();
+        const details = (log.details || "").toLowerCase();
+        const userName = (log.user_name || "").toLowerCase();
+        
+        return (
+          actionDesc.includes(searchLower) ||
+          details.includes(searchLower) ||
+          userName.includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+  }, [logs, filterUser, searchText]);
+
   // Exportar logs
   const handleExportLogs = () => {
-    if (logs.length === 0) {
+    const logsToExport = filteredLogs();
+    if (logsToExport.length === 0) {
       alert("Sem logs para exportar.");
       return;
     }
 
-    const headers = ["Data/Hora", "Tipo", "Nível", "Usuário", "Ação", "Detalhes"];
+    const headers = ["Data/Hora", "Tipo", "Nível", "Usuário", "Ação", "Descrição", "Detalhes"];
     const csv = [
       headers.join(","),
-      ...logs.map((log) =>
+      ...logsToExport.map((log) =>
         [
-          log.created_at || "",
+          log.created_at ? new Date(log.created_at).toLocaleString("pt-BR") : "",
           log.type || "",
           log.level || "",
           log.user_name || "",
           log.action || "",
-          `"${(log.details || "").replace(/"/g, '""')}"`,
+          getActionDescription(log.action),
+          `"${formatDetails(log.details, log.action).replace(/"/g, '""')}"`,
         ].join(",")
       ),
     ].join("\n");
@@ -118,21 +236,54 @@ export function AdminLogs() {
     return map[level] || level;
   };
 
+  const displayedLogs = filteredLogs();
+  const stats = {
+    total: displayedLogs.length,
+    info: displayedLogs.filter(l => l.level === "info").length,
+    warning: displayedLogs.filter(l => l.level === "warning").length,
+    error: displayedLogs.filter(l => l.level === "error").length,
+    critical: displayedLogs.filter(l => l.level === "critical").length,
+  };
+
   return (
     <PageShell
       title="Logs de Auditoria"
       subtitle="Histórico de todas as ações realizadas no sistema"
       actions={
         <button className="button" onClick={handleExportLogs}>
-          Exportar CSV
+          📥 Exportar CSV
         </button>
       }
     >
       <div className="logs-container">
+        {/* Cartões de Resumo */}
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-value">{stats.total}</div>
+            <div className="stat-label">Total de Eventos</div>
+          </div>
+          <div className="stat-card info">
+            <div className="stat-value">{stats.info}</div>
+            <div className="stat-label">Informações</div>
+          </div>
+          <div className="stat-card warning">
+            <div className="stat-value">{stats.warning}</div>
+            <div className="stat-label">Avisos</div>
+          </div>
+          <div className="stat-card error">
+            <div className="stat-value">{stats.error}</div>
+            <div className="stat-label">Erros</div>
+          </div>
+          <div className="stat-card critical">
+            <div className="stat-value">{stats.critical}</div>
+            <div className="stat-label">Críticos</div>
+          </div>
+        </div>
+
         {/* Filtros */}
         <div className="filters-panel">
           <div className="filter-group">
-            <label>Data Inicial:</label>
+            <label>📅 Data Inicial:</label>
             <input
               type="date"
               value={dateRange.start}
@@ -144,7 +295,7 @@ export function AdminLogs() {
           </div>
 
           <div className="filter-group">
-            <label>Data Final:</label>
+            <label>📅 Data Final:</label>
             <input
               type="date"
               value={dateRange.end}
@@ -156,7 +307,7 @@ export function AdminLogs() {
           </div>
 
           <div className="filter-group">
-            <label>Tipo:</label>
+            <label>📋 Tipo:</label>
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
@@ -171,7 +322,7 @@ export function AdminLogs() {
           </div>
 
           <div className="filter-group">
-            <label>Nível:</label>
+            <label>⚡ Nível:</label>
             <select
               value={filterLevel}
               onChange={(e) => setFilterLevel(e.target.value)}
@@ -184,6 +335,33 @@ export function AdminLogs() {
               ))}
             </select>
           </div>
+
+          <div className="filter-group">
+            <label>👤 Usuário:</label>
+            <select
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Todos os Usuários</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name || user.email}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>🔍 Buscar:</label>
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Buscar em ações, detalhes..."
+              className="filter-input search-input"
+            />
+          </div>
         </div>
 
         {/* Mensagens */}
@@ -191,30 +369,36 @@ export function AdminLogs() {
 
         {/* Tabela de Logs */}
         {loading ? (
-          <p className="loading">Carregando logs...</p>
-        ) : logs.length > 0 ? (
+          <p className="loading">⏳ Carregando logs...</p>
+        ) : displayedLogs.length > 0 ? (
           <div className="logs-wrapper">
             <div className="table-responsive">
               <table className="logs-table">
                 <thead>
                   <tr>
                     <th>Data/Hora</th>
-                    <th>Tipo</th>
+                    <th>Ação</th>
                     <th>Nível</th>
                     <th>Usuário</th>
-                    <th>Ação</th>
-                    <th>Detalhes</th>
+                    <th>Descrição</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((log, idx) => (
-                    <tr key={idx}>
+                  {displayedLogs.map((log, idx) => (
+                    <tr key={idx} className={`level-${log.level}`}>
                       <td className="date-cell">
                         {log.created_at
                           ? new Date(log.created_at).toLocaleString("pt-BR")
                           : "-"}
                       </td>
-                      <td className="type-cell">{log.type || "-"}</td>
+                      <td className="action-cell">
+                        <span className="action-icon">
+                          {getActionIcon(log.action)}
+                        </span>
+                        <span className="action-text">
+                          {getActionDescription(log.action)}
+                        </span>
+                      </td>
                       <td className="level-cell">
                         <span
                           className="level-badge"
@@ -223,9 +407,10 @@ export function AdminLogs() {
                           {getLevelLabel(log.level)}
                         </span>
                       </td>
-                      <td className="user-cell">{log.user_name || "-"}</td>
-                      <td className="action-cell">{log.action || "-"}</td>
-                      <td className="details-cell">{log.details || "-"}</td>
+                      <td className="user-cell">{log.user_name || "Sistema"}</td>
+                      <td className="details-cell">
+                        {formatDetails(log.details, log.action)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -234,12 +419,15 @@ export function AdminLogs() {
 
             <div className="logs-summary">
               <p>
-                Total de registros: <strong>{logs.length}</strong>
+                Mostrando <strong>{displayedLogs.length}</strong> de{" "}
+                <strong>{logs.length}</strong> registros
               </p>
             </div>
           </div>
         ) : (
-          <p className="no-data">Nenhum log encontrado para os filtros selecionados.</p>
+          <p className="no-data">
+            🔍 Nenhum log encontrado para os filtros selecionados.
+          </p>
         )}
       </div>
     </PageShell>
