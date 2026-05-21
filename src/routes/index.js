@@ -1328,7 +1328,7 @@ router.post(
     const saleItems = [];
 
     const processSaleItem = (tx, item, done) => {
-      const { product_id, quantity, discount_id = null, manual_discount = null } = item;
+      const { product_id, quantity, discount_id = null, manual_discount = null, calculated_discount = null } = item;
 
       tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
         if (err) {
@@ -1412,6 +1412,11 @@ router.post(
             }
           );
         };
+
+        if (calculated_discount !== null && calculated_discount !== undefined) {
+          applySale({ id: discount_id }, Number(calculated_discount));
+          return;
+        }
 
         if (manual_discount > 0) {
           applySale(null, Number(manual_discount));

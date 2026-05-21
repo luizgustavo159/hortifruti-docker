@@ -45,13 +45,8 @@ export function Caixa() {
 
         const promises = [apiFetch("/products")];
         
-        // Supervisores e acima podem ver descontos
-        const user = JSON.parse(sessionStorage.getItem('greenstore_user') || '{}');
-        const canSeeDiscounts = ['supervisor', 'manager', 'admin'].includes(user.role);
-        
-        if (canSeeDiscounts) {
-          promises.push(apiFetch("/discounts"));
-        }
+        // Todos os operadores precisam ver descontos para que sejam aplicados no caixa
+        promises.push(apiFetch("/discounts"));
 
         const results = await Promise.allSettled(promises);
         
@@ -61,7 +56,7 @@ export function Caixa() {
           throw new Error(results[0].reason?.message || "Falha ao carregar produtos.");
         }
 
-        if (canSeeDiscounts && results[1]?.status === 'fulfilled') {
+        if (results[1]?.status === 'fulfilled') {
           setDiscounts(results[1].value || []);
         }
       } catch (loadError) {
@@ -82,16 +77,33 @@ export function Caixa() {
   const addToCart = useCallback((product) => {
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === product.id);
+      
+      // Tentar encontrar um desconto automático para este produto
+      const autoDiscount = discounts.find(d => {
+        if (d.active !== 1 && d.active !== true) return false;
+        if (d.target_type === 'all') return true;
+        if (d.target_type === 'product') {
+          try {
+            const ids = JSON.parse(d.target_value || "[]");
+            return ids.includes(product.id);
+          } catch { return false; }
+        }
+        if (d.target_type === 'category') {
+          return String(d.target_value) === String(product.category_id);
+        }
+        return false;
+      });
+
       if (existing) {
         return prev.map((item) =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + 1, discount_id: item.discount_id || autoDiscount?.id || null }
             : item
         );
       }
-      return [...prev, { ...product, quantity: 1, discount_id: null }];
+      return [...prev, { ...product, quantity: 1, discount_id: autoDiscount?.id || null }];
     });
-  }, []);
+  }, [discounts]);
 
   // Remover item do carrinho
   const removeFromCart = useCallback((productId) => {
@@ -105,11 +117,33 @@ export function Caixa() {
       return;
     }
     setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
-      )
+      prev.map((item) => {
+        if (item.id !== productId) return item;
+        
+        // Ao atualizar quantidade, se não houver desconto selecionado, tenta buscar um automático
+        let discountId = item.discount_id;
+        if (!discountId) {
+          const autoDiscount = discounts.find(d => {
+            if (d.active !== 1 && d.active !== true) return false;
+            if (d.target_type === 'all') return true;
+            if (d.target_type === 'product') {
+              try {
+                const ids = JSON.parse(d.target_value || "[]");
+                return ids.includes(item.id);
+              } catch { return false; }
+            }
+            if (d.target_type === 'category') {
+              return String(d.target_value) === String(item.category_id);
+            }
+            return false;
+          });
+          discountId = autoDiscount?.id || null;
+        }
+
+        return { ...item, quantity, discount_id: discountId };
+      })
     );
-  }, [removeFromCart]);
+  }, [removeFromCart, discounts]);
 
   // Aplicar desconto a um item
   const applyDiscountToItem = useCallback((productId, discountId) => {
@@ -167,6 +201,44 @@ export function Caixa() {
 
       return sum + Math.max(discountAmount, 0);
     }, 0);
+  };
+
+  const calculateTotalDiscountForItem = (item) => {
+    if (!item.discount_id) return 0;
+    const discount = discounts.find((d) => d.id === item.discount_id);
+    if (!discount) return 0;
+
+    const itemTotal = item.price * item.quantity;
+    const quantity = item.quantity;
+    let discountAmount = 0;
+
+    if (discount.type === "percent") {
+      discountAmount = itemTotal * (Number(discount.value) / 100);
+    } else if (discount.type === "fixed") {
+      discountAmount = Number(discount.value);
+    } else if (discount.type === "buy_x_get_y") {
+      const buyQty = Number(discount.buy_quantity);
+      const getQty = Number(discount.get_quantity);
+      if (buyQty > 0 && quantity >= buyQty) {
+        discountAmount = Number(item.price) * getQty;
+      }
+    } else if (discount.type === "fixed_bundle") {
+      const bundleQty = Number(discount.buy_quantity);
+      const bundlePrice = Number(discount.value);
+      if (bundleQty > 0 && bundlePrice >= 0) {
+        const bundles = Math.floor(quantity / bundleQty);
+        const remainder = quantity % bundleQty;
+        const bundleTotal = bundles * bundlePrice;
+        const remainderTotal = remainder * Number(item.price);
+        discountAmount = itemTotal - (bundleTotal + remainderTotal);
+      }
+    }
+
+    if (discount.min_quantity && quantity < Number(discount.min_quantity)) {
+      discountAmount = 0;
+    }
+
+    return Math.max(discountAmount, 0);
   };
 
   const total = calculateTotal();
@@ -229,6 +301,7 @@ export function Caixa() {
         product_id: item.id,
         quantity: item.quantity,
         discount_id: item.discount_id,
+        calculated_discount: calculateTotalDiscountForItem(item)
       }));
 
       const payload = {
@@ -464,8 +537,15 @@ export function Caixa() {
                       </button>
                     </div>
 
-                        <div className="item-total">
-                      R$ {(item.price * item.quantity).toFixed(2)}
+                        <div className="item-total" style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+                        R$ {((item.price * item.quantity) - (calculateTotalDiscountForItem(item))).toFixed(2)}
+                      </div>
+                      {calculateTotalDiscountForItem(item) > 0 && (
+                        <div style={{ fontSize: '11px', color: '#ef4444', textDecoration: 'line-through' }}>
+                          R$ {(item.price * item.quantity).toFixed(2)}
+                        </div>
+                      )}
                       {discounts.length > 0 && (
                         <div className="item-discount-selector">
                           <select 
