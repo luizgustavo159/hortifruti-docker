@@ -1193,7 +1193,7 @@ router.post(
   }
 );
 
-router.get("/api/discounts", authenticateToken, requireManager, (req, res) => {
+router.get("/api/discounts", authenticateToken, requireSupervisor, (req, res) => {
   db.all("SELECT * FROM discounts ORDER BY created_at DESC", [], (err, rows) => {
     if (err) {
       return res.status(500).json({ message: "Erro ao buscar descontos." });
