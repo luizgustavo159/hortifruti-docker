@@ -626,14 +626,7 @@ router.post(
   "/api/suppliers",
   authenticateToken,
   requireSupervisor,
-  [
-    body("name").trim().notEmpty().withMessage("Nome é obrigatório."),
-    body("email").optional().isEmail().withMessage("Email inválido."),
-    body("phone")
-      .optional()
-      .matches(/^[0-9()+\-\s]{6,20}$/)
-      .withMessage("Telefone inválido."),
-  ],
+  [body("name").trim().notEmpty().withMessage("Nome é obrigatório.")],
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

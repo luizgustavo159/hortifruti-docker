@@ -506,7 +506,7 @@ export function Estoque() {
               <div className="form-group"><label>Nome *</label><input autoFocus type="text" value={newSupplier.name} onChange={e => setNewSupplier({...newSupplier, name: e.target.value})} required /></div>
               <div className="form-group"><label>Contato</label><input type="text" value={newSupplier.contact} onChange={e => setNewSupplier({...newSupplier, contact: e.target.value})} /></div>
               <div className="form-group"><label>Telefone</label><input type="text" value={newSupplier.phone} onChange={e => setNewSupplier({...newSupplier, phone: e.target.value})} /></div>
-              <div className="form-group"><label>E-mail</label><input type="email" value={newSupplier.email} onChange={e => setNewSupplier({...newSupplier, email: e.target.value})} /></div>
+              <div className="form-group"><label>E-mail</label><input type="text" value={newSupplier.email} onChange={e => setNewSupplier({...newSupplier, email: e.target.value})} /></div>
               <div className="modal-actions">
                 <button type="submit" className="btn-primary">Salvar</button>
                 <button type="button" className="btn-secondary" onClick={() => setShowSupplierModal(false)}>Voltar</button>
