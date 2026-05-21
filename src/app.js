@@ -55,29 +55,49 @@ app.use((req, res, next) => {
     }
     const isSlow = durationMs > ALERT_SLOW_THRESHOLD_MS;
     const isError = res.statusCode >= 500;
-    if (isSlow || isError) {
-      const level = isError ? "error" : "warning";
-      const message = isError ? "Erro de API" : "Resposta lenta";
+    if (isSlow || isError || (res.statusCode >= 400 && res.statusCode < 500)) {
+      const level = res.statusCode >= 500 ? "error" : (isSlow ? "warning" : "info");
+      const message = res.statusCode >= 500 ? "Erro de API" : (isSlow ? "Resposta lenta" : "Erro de Cliente");
       const context = {
         method: req.method,
         path: req.path,
         status: res.statusCode,
         duration_ms: Math.round(durationMs),
         request_id: req.requestId,
+        user_id: req.user?.id || null
       };
-      db.run(
-        "INSERT INTO alerts (level, message, context) VALUES (?, ?, ?)",
-        [level, message, JSON.stringify(context)],
-        (err) => {
-          if (err) {
-            logger.error({ err }, "Erro ao registrar alerta.");
-            return;
+
+      // Registrar Alerta para erros graves ou lentidão
+      if (isSlow || isError) {
+        db.run(
+          "INSERT INTO alerts (level, message, context) VALUES (?, ?, ?)",
+          [level, message, JSON.stringify(context)],
+          (err) => {
+            if (err) {
+              logger.error({ err }, "Erro ao registrar alerta.");
+              return;
+            }
+            sendAlertNotification({ level, message, context }).catch((notifyErr) => {
+              logger.error({ err: notifyErr }, "Erro ao enviar alerta.");
+            });
           }
-          sendAlertNotification({ level, message, context }).catch((notifyErr) => {
-            logger.error({ err: notifyErr }, "Erro ao enviar alerta.");
-          });
-        }
-      );
+        );
+      }
+
+      // Registrar no Audit Logs para TODOS os erros (4xx e 5xx)
+      if (res.statusCode >= 400) {
+        db.run(
+          "INSERT INTO audit_logs (action, details, performed_by) VALUES (?, ?, ?)",
+          [
+            res.statusCode >= 500 ? "system_error" : "client_error",
+            JSON.stringify({
+              ...context,
+              error_message: res.statusMessage || "Error"
+            }),
+            req.user?.id || null
+          ]
+        );
+      }
     }
   });
   req.requestMetrics = {
@@ -108,8 +128,25 @@ app.get("*", (req, res, next) => {
   }
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
-app.use((err, _req, res, _next) => {
-  logger.error({ err }, "Erro não tratado.");
+app.use((err, req, res, _next) => {
+  logger.error({ err, requestId: req.requestId }, "Erro não tratado.");
+  
+  // Registrar erro fatal no audit_logs
+  db.run(
+    "INSERT INTO audit_logs (action, details, performed_by) VALUES (?, ?, ?)",
+    [
+      "unhandled_exception",
+      JSON.stringify({
+        message: err.message,
+        stack: err.stack,
+        path: req.path,
+        method: req.method,
+        requestId: req.requestId
+      }),
+      req.user?.id || null
+    ]
+  );
+
   res.status(500).json({ message: "Erro interno do servidor." });
 });
 

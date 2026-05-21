@@ -29,12 +29,16 @@ async function runMigrations(targetDb) {
               else resolve();
             });
           });
-        } catch (err) {
-          // Ignorar erros de "já existe" para tabelas/índices
-          if (!err.message.includes("already exists") && !err.message.includes("já existe")) {
-            console.error(`Erro no comando em ${file}:`, err.message);
-          }
-        }
+    } catch (err) {
+      // Ignorar erros de "já existe" para tabelas/índices
+      if (!err.message.includes("already exists") && !err.message.includes("já existe")) {
+        console.error(`Erro no comando em ${file}:`, err.message);
+        db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
+          "migration_error",
+          JSON.stringify({ file, error: err.message })
+        ]);
+      }
+    }
       }
     }
   }
@@ -117,6 +121,10 @@ async function seedInMemoryDb() {
     console.log("Banco de dados populado com sucesso.");
   } catch (err) {
     console.error("Erro no seed:", err.message);
+    db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
+      "seed_error",
+      JSON.stringify({ error: err.message })
+    ]);
   }
 }
 
@@ -131,7 +139,12 @@ if (require.main === module) {
     })
     .catch(err => {
       console.error("Erro fatal na inicialização:", err);
-      process.exit(1);
+      db.run("INSERT INTO audit_logs (action, details) VALUES (?, ?)", [
+        "startup_fatal_error",
+        JSON.stringify({ error: err.message, stack: err.stack })
+      ], () => {
+        process.exit(1);
+      });
     });
 }
 
