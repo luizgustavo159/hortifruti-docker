@@ -336,7 +336,7 @@ router.post(
           }
           logAudit({
             action: "inicializacao_admin",
-            details: { user_id: row.id, email },
+            details: { id_usuario: row.id, email_usuario: email, mensagem: "Administrador inicializado via bootstrap" },
             performedBy: row.id,
             approvedBy: row.id,
           });
@@ -384,7 +384,7 @@ router.post(
             .then(() => {
               logAudit({
                 action: "solicitacao_recuperacao_senha",
-                details: { user_id: user.id },
+                details: { id_usuario: user.id, email_usuario: user.email, mensagem: "Solicitação de redefinição de senha enviada" },
                 performedBy: user.id,
               });
               return res.json({ status: "ok" });
@@ -462,7 +462,7 @@ router.post(
           }
           logAudit({
             action: "recuperacao_senha_concluida",
-            details: { user_id: reset.user_id },
+            details: { id_usuario: reset.user_id, mensagem: "Senha redefinida com sucesso pelo usuário" },
             performedBy: reset.user_id,
           });
           return res.json({ status: "ok" });
@@ -705,7 +705,7 @@ router.post(
         }
         logAudit({
           action: "produto_criado",
-          details: { product_id: row.id, name: payload.name, sku: payload.sku },
+          details: { id_produto: row.id, nome_produto: payload.name, sku_produto: payload.sku, mensagem: "Novo produto cadastrado no sistema" },
           performedBy: req.user.id
         });
         return res.status(201).json({ id: row.id });
@@ -805,14 +805,15 @@ router.post(
         logAudit({
           action: "perda_estoque",
           details: { 
-            product_id, 
-            product_name: productData?.name, 
-            quantity, 
-            reason,
-            prev_stock: productData?.current_stock,
-            next_stock: productData?.current_stock - quantity
+            id_produto: product_id, 
+            nome_produto: productData?.name, 
+            quantidade_perda: quantity, 
+            motivo_perda: reason,
+            estoque_anterior: productData?.stock,
+            estoque_atual: (productData?.stock || 0) - quantity,
+            mensagem: "Registro de perda de mercadoria"
           },
-          performedBy: req.user.id,
+          performedBy: req.user.id
         });
         return res.status(201).json({ status: "ok" });
       });
@@ -903,15 +904,16 @@ router.post(
         logAudit({
           action: "ajuste_estoque",
           details: { 
-            product_id, 
-            product_name: productData?.name,
-            delta, 
-            reason,
-            prev_stock: productData?.current_stock,
-            next_stock: updatedStock
+            id_produto: product_id, 
+            nome_produto: productData?.name,
+            variacao_estoque: delta, 
+            motivo_ajuste: reason,
+            estoque_anterior: productData?.stock,
+            estoque_atual: (productData?.stock || 0) + delta,
+            mensagem: "Ajuste manual de estoque realizado"
           },
           performedBy: req.user.id,
-          approvedBy: approval?.approved_by || null,
+          approvedBy: req.approval?.performed_by
         });
         return res.status(201).json({ status: "ok", current_stock: updatedStock });
       });
@@ -2052,7 +2054,7 @@ router.post(
         }
         logAudit({
           action: "conta_financeira_criada",
-          details: { id: row.id, kind, partner_name, amount: Number(amount), due_date },
+          details: { id_conta: row.id, tipo_conta: kind, nome_parceiro: partner_name, valor: Number(amount), data_vencimento: due_date, mensagem: "Nova conta a pagar ou receber registrada" },
           performedBy: req.user.id,
         });
         return res.status(201).json(row);
@@ -2146,7 +2148,7 @@ router.post("/api/finance/accounts/:id/settle", authenticateToken, requireSuperv
     }
     logAudit({
       action: "conta_financeira_liquidada",
-      details: { account_id: accountId },
+      details: { id_conta: accountId, mensagem: "Conta financeira liquidada (paga ou recebida)" },
       performedBy: req.user.id,
     });
     return res.json({ status: "ok", account_id: accountId });
@@ -2241,7 +2243,7 @@ router.post(
           }
           logAudit({
             action: "aprovacao_concedida",
-            details: { action, reason, metadata },
+            details: { acao_autorizada: action, motivo: reason, metadados: metadata, mensagem: "Aprovação de segurança concedida por gerente" },
             performedBy: user.id,
             approvedBy: user.id,
           });
@@ -2269,7 +2271,7 @@ router.post(
     const { item, reason } = req.body;
     logAudit({
       action: "item_removido",
-      details: { item, reason },
+      details: { item_removido: item, motivo: reason, mensagem: "Item removido do carrinho com autorização" },
       performedBy: req.user.id,
       approvedBy: req.approval?.approved_by,
     });
@@ -2310,7 +2312,7 @@ router.post(
       const finalize = (approval) => {
         logAudit({
           action: "desconto_manual_autorizado",
-          details: { amount, reason, subtotal: baseTotal, percent: discountPercent },
+          details: { valor_desconto: amount, motivo: reason, subtotal_venda: baseTotal, porcentagem_desconto: discountPercent, mensagem: "Desconto manual aplicado na venda" },
           performedBy: req.user.id,
           approvedBy: approval?.approved_by,
         });
@@ -2796,7 +2798,7 @@ router.post(
         if (err) {
           return res.status(400).json({ message: "Email já cadastrado." });
         }
-        logAudit({ action: "usuario_criado", details: { id: row.id, email }, performedBy: req.user.id });
+        logAudit({ action: "usuario_criado", details: { id_usuario: row.id, email_usuario: email, mensagem: "Novo usuário cadastrado pelo administrador" }, performedBy: req.user.id });
         return res.status(201).json({ id: row.id });
       }
     );
@@ -2854,7 +2856,7 @@ router.put(
           }
           logAudit({
             action: "usuario_atualizado",
-            details: { id: userId, email: updated.email, role: updated.role },
+            details: { id_usuario: userId, email_usuario: updated.email, perfil_usuario: updated.role, mensagem: "Dados cadastrais do usuário atualizados" },
             performedBy: req.user.id,
           });
           return res.json({ id: userId });
@@ -2965,7 +2967,7 @@ router.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
       }
       logAudit({
         action: "usuario_deletado",
-        details: { user_id: userId },
+        details: { id_usuario: userId, mensagem: "Usuário removido permanentemente do sistema" },
         performedBy: req.user.id
       });
       return res.json({ status: "ok", message: "Usuário excluído com sucesso." });
