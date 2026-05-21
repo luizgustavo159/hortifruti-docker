@@ -114,44 +114,96 @@ const formatDetails = (details, action) => {
   try {
     const parsed = typeof details === "string" ? JSON.parse(details) : details;
     
-    // Criar descrição amigável baseada na ação
-    if (action === "venda_realizada") {
-      const id = parsed.id || (parsed.sale_ids ? parsed.sale_ids.join(",") : "N/A");
-      const itemsCount = parsed.items_count || (parsed.items ? parsed.items.length : "N/A");
-      const totalVal = parsed.final_total || parsed.total || 0;
-      return `VENDA #${id} | Total: R$ ${Number(totalVal).toFixed(2)} | Itens: ${itemsCount} | Pagto: ${parsed.payment_method || "N/A"}`;
-    }
-    if (action === "perda_estoque") {
-      return `PERDA: ${parsed.product_name || "N/A"} | Qtd: ${parsed.quantity} | Motivo: ${parsed.reason || "N/A"} | Estoque: ${parsed.prev_stock} -> ${parsed.next_stock}`;
-    }
-    if (action === "ajuste_estoque") {
-      const type = Number(parsed.delta) > 0 ? "ENTRADA" : "SAÍDA";
-      return `${type}: ${parsed.product_name || "N/A"} | Qtd: ${Math.abs(parsed.delta)} | Motivo: ${parsed.reason || "N/A"} | Estoque: ${parsed.prev_stock} -> ${parsed.next_stock}`;
-    }
-    if (action.includes("stock")) {
-      return `Produto: ${parsed.product_name || "N/A"} | Quantidade: ${parsed.quantity || parsed.delta || "N/A"}`;
-    }
-    if (action.includes("user")) {
-      return `Usuário: ${parsed.email || parsed.name || "N/A"} | Perfil: ${parsed.role || "N/A"}`;
-    }
-    if (action.includes("discount")) {
-      return `Desconto: ${parsed.name || "N/A"} | Tipo: ${parsed.type || "N/A"} | Valor: ${parsed.value || "N/A"}`;
-    }
-    if (action.includes("approval")) {
-      return `Pedido ID: ${parsed.id || "N/A"} | Status: ${parsed.status || "N/A"}`;
-    }
-    
-    // Priorizar campo 'mensagem' ou 'detalhe' se existirem
-    if (parsed.mensagem) return parsed.mensagem;
-    if (parsed.detalhe) return parsed.detalhe;
-    if (parsed.descricao_amigavel) return parsed.descricao_amigavel;
+    // Mapeamento de chaves técnicas para nomes amigáveis em português
+    const KEY_MAP = {
+      "id_venda": "ID da Venda",
+      "numero_documento": "Nº Documento",
+      "valor_total": "Valor Total",
+      "valor_final": "Valor Final",
+      "valor_final_com_desconto": "Valor Final",
+      "forma_pagamento": "Forma de Pagamento",
+      "quantidade_itens": "Qtd Itens",
+      "mensagem": "Informação",
+      "id_produto": "ID do Produto",
+      "nome_produto": "Produto",
+      "quantidade_perda": "Qtd Perda",
+      "motivo_perda": "Motivo da Perda",
+      "estoque_anterior": "Estoque Anterior",
+      "estoque_atual": "Estoque Atual",
+      "variacao_estoque": "Variação",
+      "motivo_ajuste": "Motivo do Ajuste",
+      "id_usuario": "ID do Usuário",
+      "email_usuario": "E-mail",
+      "perfil_usuario": "Perfil",
+      "id_sessao": "ID da Sessão",
+      "valor_abertura": "Valor Abertura",
+      "valor_fechamento": "Valor Fechamento",
+      "valor_esperado": "Valor Esperado",
+      "diferenca_valor": "Diferença",
+      "tipo_movimentacao": "Tipo",
+      "valor": "Valor",
+      "motivo": "Motivo",
+      "id_aprovacao": "ID Aprovação",
+      "acao_aprovada": "Ação Autorizada",
+      "acao_autorizada": "Ação Autorizada",
+      "metodo_http": "Método",
+      "caminho_acessado": "Caminho",
+      "codigo_status": "Status HTTP",
+      "tempo_resposta_ms": "Duração (ms)",
+      "id_requisicao": "ID Requisição",
+      "mensagem_erro": "Erro",
+      "detalhe": "Detalhe do Erro",
+      "erro_tecnico": "Erro Técnico",
+      "orientacao": "Orientação",
+      // Legado
+      "sale_id": "ID da Venda",
+      "document_number": "Nº Documento",
+      "total": "Total",
+      "final_total": "Total Final",
+      "payment_method": "Pagamento",
+      "items_count": "Qtd Itens",
+      "product_id": "ID Produto",
+      "product_name": "Produto",
+      "quantity": "Quantidade",
+      "reason": "Motivo",
+      "prev_stock": "Estoque Ant.",
+      "next_stock": "Estoque Atual",
+      "user_id": "ID Usuário",
+      "email": "E-mail",
+      "role": "Perfil",
+      "session_id": "ID Sessão",
+      "opening_amount": "Valor Abertura",
+      "closing_amount": "Valor Fechamento",
+      "expected_amount": "Valor Esperado",
+      "difference_amount": "Diferença",
+      "type": "Tipo",
+      "amount": "Valor",
+      "notes": "Observações",
+      "status": "Status",
+      "method": "Método",
+      "path": "Caminho",
+      "duration_ms": "Duração (ms)",
+      "request_id": "ID Requisição",
+      "error_message": "Mensagem de Erro"
+    };
 
-    // Fallback: mostrar principais campos traduzidos
-    const keys = Object.keys(parsed).slice(0, 3);
-    return keys.map(k => {
-      const label = k.replace(/_/g, ' ').toUpperCase();
-      return `${label}: ${parsed[k]}`;
-    }).join(" | ") || "Sem detalhes";
+    // Se houver uma mensagem principal, usá-la como destaque
+    const mainMessage = parsed.mensagem || parsed.detalhe || parsed.descricao_amigavel;
+    
+    // Filtrar chaves para não repetir a mensagem principal e chaves técnicas irrelevantes
+    const detailEntries = Object.entries(parsed).filter(([k]) => 
+      k !== "mensagem" && k !== "detalhe" && k !== "descricao_amigavel" && k !== "pilha_erro"
+    );
+
+    if (detailEntries.length === 0) return mainMessage || "Sem detalhes";
+
+    const detailsString = detailEntries.map(([k, v]) => {
+      const label = KEY_MAP[k] || k.replace(/_/g, ' ').toUpperCase();
+      const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+      return `${label}: ${val}`;
+    }).join(" | ");
+
+    return mainMessage ? `${mainMessage} (${detailsString})` : detailsString;
   } catch {
     return details;
   }
