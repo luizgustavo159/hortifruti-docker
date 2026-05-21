@@ -1294,6 +1294,68 @@ router.post(
   }
 );
 
+router.put(
+  "/api/discounts/:id",
+  authenticateToken,
+  requireSupervisor,
+  [
+    body("name").trim().notEmpty().withMessage("Nome é obrigatório."),
+    body("type").isIn(["percent", "fixed", "buy_x_get_y", "fixed_bundle", "percentage", "bulk"]).withMessage("Tipo inválido."),
+    body("value").optional().isFloat({ min: 0 }).withMessage("Valor inválido."),
+  ],
+  (req, res) => {
+    const id = Number(req.params.id);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const payload = req.body;
+    let type = payload.type;
+    if (type === "percentage") type = "percent";
+    if (type === "bulk") type = "buy_x_get_y";
+    if (type === "combo") type = "fixed_bundle";
+
+    db.run(
+      `UPDATE discounts SET 
+         name = ?, type = ?, value = ?, min_quantity = ?, buy_quantity = ?, get_quantity = ?, 
+         target_type = ?, target_value = ?, days_of_week = ?, starts_at = ?, ends_at = ?, 
+         starts_time = ?, ends_time = ?, stacking_rule = ?, priority = ?, active = ?
+       WHERE id = ?`,
+      [
+        payload.name,
+        type,
+        payload.value != null ? payload.value : 0,
+        payload.min_quantity != null ? Number(payload.min_quantity) : 0,
+        payload.buy_quantity != null ? Number(payload.buy_quantity) : 0,
+        payload.get_quantity != null ? Number(payload.get_quantity) : 0,
+        payload.target_type || "all",
+        payload.target_value || null,
+        Array.isArray(payload.days_of_week) ? JSON.stringify(payload.days_of_week) : (payload.days_of_week || null),
+        payload.starts_at || null,
+        payload.ends_at || null,
+        payload.starts_time || null,
+        payload.ends_time || null,
+        payload.stacking_rule || "exclusive",
+        payload.priority != null ? Number(payload.priority) : 0,
+        payload.active != null ? Number(payload.active) : 1,
+        id
+      ],
+      (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Erro ao atualizar desconto." });
+        }
+        logAudit({
+          action: "discount_updated",
+          details: { id, name: payload.name, type, value: payload.value },
+          performedBy: req.user.id,
+        });
+        return res.json({ status: "ok" });
+      }
+    );
+  }
+);
+
 router.delete("/api/discounts/:id", authenticateToken, requireSupervisor, (req, res) => {
   const id = Number(req.params.id);
   db.run("DELETE FROM discounts WHERE id = ?", [id], (err) => {

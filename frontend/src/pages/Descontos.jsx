@@ -87,7 +87,51 @@ export function Descontos() {
     setShowModal(true);
   };
 
-  const handleCreateDiscount = async (e) => {
+  const openEditModal = (discount) => {
+    setEditingDiscount(discount);
+    let selectedIds = [];
+    if (discount.target_type === "product") {
+      try {
+        selectedIds = JSON.parse(discount.target_value || "[]");
+      } catch {
+        selectedIds = [];
+      }
+    }
+
+    let days = [];
+    if (discount.days_of_week) {
+      try {
+        days = typeof discount.days_of_week === 'string' ? JSON.parse(discount.days_of_week) : discount.days_of_week;
+      } catch {
+        days = [];
+      }
+    }
+
+    setFormData({
+      name: discount.name || "",
+      type: discount.type || "percent",
+      value: discount.value || "",
+      description: discount.description || "",
+      target_type: discount.target_type || "all",
+      target_value: discount.target_type === "category" ? discount.target_value : "",
+      selected_ids: selectedIds,
+      min_quantity: discount.min_quantity || "",
+      buy_quantity: discount.buy_quantity || "",
+      get_quantity: discount.get_quantity || "",
+      starts_at: discount.starts_at ? discount.starts_at.split("T")[0] : "",
+      ends_at: discount.ends_at ? discount.ends_at.split("T")[0] : "",
+      starts_time: discount.starts_time || "",
+      ends_time: discount.ends_time || "",
+      days_of_week: days,
+      stacking_rule: discount.stacking_rule || "exclusive",
+      priority: discount.priority || 0,
+      active: discount.active === 1 || discount.active === true,
+    });
+    setError("");
+    setShowModal(true);
+  };
+
+  const handleSubmitDiscount = async (e) => {
     e.preventDefault();
     setError("");
 
@@ -142,24 +186,28 @@ export function Descontos() {
         ends_at: formData.ends_at || null,
         starts_time: formData.starts_time || null,
         ends_time: formData.ends_time || null,
-        days_of_week: formData.days_of_week.length > 0 ? formData.days_of_week : null,
+        days_of_week: formData.days_of_week.length > 0 ? JSON.stringify(formData.days_of_week) : null,
         stacking_rule: formData.stacking_rule || "exclusive",
         priority: parseInt(formData.priority) || 0,
-        active: formData.active !== false,
+        active: formData.active ? 1 : 0,
       };
 
-      await apiFetch("/discounts", {
-        method: "POST",
+      const method = editingDiscount ? "PUT" : "POST";
+      const url = editingDiscount ? `/discounts/${editingDiscount.id}` : "/discounts";
+
+      await apiFetch(url, {
+        method,
         body: JSON.stringify(payload),
       });
 
-      setSuccessMessage("Desconto criado com sucesso!");
+      setSuccessMessage(editingDiscount ? "Desconto atualizado!" : "Desconto criado!");
       setFormData(defaultForm);
       setShowModal(false);
+      setEditingDiscount(null);
       loadData();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      setError(err.message || "Erro ao criar desconto.");
+      setError(err.message || "Erro ao salvar desconto.");
     } finally {
       setLoading(false);
     }
@@ -246,8 +294,8 @@ export function Descontos() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '680px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2>Novo Desconto</h2>
-            <form onSubmit={handleCreateDiscount} className="form-grid">
+            <h2>{editingDiscount ? "Editar Desconto" : "Novo Desconto"}</h2>
+            <form onSubmit={handleSubmitDiscount} className="form-grid">
 
               {/* Informações Básicas */}
               <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '16px', marginBottom: '16px' }}>
@@ -334,6 +382,17 @@ export function Descontos() {
                     placeholder="Descrição opcional do desconto..."
                     rows={2}
                   />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.active}
+                      onChange={e => setFormData({...formData, active: e.target.checked})}
+                    />
+                    Desconto Ativo
+                  </label>
                 </div>
               </div>
 
@@ -515,7 +574,10 @@ export function Descontos() {
                       </p>
                     )}
                     {d.description && <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 8px' }}>{d.description}</p>}
-                    <button className="btn-delete" onClick={() => handleDeleteDiscount(d.id)}>Excluir</button>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                      <button className="button" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => openEditModal(d)}>Editar</button>
+                      <button className="btn-delete" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => handleDeleteDiscount(d.id)}>Excluir</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -537,7 +599,10 @@ export function Descontos() {
                     </div>
                     <p style={{ color: '#9ca3af', margin: '8px 0 4px' }}>{formatDiscountValue(d)}</p>
                     <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0 0 8px' }}>{formatTarget(d)}</p>
-                    <button className="btn-delete" onClick={() => handleDeleteDiscount(d.id)}>Excluir</button>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                      <button className="button" style={{ padding: '4px 12px', fontSize: '12px', background: '#9ca3af' }} onClick={() => openEditModal(d)}>Editar</button>
+                      <button className="btn-delete" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => handleDeleteDiscount(d.id)}>Excluir</button>
+                    </div>
                   </div>
                 ))}
               </div>
