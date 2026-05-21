@@ -9,10 +9,18 @@ const ACTION_DESCRIPTIONS = {
   "sale_cancelled": "Venda Cancelada",
   "sale_refunded": "Reembolso Processado",
   "stock_adjusted": "Estoque Ajustado",
+  "stock_adjust": "Ajuste de Estoque",
   "stock_received": "Estoque Recebido",
   "stock_loss": "Perda de Estoque",
+  "stock_move": "Movimentação de Estoque",
+  "product_created": "Produto Cadastrado",
+  "product_updated": "Produto Atualizado",
+  "product_deleted": "Produto Removido",
+  "category_created": "Categoria Criada",
+  "supplier_created": "Fornecedor Cadastrado",
   "purchase_order_created": "Pedido de Compra Criado",
   "purchase_order_approved": "Pedido de Compra Aprovado",
+  "purchase_order_received": "Pedido de Compra Recebido",
   "user_created": "Usuário Criado",
   "user_updated": "Usuário Atualizado",
   "user_deleted": "Usuário Deletado",
@@ -27,6 +35,8 @@ const ACTION_DESCRIPTIONS = {
   "approval_denied": "Aprovação Negada",
   "settings_changed": "Configurações Alteradas",
   "admin_bootstrap": "Sistema Inicializado",
+  "cash_session_opened": "Abertura de Caixa",
+  "cash_session_closed": "Fechamento de Caixa",
 };
 
 const getActionDescription = (action) => {
