@@ -31,6 +31,7 @@ export function Estoque() {
     price: "",
     current_stock: "",
     min_stock: "",
+    unit_type: "un",
   });
 
   const [newCategory, setNewCategory] = useState({ name: "", description: "" });
@@ -79,15 +80,16 @@ export function Estoque() {
     }
 
     try {
+      const isKg = newProduct.unit_type === 'kg';
       const productData = {
         name: newProduct.name,
         category_id: parseInt(newProduct.category_id),
         supplier_id: newProduct.supplier_id ? parseInt(newProduct.supplier_id) : null,
         price: parseFloat(newProduct.price),
-        current_stock: parseInt(newProduct.current_stock),
-        min_stock: parseInt(newProduct.min_stock),
+        current_stock: isKg ? parseFloat(newProduct.current_stock) : parseInt(newProduct.current_stock),
+        min_stock: isKg ? parseFloat(newProduct.min_stock) : parseInt(newProduct.min_stock),
         sku: `PROD-${Date.now()}`,
-        unit_type: 'unit'
+        unit_type: newProduct.unit_type || 'un'
       };
 
       await apiFetch("/products", {
@@ -96,7 +98,7 @@ export function Estoque() {
       });
 
       setSuccessMessage("Produto criado com sucesso!");
-      setNewProduct({ name: "", category_id: "", supplier_id: "", price: "", current_stock: "", min_stock: "" });
+      setNewProduct({ name: "", category_id: "", supplier_id: "", price: "", current_stock: "", min_stock: "", unit_type: "un" });
       setShowNewProductModal(false);
       loadData();
       setTimeout(() => setSuccessMessage(""), 3000);
@@ -150,7 +152,8 @@ export function Estoque() {
       return;
     }
 
-    const qty = parseInt(movement.quantity);
+    const isKgProduct = selectedProduct?.unit_type === 'kg';
+    const qty = isKgProduct ? parseFloat(movement.quantity) : parseInt(movement.quantity);
     if (isNaN(qty) || qty <= 0) {
       setError("A quantidade deve ser um número positivo.");
       return;
@@ -290,9 +293,10 @@ export function Estoque() {
             ) : (
               <div className="table-wrapper">
                 <table className="table">
-                  <thead>
+                    <thead>
                     <tr>
                       <th>Produto</th>
+                      <th>Unidade</th>
                       <th>Categoria</th>
                       <th>Fornecedor</th>
                       <th>Preço</th>
@@ -307,16 +311,26 @@ export function Estoque() {
                       <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>Nenhum produto encontrado.</td></tr>
                     ) : filteredProducts.map((product) => (
                       <tr key={product.id}>
-                        <td><strong>{product.name}</strong></td>
-                        <td>{product.category_name || "-"}</td>
-                        <td>{product.supplier_name || "-"}</td>
-                        <td>R$ {Number(product.price).toFixed(2)}</td>
                         <td>
-                          <span style={{ fontWeight: 'bold', color: Number(product.current_stock) <= Number(product.min_stock) ? '#dc2626' : '#16a34a' }}>
-                            {product.current_stock}
+                          <strong>{product.name}</strong>
+                          {product.unit_type === 'kg' && <span style={{ marginLeft: '6px', fontSize: '11px', background: '#dbeafe', color: '#1d4ed8', padding: '1px 6px', borderRadius: '10px' }}>⚖️ kg</span>}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '12px', background: '#f3f4f6', padding: '2px 8px', borderRadius: '10px' }}>
+                            {product.unit_type || 'un'}
                           </span>
                         </td>
-                        <td>{product.min_stock}</td>
+                        <td>{product.category_name || "-"}</td>
+                        <td>{product.supplier_name || "-"}</td>
+                        <td>R$ {Number(product.price).toFixed(2)}/{product.unit_type === 'kg' ? 'kg' : 'un'}</td>
+                        <td>
+                          <span style={{ fontWeight: 'bold', color: Number(product.current_stock) <= Number(product.min_stock) ? '#dc2626' : '#16a34a' }}>
+                            {product.unit_type === 'kg'
+                              ? `${Number(product.current_stock).toFixed(3)} kg`
+                              : product.current_stock}
+                          </span>
+                        </td>
+                        <td>{product.unit_type === 'kg' ? `${Number(product.min_stock).toFixed(3)} kg` : product.min_stock}</td>
                         <td>
                           <span className={`status ${Number(product.current_stock) <= Number(product.min_stock) ? "critical" : "ok"}`}>
                             {Number(product.current_stock) <= Number(product.min_stock) ? "⚠ Crítico" : "✓ OK"}
@@ -467,10 +481,36 @@ export function Estoque() {
               </div>
             </div>
 
+            <div className="form-group">
+              <label>Tipo de Unidade *</label>
+              <select value={newProduct.unit_type} onChange={(e) => setNewProduct({ ...newProduct, unit_type: e.target.value })}>
+                <option value="un">Unidade (un)</option>
+                <option value="kg">Quilograma (kg)</option>
+                <option value="g">Grama (g)</option>
+                <option value="l">Litro (l)</option>
+                <option value="cx">Caixa (cx)</option>
+                <option value="pct">Pacote (pct)</option>
+              </select>
+              {newProduct.unit_type === 'kg' && (
+                <small style={{ color: '#2563eb', marginTop: '4px', display: 'block' }}>
+                  ⚖️ Produto por peso — suporta leitura de balança no caixa
+                </small>
+              )}
+            </div>
+
             <div className="form-row">
-              <div className="form-group"><label>Preço *</label><input type="number" step="0.01" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })} /></div>
-              <div className="form-group"><label>Estoque Inicial *</label><input type="number" value={newProduct.current_stock} onChange={(e) => setNewProduct({ ...newProduct, current_stock: e.target.value })} /></div>
-              <div className="form-group"><label>Estoque Mínimo *</label><input type="number" value={newProduct.min_stock} onChange={(e) => setNewProduct({ ...newProduct, min_stock: e.target.value })} /></div>
+              <div className="form-group">
+                <label>Preço por {newProduct.unit_type === 'kg' ? 'kg' : 'unidade'} *</label>
+                <input type="number" step="0.01" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })} placeholder="0,00" />
+              </div>
+              <div className="form-group">
+                <label>Estoque Inicial * {newProduct.unit_type === 'kg' ? '(kg)' : ''}</label>
+                <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.current_stock} onChange={(e) => setNewProduct({ ...newProduct, current_stock: e.target.value })} placeholder={newProduct.unit_type === 'kg' ? 'Ex: 10.500' : 'Ex: 50'} />
+              </div>
+              <div className="form-group">
+                <label>Estoque Mínimo * {newProduct.unit_type === 'kg' ? '(kg)' : ''}</label>
+                <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.min_stock} onChange={(e) => setNewProduct({ ...newProduct, min_stock: e.target.value })} placeholder={newProduct.unit_type === 'kg' ? 'Ex: 2.000' : 'Ex: 10'} />
+              </div>
             </div>
 
             <div className="modal-actions">
@@ -522,7 +562,9 @@ export function Estoque() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Movimentar Estoque</h2>
             <p className="modal-subtitle">
-              <strong>{selectedProduct.name}</strong> — Estoque atual: <strong>{selectedProduct.current_stock}</strong>
+              <strong>{selectedProduct.name}</strong>
+              {selectedProduct.unit_type === 'kg' && <span style={{ marginLeft: '8px', fontSize: '12px', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '10px' }}>⚖️ Produto por kg</span>}
+              {' '}— Estoque atual: <strong>{selectedProduct.unit_type === 'kg' ? `${Number(selectedProduct.current_stock).toFixed(3)} kg` : selectedProduct.current_stock}</strong>
             </p>
             <div className="form-group">
               <label>Tipo de Movimentação</label>
@@ -533,27 +575,34 @@ export function Estoque() {
               </select>
             </div>
             <div className="form-group">
-              <label>Quantidade *</label>
+              <label>Quantidade {selectedProduct.unit_type === 'kg' ? '(kg) *' : '*'}</label>
               <input
                 type="number"
-                min="1"
+                min={selectedProduct.unit_type === 'kg' ? '0.001' : '1'}
+                step={selectedProduct.unit_type === 'kg' ? '0.001' : '1'}
                 value={movement.quantity}
                 onChange={e => setMovement({...movement, quantity: e.target.value})}
-                placeholder="Ex: 10"
+                placeholder={selectedProduct.unit_type === 'kg' ? 'Ex: 5.500' : 'Ex: 10'}
               />
               {movement.type === "adjust" && movement.quantity && (
                 <small style={{ color: '#16a34a' }}>
-                  Novo estoque: {Number(selectedProduct.current_stock) + Number(movement.quantity || 0)}
+                  Novo estoque: {selectedProduct.unit_type === 'kg'
+                    ? `${(Number(selectedProduct.current_stock) + Number(movement.quantity || 0)).toFixed(3)} kg`
+                    : Number(selectedProduct.current_stock) + Number(movement.quantity || 0)}
                 </small>
               )}
               {movement.type === "adjust_negative" && movement.quantity && (
                 <small style={{ color: '#dc2626' }}>
-                  Novo estoque: {Number(selectedProduct.current_stock) - Number(movement.quantity || 0)}
+                  Novo estoque: {selectedProduct.unit_type === 'kg'
+                    ? `${(Number(selectedProduct.current_stock) - Number(movement.quantity || 0)).toFixed(3)} kg`
+                    : Number(selectedProduct.current_stock) - Number(movement.quantity || 0)}
                 </small>
               )}
               {movement.type === "loss" && movement.quantity && (
                 <small style={{ color: '#f97316' }}>
-                  Novo estoque após perda: {Number(selectedProduct.current_stock) - Number(movement.quantity || 0)}
+                  Novo estoque após perda: {selectedProduct.unit_type === 'kg'
+                    ? `${(Number(selectedProduct.current_stock) - Number(movement.quantity || 0)).toFixed(3)} kg`
+                    : Number(selectedProduct.current_stock) - Number(movement.quantity || 0)}
                 </small>
               )}
             </div>

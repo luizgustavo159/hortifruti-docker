@@ -719,7 +719,7 @@ router.post(
   authenticateToken,
   [
     body("product_id").isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("quantity").isInt({ min: 1 }).withMessage("Quantidade inválida."),
+    body("quantity").isFloat({ min: 0.001 }).withMessage("Quantidade inválida."),
     body("reason").trim().notEmpty().withMessage("Motivo é obrigatório."),
   ],
   (req, res) => {
@@ -827,7 +827,7 @@ router.post(
   requireSupervisor,
   [
     body("product_id").isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("delta").isInt().withMessage("Delta inválido."),
+    body("delta").isFloat().withMessage("Delta inválido."),
     body("reason").trim().notEmpty().withMessage("Motivo é obrigatório."),
   ],
   (req, res) => {
@@ -927,8 +927,8 @@ router.post(
   requireSupervisor,
   [
     body("product_id").isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("delta").optional().isInt().not().equals("0").withMessage("Delta inválido."),
-    body("quantity").optional().isInt({ min: 1 }).withMessage("Quantidade inválida."),
+    body("delta").optional().isFloat().not().equals("0").withMessage("Delta inválido."),
+    body("quantity").optional().isFloat({ min: 0.001 }).withMessage("Quantidade inválida."),
     body("type").isIn(["inbound", "outbound", "transfer", "return"]).withMessage("Tipo inválido."),
     body("reason").optional().trim().isString().withMessage("Motivo inválido."),
   ],
@@ -1376,14 +1376,14 @@ router.post(
   [
     body("payment_method").trim().notEmpty().withMessage("Pagamento é obrigatório."),
     body("product_id").optional().isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("quantity").optional().isInt({ min: 1 }).withMessage("Quantidade inválida."),
+    body("quantity").optional().isFloat({ min: 0.001 }).withMessage("Quantidade inválida."),
     body("discount_id").optional().isInt({ min: 1 }).withMessage("Desconto inválido."),
     body("items")
       .optional()
       .isArray({ min: 1 })
       .withMessage("Itens da venda inválidos."),
     body("items.*.product_id").optional().isInt({ min: 1 }).withMessage("Produto inválido."),
-    body("items.*.quantity").optional().isInt({ min: 1 }).withMessage("Quantidade inválida."),
+    body("items.*.quantity").optional().isFloat({ min: 0.001 }).withMessage("Quantidade inválida."),
     body("items.*.discount_id").optional({ nullable: true }).isInt({ min: 1 }).withMessage("Desconto inválido."),
     body("items.*.manual_discount").optional({ nullable: true }).isFloat({ min: 0 }).withMessage("Desconto manual inválido."),
     body("manual_discount").optional({ nullable: true }).isFloat({ min: 0 }).withMessage("Desconto manual inválido."),
@@ -1452,14 +1452,14 @@ router.post(
           done({ status: 404, message: "Produto não encontrado." });
           return;
         }
-        if (product.current_stock < quantity) {
+        if (Number(product.current_stock) < Number(quantity)) {
           done({ status: 400, message: "Estoque insuficiente." });
           return;
         }
 
         const total = Number(product.price) * Number(quantity);
         const applySale = (discount, discountAmount) => {
-          const nextStock = product.current_stock - quantity;
+          const nextStock = Number(product.current_stock) - Number(quantity);
           const finalTotal = Math.max(total - discountAmount, 0);
 
           tx.run(
