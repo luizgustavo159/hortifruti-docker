@@ -1,11 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 
-// Detecção automática de ambiente
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres");
 
 if (!isPostgres) {
-    // --- MODO SQLITE (USADO NO MANUS / TESTES RÁPIDOS) ---
     const initSqlJs = require("sql.js");
     const DB_PATH = path.join(__dirname, "data", "database.sqlite");
     if (!fs.existsSync(path.join(__dirname, "data"))) fs.mkdirSync(path.join(__dirname, "data"));
@@ -19,11 +17,7 @@ if (!isPostgres) {
     };
     const ready = init();
     const save = () => fs.writeFileSync(DB_PATH, Buffer.from(dbInstance.export()));
-    
-    const pToS = (sql) => {
-        // Converte $1 para ? e remove RETURNING para o SQLite
-        return sql.replace(/\$\d+/g, "?").replace(/RETURNING\s+(id|\*)/gi, "");
-    };
+    const pToS = (sql) => sql.replace(/\$\d+/g, "?").replace(/RETURNING\s+(id|\*)/gi, "");
 
     const pool = {
         query: (sql, params, callback) => {
@@ -64,39 +58,41 @@ if (!isPostgres) {
         exec: (sql, cb) => ready.then(() => { try { dbInstance.run(sql); save(); if(cb) cb(null); } catch(e) { if(cb) cb(e); } }),
         withTransaction: (work, callback) => {
             ready.then(() => {
-                dbInstance.run("BEGIN TRANSACTION");
-                const tx = {
-                    run: (s, p, cb) => pool.query(s, p, cb),
-                    get: (s, p, cb) => pool.query(s, p, (err, res) => { if(cb) cb(err, res?.rows?.[0]); }),
-                    all: (s, p, cb) => pool.query(s, p, (err, res) => { if(cb) cb(err, res?.rows || []); }),
-                    exec: (s, cb) => { try { dbInstance.run(s); if(cb) cb(null); } catch(e) { if(cb) cb(e); } }
-                };
-                work(tx, (err) => {
-                    if (err) { dbInstance.run("ROLLBACK"); if(callback) callback(err); }
-                    else { dbInstance.run("COMMIT"); save(); if(callback) callback(null); }
-                });
+                try {
+                    dbInstance.run("BEGIN TRANSACTION");
+                    const tx = {
+                        run: (s, p, cb) => pool.query(s, p, cb),
+                        get: (s, p, cb) => pool.query(s, p, (err, res) => { if(cb) cb(err, res?.rows?.[0]); }),
+                        all: (s, p, cb) => pool.query(s, p, (err, res) => { if(cb) cb(err, res?.rows || []); }),
+                        exec: (s, cb) => { try { dbInstance.run(s); if(cb) cb(null); } catch(e) { if(cb) cb(e); } }
+                    };
+                    work(tx, (err) => {
+                        if (err) {
+                            try { dbInstance.run("ROLLBACK"); } catch (e) {}
+                            if (callback) callback(err);
+                        } else {
+                            try {
+                                dbInstance.run("COMMIT");
+                                save();
+                                if (callback) callback(null);
+                            } catch (e) {
+                                if (callback) callback(e);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    if (callback) callback(e);
+                }
             });
         }
     };
 } else {
-    // --- MODO POSTGRESQL (USADO NO DOCKER / PRODUÇÃO) ---
     const { Pool: PgPool } = require("pg");
-    const pool = new PgPool({
-        connectionString: process.env.DATABASE_URL,
-        max: 10,
-    });
-    
-    // O Postgres já suporta $1, $2 e RETURNING nativamente, então não alteramos nada
-    const formatQuery = (sql) => {
-        let index = 0;
-        return sql.replace(/\?/g, () => `$${(index += 1)}`);
-    };
-
+    const pool = new PgPool({ connectionString: process.env.DATABASE_URL, max: 10 });
+    const formatQuery = (sql) => { let index = 0; return sql.replace(/\?/g, () => `$${(index += 1)}`); };
     const runQuery = (client, sql, params = [], callback) => {
-        const statement = formatQuery(sql);
-        client.query(statement, params, (err, result) => { if (callback) callback(err, result); });
+        client.query(formatQuery(sql), params, (err, result) => { if (callback) callback(err, result); });
     };
-
     module.exports = {
         pool,
         run: (sql, params, cb) => runQuery(pool, sql, params, cb),
