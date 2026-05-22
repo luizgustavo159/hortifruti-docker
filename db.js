@@ -1,42 +1,19 @@
 const { Pool: PgPool } = require("pg");
-const { newDb } = require("pg-mem");
 
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-const useInMemoryDb = true; // Forçado para emulação rápida
-
-if (!DATABASE_URL && NODE_ENV !== "development" && !useInMemoryDb) {
+if (!DATABASE_URL && NODE_ENV !== "development") {
   throw new Error("DATABASE_URL não configurado. Defina a conexão com PostgreSQL.");
 }
 
-let memoryInstance = null;
-const buildPool = () => {
-  if (useInMemoryDb) {
-    if (memoryInstance) return memoryInstance;
-    const memoryDb = newDb({
-      autoCreateForeignKeyIndices: true,
-    });
-    const { Pool: MemoryPool } = memoryDb.adapters.createPg();
-    memoryInstance = new MemoryPool();
-    return memoryInstance;
-  }
+const pool = new PgPool({
+  connectionString: DATABASE_URL || "postgres://greenstore:greenstore@db:5432/greenstore",
+  max: Number(process.env.DB_POOL_MAX || 10),
+  idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_MS || 10000),
+  connectionTimeoutMillis: Number(process.env.DB_POOL_CONN_TIMEOUT_MS || 2000),
+});
 
-  return new PgPool({
-    connectionString: DATABASE_URL || "postgres://localhost:5432/greenstore",
-    max: Number(process.env.DB_POOL_MAX || 10),
-    idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_MS || 10000),
-    connectionTimeoutMillis: Number(process.env.DB_POOL_CONN_TIMEOUT_MS || 2000),
-    ssl:
-      process.env.DB_SSL === "true"
-        ? {
-            rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false",
-          }
-        : undefined,
-  });
-};
-
-const pool = buildPool();
 global.dbPool = pool;
 
 const formatQuery = (sql) => {

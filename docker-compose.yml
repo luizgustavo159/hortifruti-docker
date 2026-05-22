@@ -1,26 +1,54 @@
 version: "3.9"
+
 services:
   db:
-    image: postgres:16
-    env_file:
-      - .env
+    image: postgres:16-alpine
+    container_name: greenstore_db
+    restart: always
     environment:
       POSTGRES_DB: greenstore
       POSTGRES_USER: greenstore
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: greenstore_password
     volumes:
       - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greenstore"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: greenstore_redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
+    container_name: greenstore_app
+    restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "3000:3000"
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-    command: ["sh", "-c", "npm run migrate && npm start"]
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgres://greenstore:greenstore_password@db:5432/greenstore
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=sua_chave_secreta_muito_longa_e_segura_123
+      - ADMIN_BOOTSTRAP_TOKEN=bootstrap_token_123
+    command: >
+      sh -c "npm run migrate && 
+             node scripts/seed-test-users.js && 
+             npm start"
 
 volumes:
   db-data:
