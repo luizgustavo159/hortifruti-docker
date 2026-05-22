@@ -1,145 +1,125 @@
-const { Pool: PgPool } = require("pg");
+const fs = require("fs");
+const path = require("path");
 
-const DATABASE_URL = process.env.DATABASE_URL || "";
-const NODE_ENV = process.env.NODE_ENV || "development";
+// Detecção automática de ambiente
+const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres");
 
-if (!DATABASE_URL && NODE_ENV !== "development") {
-  throw new Error("DATABASE_URL não configurado. Defina a conexão com PostgreSQL.");
-}
+if (!isPostgres) {
+    // --- MODO SQLITE (USADO NO MANUS / TESTES RÁPIDOS) ---
+    const initSqlJs = require("sql.js");
+    const DB_PATH = path.join(__dirname, "data", "database.sqlite");
+    if (!fs.existsSync(path.join(__dirname, "data"))) fs.mkdirSync(path.join(__dirname, "data"));
 
-const pool = new PgPool({
-  connectionString: DATABASE_URL || "postgres://greenstore:greenstore@db:5432/greenstore",
-  max: Number(process.env.DB_POOL_MAX || 10),
-  idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_MS || 10000),
-  connectionTimeoutMillis: Number(process.env.DB_POOL_CONN_TIMEOUT_MS || 2000),
-});
+    let dbInstance;
+    const init = async () => {
+        const SQL = await initSqlJs();
+        if (fs.existsSync(DB_PATH)) dbInstance = new SQL.Database(fs.readFileSync(DB_PATH));
+        else dbInstance = new SQL.Database();
+        console.log("Ambiente: SQLite (Emulação)");
+    };
+    const ready = init();
+    const save = () => fs.writeFileSync(DB_PATH, Buffer.from(dbInstance.export()));
+    
+    const pToS = (sql) => {
+        // Converte $1 para ? e remove RETURNING para o SQLite
+        return sql.replace(/\$\d+/g, "?").replace(/RETURNING\s+(id|\*)/gi, "");
+    };
 
-global.dbPool = pool;
-
-const formatQuery = (sql) => {
-  let index = 0;
-  return sql.replace(/\?/g, () => `$${(index += 1)}`);
-};
-
-const normalizeArgs = (params, callback) => {
-  if (typeof params === "function") {
-    return { params: [], callback: params };
-  }
-  return { params: params || [], callback };
-};
-
-const runQuery = (client, sql, params = [], callback) => {
-  const statement = formatQuery(sql);
-  client.query(statement, params, (err, result) => {
-    if (callback) {
-      callback(err, result);
-    }
-  });
-};
-
-const run = (sql, params, callback) => {
-  const normalized = normalizeArgs(params, callback);
-  return runQuery(pool, sql, normalized.params, normalized.callback);
-};
-
-const get = (sql, params, callback) => {
-  const normalized = normalizeArgs(params, callback);
-  return runQuery(pool, sql, normalized.params, (err, result) => {
-    if (callback) {
-      callback(err, result?.rows?.[0]);
-    }
-  });
-};
-
-const all = (sql, params, callback) => {
-  const normalized = normalizeArgs(params, callback);
-  runQuery(pool, sql, normalized.params, (err, result) => {
-    if (callback) {
-      callback(err, result?.rows || []);
-    }
-  });
-};
-
-const exec = (sql, callback) => {
-  pool.query(sql, (err) => {
-    if (callback) {
-      callback(err);
-    }
-  });
-};
-
-const close = (callback) => {
-  pool.end((err) => {
-    if (callback) {
-      callback(err);
-    }
-  });
-};
-
-const withTransaction = (work, callback) => {
-  pool.connect((err, client, release) => {
-    if (err) {
-      callback(err);
-      return;
-    }
-    client.query("BEGIN", (beginErr) => {
-      if (beginErr) {
-        release();
-        callback(beginErr);
-        return;
-      }
-      const tx = {
-        run: (sql, params, cb) => {
-          const normalized = normalizeArgs(params, cb);
-          runQuery(client, sql, normalized.params, normalized.callback);
-        },
-        get: (sql, params, cb) => {
-          const normalized = normalizeArgs(params, cb);
-          runQuery(client, sql, normalized.params, (queryErr, result) => {
-            if (cb) {
-              cb(queryErr, result?.rows?.[0]);
-            }
-          });
-        },
-        all: (sql, params, cb) => {
-          const normalized = normalizeArgs(params, cb);
-          runQuery(client, sql, normalized.params, (queryErr, result) => {
-            if (cb) {
-              cb(queryErr, result?.rows || []);
-            }
-          });
-        },
-        exec: (sql, cb) => {
-          client.query(sql, (queryErr) => {
-            if (cb) {
-              cb(queryErr);
-            }
-          });
-        },
-      };
-      work(tx, (workErr) => {
-        if (workErr) {
-          client.query("ROLLBACK", () => {
-            release();
-            callback(workErr);
-          });
-          return;
+    const pool = {
+        query: (sql, params, callback) => {
+            ready.then(() => {
+                const s = pToS(sql);
+                const isInsert = s.trim().toUpperCase().startsWith("INSERT");
+                try {
+                    if (s.trim().toUpperCase().startsWith("SELECT")) {
+                        const stmt = dbInstance.prepare(s);
+                        if (params && params.length > 0) stmt.bind(params);
+                        const rows = [];
+                        while (stmt.step()) rows.push(stmt.getAsObject());
+                        stmt.free();
+                        if (callback) callback(null, { rows });
+                    } else {
+                        dbInstance.run(s, params);
+                        save();
+                        if (isInsert && sql.toUpperCase().includes("RETURNING")) {
+                            const res = dbInstance.exec("SELECT last_insert_rowid() as id");
+                            const lastId = res[0].values[0][0];
+                            if (callback) callback(null, { rows: [{ id: lastId }] });
+                        } else {
+                            if (callback) callback(null, { rows: [] });
+                        }
+                    }
+                } catch (err) {
+                    if (callback) callback(err, { rows: [] });
+                }
+            });
         }
-        client.query("COMMIT", (commitErr) => {
-          release();
-          callback(commitErr || null);
-        });
-      });
-    });
-  });
-};
+    };
 
-module.exports = {
-  pool,
-  run,
-  get,
-  all,
-  exec,
-  close,
-  withTransaction,
-};
+    module.exports = {
+        pool,
+        run: (sql, params, cb) => pool.query(sql, params, cb),
+        get: (sql, params, cb) => pool.query(sql, params, (err, res) => { if(cb) cb(err, res?.rows?.[0]); }),
+        all: (sql, params, cb) => pool.query(sql, params, (err, res) => { if(cb) cb(err, res?.rows || []); }),
+        exec: (sql, cb) => ready.then(() => { try { dbInstance.run(sql); save(); if(cb) cb(null); } catch(e) { if(cb) cb(e); } }),
+        withTransaction: (work, callback) => {
+            ready.then(() => {
+                dbInstance.run("BEGIN TRANSACTION");
+                const tx = {
+                    run: (s, p, cb) => pool.query(s, p, cb),
+                    get: (s, p, cb) => pool.query(s, p, (err, res) => { if(cb) cb(err, res?.rows?.[0]); }),
+                    all: (s, p, cb) => pool.query(s, p, (err, res) => { if(cb) cb(err, res?.rows || []); }),
+                    exec: (s, cb) => { try { dbInstance.run(s); if(cb) cb(null); } catch(e) { if(cb) cb(e); } }
+                };
+                work(tx, (err) => {
+                    if (err) { dbInstance.run("ROLLBACK"); if(callback) callback(err); }
+                    else { dbInstance.run("COMMIT"); save(); if(callback) callback(null); }
+                });
+            });
+        }
+    };
+} else {
+    // --- MODO POSTGRESQL (USADO NO DOCKER / PRODUÇÃO) ---
+    const { Pool: PgPool } = require("pg");
+    const pool = new PgPool({
+        connectionString: process.env.DATABASE_URL,
+        max: 10,
+    });
+    
+    // O Postgres já suporta $1, $2 e RETURNING nativamente, então não alteramos nada
+    const formatQuery = (sql) => {
+        let index = 0;
+        return sql.replace(/\?/g, () => `$${(index += 1)}`);
+    };
+
+    const runQuery = (client, sql, params = [], callback) => {
+        const statement = formatQuery(sql);
+        client.query(statement, params, (err, result) => { if (callback) callback(err, result); });
+    };
+
+    module.exports = {
+        pool,
+        run: (sql, params, cb) => runQuery(pool, sql, params, cb),
+        get: (sql, params, cb) => runQuery(pool, sql, params, (err, res) => { if(cb) cb(err, res?.rows?.[0]); }),
+        all: (sql, params, cb) => runQuery(pool, sql, params, (err, res) => { if(cb) cb(err, res?.rows || []); }),
+        exec: (sql, cb) => pool.query(sql, cb),
+        withTransaction: (work, callback) => {
+            pool.connect((err, client, release) => {
+                if (err) return callback(err);
+                client.query("BEGIN", (beginErr) => {
+                    if (beginErr) { release(); return callback(beginErr); }
+                    const tx = {
+                        run: (s, p, cb) => runQuery(client, s, p, cb),
+                        get: (s, p, cb) => runQuery(client, s, p, (e, r) => { if(cb) cb(e, r?.rows?.[0]); }),
+                        all: (s, p, cb) => runQuery(client, s, p, (e, r) => { if(cb) cb(e, r?.rows || []); }),
+                        exec: (s, cb) => client.query(s, cb),
+                    };
+                    work(tx, (workErr) => {
+                        if (workErr) client.query("ROLLBACK", () => { release(); callback(workErr); });
+                        else client.query("COMMIT", (commitErr) => { release(); callback(commitErr || null); });
+                    });
+                });
+            });
+        }
+    };
+}
