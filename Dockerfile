@@ -42,6 +42,7 @@ COPY server.js ./
 COPY db.js ./
 COPY config.js ./
 COPY migrations ./migrations
+COPY scripts ./scripts
 
 # Copiar build do frontend do stage anterior
 COPY --from=builder /app/public ./public
