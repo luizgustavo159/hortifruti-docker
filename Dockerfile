@@ -38,10 +38,13 @@ RUN npm ci --only=production && \
 
 # Copiar código do backend
 COPY src ./src
+COPY server.js ./
+COPY db.js ./
+COPY config.js ./
 COPY migrations ./migrations
 
 # Copiar build do frontend do stage anterior
-COPY --from=builder /app/frontend/dist ./public
+COPY --from=builder /app/public ./public
 
 # Mudar proprietário dos arquivos
 RUN chown -R nodejs:nodejs /app
