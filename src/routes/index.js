@@ -1771,7 +1771,7 @@ router.get("/api/reports/sales", authenticateToken, requireSupervisor, (req, res
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  db.pool.query(
+  db.all(
     `SELECT sales.id, sales.created_at, products.name as product, categories.name as category, sales.quantity, sales.total, sales.final_total, users.name as operator
      FROM sales
      JOIN products ON products.id = sales.product_id
@@ -1780,9 +1780,9 @@ router.get("/api/reports/sales", authenticateToken, requireSupervisor, (req, res
      ${whereClause}
      ORDER BY sales.created_at DESC`,
     params,
-    (err, result) => {
+    (err, rows) => {
       if (err) return res.status(500).json({ message: "Erro ao gerar relatório." });
-      return res.json(result.rows || []);
+      return res.json(rows || []);
     }
   );
 });

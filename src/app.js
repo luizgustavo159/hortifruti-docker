@@ -111,6 +111,7 @@ app.use((req, res, next) => {
   };
   next();
 });
+app.get("/health", (req, res) => res.redirect("/api/health"));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 const limiter = rateLimit({

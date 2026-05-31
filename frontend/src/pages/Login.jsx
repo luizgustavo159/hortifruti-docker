@@ -16,7 +16,6 @@ export function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/caixa");
     } catch (submitError) {
       setError(submitError.message || "Falha ao autenticar. Verifique suas credenciais.");
     } finally {
