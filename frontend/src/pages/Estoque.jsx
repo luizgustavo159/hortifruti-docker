@@ -324,10 +324,22 @@ export function Estoque() {
     >
       <div className="stock-container">
         <div className="card-grid">
-          <div className="card"><h3>Itens Críticos</h3><strong>{criticalItems}</strong></div>
-          <div className="card"><h3>Reposições Sugeridas</h3><strong>{restockSuggestions.length}</strong></div>
-          <div className="card"><h3>Total de Produtos</h3><strong>{products.length}</strong></div>
-          <div className="card"><h3>Fornecedores</h3><strong>{suppliers.length}</strong></div>
+          <div className="card">
+            <h3>Itens Críticos</h3>
+            <strong className={`value-large ${criticalItems > 0 ? 'critical' : ''}`}>{criticalItems}</strong>
+          </div>
+          <div className="card">
+            <h3>Reposições Sugeridas</h3>
+            <strong className={`value-large ${restockSuggestions.length > 0 ? 'warning' : ''}`}>{restockSuggestions.length}</strong>
+          </div>
+          <div className="card">
+            <h3>Total de Produtos</h3>
+            <strong className="value-large">{products.length}</strong>
+          </div>
+          <div className="card">
+            <h3>Fornecedores</h3>
+            <strong className="value-large">{suppliers.length}</strong>
+          </div>
         </div>
 
         {error && <div className="error-message">{error}</div>}

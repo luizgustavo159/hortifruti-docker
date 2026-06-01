@@ -54,7 +54,8 @@ export function DashboardAdvanced() {
 
       // Processar dados por categoria
       if (Array.isArray(byCategory)) {
-        const colors = ['#ef4444', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
+        // Cores mais vibrantes para modo escuro/claro
+        const colors = ['#f87171', '#34d399', '#60a5fa', '#fbbf24', '#a78bfa', '#22d3ee', '#f472b6'];
         setCategoryData(byCategory.map((cat, idx) => ({
           name: cat.category || "Sem categoria",
           value: Number(cat.total_sales || 0),
@@ -113,18 +114,21 @@ export function DashboardAdvanced() {
 
         {/* Cards de Resumo */}
         {summaryData && (
-          <div className="summary-cards">
-            <div className="summary-card">
-              <h4>Total de Vendas</h4>
-              <p className="value">R$ {Number(summaryData.total_sales || 0).toFixed(2)}</p>
+          <div className="card-grid">
+            <div className="card">
+              <h3>Total de Vendas</h3>
+              <strong className="value-large">R$ {Number(summaryData.total_sales || 0).toFixed(2)}</strong>
+              <p className="card-subtitle">No período selecionado</p>
             </div>
-            <div className="summary-card">
-              <h4>Perdas de Estoque</h4>
-              <p className="value">R$ {Number(summaryData.total_losses || 0).toFixed(2)}</p>
+            <div className="card">
+              <h3>Perdas de Estoque</h3>
+              <strong className="value-large loss">R$ {Number(summaryData.total_losses || 0).toFixed(2)}</strong>
+              <p className="card-subtitle">Descartes e perdas</p>
             </div>
-            <div className="summary-card">
-              <h4>Itens Críticos</h4>
-              <p className="value">{summaryData.low_stock?.length || 0}</p>
+            <div className="card">
+              <h3>Itens Críticos</h3>
+              <strong className={`value-large ${summaryData.low_stock?.length > 0 ? 'critical' : ''}`}>{summaryData.low_stock?.length || 0}</strong>
+              <p className="card-subtitle">Abaixo do estoque mínimo</p>
             </div>
           </div>
         )}

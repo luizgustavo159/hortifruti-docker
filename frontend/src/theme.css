@@ -69,10 +69,28 @@ body {
 
 .input,
 .select,
-.textarea {
-  background-color: var(--bg-primary);
-  border-color: var(--border-color);
-  color: var(--text-primary);
+.textarea,
+input,
+select,
+textarea {
+  background-color: var(--bg-primary) !important;
+  border: 2px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+}
+
+:root.dark-mode input,
+:root.dark-mode select,
+:root.dark-mode textarea {
+  background-color: #0f172a !important; /* Azul marinho profundo para contraste */
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+input::placeholder {
+  color: var(--text-tertiary) !important;
+  opacity: 0.7 !important;
 }
 
 .input:focus,
