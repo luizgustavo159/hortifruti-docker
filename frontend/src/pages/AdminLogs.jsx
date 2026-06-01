@@ -242,6 +242,7 @@ export function AdminLogs() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedLog, setSelectedLog] = useState(null);
   
   // Filtros
   const [filterType, setFilterType] = useState("all");
@@ -544,6 +545,7 @@ export function AdminLogs() {
                     <th>Nível</th>
                     <th>Usuário</th>
                     <th>Descrição</th>
+                    <th style={{ textAlign: 'center' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -572,7 +574,18 @@ export function AdminLogs() {
                       </td>
                       <td className="user-cell">{log.user_name || "Sistema"}</td>
                       <td className="details-cell">
-                        {formatDetails(log.details, log.action)}
+                        <div className="details-preview">
+                          {formatDetails(log.details, log.action)}
+                        </div>
+                      </td>
+                      <td className="actions-cell">
+                        <button 
+                          className="view-details-btn"
+                          onClick={() => setSelectedLog(log)}
+                          title="Ver detalhes completos"
+                        >
+                          👁️ Abrir
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -591,6 +604,58 @@ export function AdminLogs() {
           <p className="no-data">
             🔍 Nenhum log encontrado para os filtros selecionados.
           </p>
+        )}
+        {/* Modal de Detalhes do Log */}
+        {selectedLog && (
+          <div className="log-modal-overlay" onClick={() => setSelectedLog(null)}>
+            <div className="log-modal-content" onClick={e => e.stopPropagation()}>
+              <div className="log-modal-header">
+                <h3>🔍 Detalhes do Log</h3>
+                <button className="close-modal-btn" onClick={() => setSelectedLog(null)}>×</button>
+              </div>
+              <div className="log-modal-body">
+                <div className="log-info-grid">
+                  <div className="info-item">
+                    <label>📅 Data/Hora:</label>
+                    <span>{new Date(selectedLog.created_at).toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>⚡ Ação:</label>
+                    <span>{getActionDescription(selectedLog.action)}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>📊 Nível:</label>
+                    <span className="level-badge" style={{ backgroundColor: getLevelColor(selectedLog.level) }}>
+                      {getLevelLabel(selectedLog.level)}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <label>👤 Usuário:</label>
+                    <span>{selectedLog.user_name || "Sistema"}</span>
+                  </div>
+                </div>
+                
+                <div className="log-details-full">
+                  <label>📝 Descrição Completa:</label>
+                  <div className="details-box">
+                    {formatDetails(selectedLog.details, selectedLog.action)}
+                  </div>
+                </div>
+
+                {selectedLog.details && (
+                  <div className="log-raw-data">
+                    <label>💻 Dados Brutos (JSON):</label>
+                    <pre>
+                      {JSON.stringify(typeof selectedLog.details === 'string' ? JSON.parse(selectedLog.details) : selectedLog.details, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+              <div className="log-modal-footer">
+                <button className="button" onClick={() => setSelectedLog(null)}>Fechar</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </PageShell>
