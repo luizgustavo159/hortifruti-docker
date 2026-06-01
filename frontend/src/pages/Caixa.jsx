@@ -21,6 +21,7 @@ export function Caixa() {
   const [manualDiscount, setManualDiscount] = useState("");
   const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
   const [tempApprovalToken, setTempApprovalToken] = useState(null);
+  const [amountReceived, setAmountReceived] = useState("");
 
   // Estado do Caixa
   const [caixaAberto, setCaixaAberto] = useState(false);
@@ -326,6 +327,11 @@ export function Caixa() {
         payment_method: paymentMethod,
       };
 
+      if (paymentMethod === "cash" && amountReceived) {
+        payload.amount_received = parseFloat(amountReceived);
+        payload.change_amount = Math.max(parseFloat(amountReceived) - finalTotal, 0);
+      }
+
       if (parseFloat(manualDiscount) > 0) {
         payload.manual_discount = parseFloat(manualDiscount);
         payload.approval_token = tempApprovalToken;
@@ -347,6 +353,7 @@ export function Caixa() {
       setCartItems([]);
       setPaymentMethod("cash");
       setManualDiscount("");
+      setAmountReceived("");
       setTempApprovalToken(null);
 
       setTimeout(() => setSuccessMessage(""), 5000);
@@ -799,6 +806,30 @@ export function Caixa() {
                   <span>Total:</span>
                   <span>R$ {finalTotal.toFixed(2)}</span>
                 </div>
+                
+                {paymentMethod === "cash" && (
+                  <div className="change-calculator" style={{ borderTop: "2px solid #3b82f6", marginTop: "12px", paddingTop: "12px" }}>
+                    <div className="summary-row">
+                      <span style={{ fontWeight: "bold" }}>Valor Recebido:</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={finalTotal}
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(e.target.value)}
+                        placeholder="0.00"
+                        style={{ width: "100px", textAlign: "right", padding: "6px", fontSize: "16px", border: "2px solid #3b82f6", borderRadius: "4px" }}
+                        autoFocus={paymentMethod === "cash"}
+                      />
+                    </div>
+                    {parseFloat(amountReceived) >= finalTotal && (
+                      <div className="summary-row" style={{ marginTop: "8px", color: "#10b981", fontSize: "18px", fontWeight: "bold" }}>
+                        <span>Troco:</span>
+                        <span>R$ {(parseFloat(amountReceived) - finalTotal).toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="payment-section">

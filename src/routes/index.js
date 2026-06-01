@@ -1488,7 +1488,7 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { payment_method, manual_discount: globalManualDiscount, approval_token } = req.body;
+    const { payment_method, manual_discount: globalManualDiscount, approval_token, amount_received = 0, change_amount = 0 } = req.body;
     const itemsFromBody = Array.isArray(req.body.items)
       ? req.body.items
       : [{ 
@@ -1565,8 +1565,8 @@ router.post(
               }
 
               tx.get(
-                `INSERT INTO sales (product_id, quantity, total, discount_id, discount_amount, final_total, payment_method, sold_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+                `INSERT INTO sales (product_id, quantity, total, discount_id, discount_amount, final_total, payment_method, sold_by, amount_received, change_amount)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
                 [
                   product_id,
                   quantity,
@@ -1576,6 +1576,8 @@ router.post(
                   finalTotal,
                   payment_method,
                   req.user.id,
+                  payment_method === "cash" ? (amount_received / itemsFromBody.length) : 0, // Proporcional se múltiplos itens
+                  payment_method === "cash" ? (change_amount / itemsFromBody.length) : 0,
                 ],
                 (saleErr, row) => {
                   if (saleErr) {
@@ -1736,7 +1738,23 @@ router.post(
               items: saleItems,
             };
           }
-          finish(null);
+          // Se for venda em dinheiro, atualizar o valor esperado na sessão de caixa
+          if (payment_method === "cash") {
+            const netAmount = totals.final_total;
+            tx.run(
+              "UPDATE cash_sessions SET expected_amount = expected_amount + ? WHERE id = ?",
+              [netAmount, cashSession.id],
+              (sessionUpdateErr) => {
+                if (sessionUpdateErr) {
+                  finish(sessionUpdateErr);
+                  return;
+                }
+                finish(null);
+              }
+            );
+          } else {
+            finish(null);
+          }
           return;
         }
         processSaleItem(tx, itemsFromBody[index], (itemErr) => {
