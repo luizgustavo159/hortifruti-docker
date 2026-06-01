@@ -2356,7 +2356,7 @@ router.post(
     body("email").isEmail().withMessage("Email inválido."),
     body("password").notEmpty().withMessage("Senha é obrigatória."),
     body("action")
-      .isIn(["remove_item", "discount_override", "cancel_sale", "user_update", "stock_loss", "stock_adjust", "open_cash_session", "cash_withdrawal"])
+      .isIn(["remove_item", "discount_override", "cancel_sale", "user_update", "stock_loss", "stock_adjust", "open_cash_session", "cash_withdrawal", "cash_close_break"])
       .withMessage("Ação inválida."),
   ],
   (req, res) => {

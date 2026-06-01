@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Leaf, Mail, Lock, LogIn, AlertCircle } from "lucide-react";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -27,7 +28,9 @@ export function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">🌿</div>
+          <div className="login-logo-container">
+            <Leaf className="login-logo-icon" size={48} />
+          </div>
           <h1>GreenStore Pro</h1>
           <p>Gestão Inteligente de Hortifruti</p>
         </div>
@@ -35,37 +38,51 @@ export function Login() {
         <form className="login-form" onSubmit={onSubmit}>
           <div className="form-group">
             <label htmlFor="email">E-mail</label>
-            <input
-              id="email"
-              type="email"
-              placeholder="seu@email.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              autoFocus
-            />
+            <div className="input-with-icon">
+              <Mail className="input-icon" size={18} />
+              <input
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                autoFocus
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label htmlFor="password">Senha</label>
-            <input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
+            <div className="input-with-icon">
+              <Lock className="input-icon" size={18} />
+              <input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </div>
           </div>
 
           {error && (
             <div className="login-error">
-              {error}
+              <AlertCircle size={16} />
+              <span>{error}</span>
             </div>
           )}
 
           <button className="login-submit" type="submit" disabled={loading}>
-            {loading ? "Autenticando..." : "Acessar Sistema"}
+            {loading ? (
+              <span className="loading-spinner"></span>
+            ) : (
+              <>
+                <LogIn size={18} />
+                <span>Acessar Sistema</span>
+              </>
+            )}
           </button>
         </form>
 
