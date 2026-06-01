@@ -88,16 +88,23 @@ app.use((req, res, next) => {
         );
       }
 
-      // Registrar no Audit Logs para TODOS os erros (4xx e 5xx)
-      if (res.statusCode >= 400) {
+      // Registrar no Audit Logs para erros relevantes (4xx e 5xx)
+      // Ignorar 401 em rotas de check de auth para evitar poluição (ruído de sistema)
+      const isAuthCheck = req.path === "/api/auth/me" || req.path === "/api/auth/check";
+      const shouldLog = res.statusCode >= 400 && !(res.statusCode === 401 && isAuthCheck);
+
+      if (shouldLog) {
         db.run(
           "INSERT INTO audit_logs (action, details, performed_by) VALUES (?, ?, ?)",
           [
             res.statusCode >= 500 ? "erro_sistema" : "erro_cliente",
             JSON.stringify({
               ...context,
-              erro: res.statusMessage || "Não especificado",
-              detalhe: `Falha ao tentar acessar a página ${req.path}`
+              id_usuario: req.user?.id || "anonimo",
+              erro: res.statusMessage || (res.statusCode === 401 ? "Não Autenticado" : "Não especificado"),
+              detalhe: res.statusCode === 401 
+                ? `Tentativa de acesso anônimo à página restrita: ${req.path}`
+                : `Falha ao tentar acessar a página ${req.path}`
             }),
             req.user?.id || null
           ]

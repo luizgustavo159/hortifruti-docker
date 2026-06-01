@@ -521,3 +521,20 @@
 .actions-cell {
   text-align: center;
 }
+
+.user-anonymous {
+  color: #94a3b8 !important;
+  font-style: italic !important;
+  font-size: 0.85em !important;
+  background: #f1f5f9 !important;
+  padding: 2px 8px !important;
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  display: inline-block !important;
+}
+
+:root.dark-mode .user-anonymous {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #94a3b8 !important;
+}

@@ -118,6 +118,11 @@ const formatDetails = (details, action) => {
     if (action === "erro_cliente" || action === "client_error") {
       const status = parsed.status || parsed.codigo_status || "400";
       const path = parsed.path || parsed.caminho_acessado || "uma página";
+      
+      if (status === 401 || status === "401") {
+        return `Tentativa de acesso não autorizado: Um visitante tentou acessar a página ${path} sem estar logado.`;
+      }
+      
       return `O sistema recusou um acesso em ${path} (Código: ${status}). Isso geralmente ocorre por falta de permissão ou dados inválidos.`;
     }
 
@@ -572,7 +577,13 @@ export function AdminLogs() {
                           {getLevelLabel(log.level)}
                         </span>
                       </td>
-                      <td className="user-cell">{log.user_name || "Sistema"}</td>
+                      <td className="user-cell">
+  {log.user_name === "Sistema" && log.details?.includes("anonimo") ? (
+    <span className="user-anonymous">👤 Visitante</span>
+  ) : (
+    log.user_name || "Sistema"
+  )}
+</td>
                       <td className="details-cell">
                         <div className="details-preview">
                           {formatDetails(log.details, log.action)}
@@ -629,10 +640,14 @@ export function AdminLogs() {
                       {getLevelLabel(selectedLog.level)}
                     </span>
                   </div>
-                  <div className="info-item">
-                    <label>👤 Usuário:</label>
-                    <span>{selectedLog.user_name || "Sistema"}</span>
-                  </div>
+<div className="info-item">
+  <label>👤 Usuário:</label>
+  <span>
+    {selectedLog.user_name === "Sistema" && selectedLog.details?.includes("anonimo") 
+      ? "👤 Visitante (Não Autenticado)" 
+      : (selectedLog.user_name || "Sistema")}
+  </span>
+</div>
                 </div>
                 
                 <div className="log-details-full">
