@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Leaf, Mail, Lock, LogIn, AlertCircle } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
+import { Leaf, Mail, Lock, LogIn, AlertCircle, Sun, Moon } from "lucide-react";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -10,6 +11,7 @@ export function Login() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -26,6 +28,14 @@ export function Login() {
 
   return (
     <div className="login-page">
+      <button 
+        type="button" 
+        className="login-theme-toggle" 
+        onClick={toggleTheme}
+        title={isDark ? "Mudar para modo claro" : "Mudar para modo escuro"}
+      >
+        {isDark ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
       <div className="login-card">
         <div className="login-header">
           <div className="login-logo-container">

@@ -165,6 +165,14 @@
   padding: 20px;
   position: relative;
   overflow: hidden;
+  transition: background-color 0.3s ease;
+}
+
+:root.dark-mode .login-page {
+  background-color: #0f172a;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(30, 41, 59, 0.1) 0px, transparent 50%);
 }
 
 .login-page::before {
@@ -177,6 +185,37 @@
   top: -400px;
   right: -400px;
   z-index: 0;
+}
+
+.login-theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  z-index: 10;
+  color: #64748b;
+}
+
+:root.dark-mode .login-theme-toggle {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+.login-theme-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  color: #10b981;
 }
 
 .login-card {
@@ -194,6 +233,16 @@
   position: relative;
   z-index: 1;
   border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+:root.dark-mode .login-card {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.2), 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .login-header {
@@ -230,11 +279,19 @@
   letter-spacing: -0.025em;
 }
 
+:root.dark-mode .login-header h1 {
+  color: #f1f5f9;
+}
+
 .login-header p {
   color: #64748b;
   font-size: 16px;
   margin: 0;
   font-weight: 500;
+}
+
+:root.dark-mode .login-header p {
+  color: #94a3b8;
 }
 
 .login-form {
@@ -255,6 +312,10 @@
   font-weight: 600;
   color: #334155;
   margin-left: 4px;
+}
+
+:root.dark-mode .login-form .form-group label {
+  color: #cbd5e1;
 }
 
 .input-with-icon {
@@ -281,11 +342,21 @@
   color: #1e293b;
 }
 
+:root.dark-mode .login-form .form-group input {
+  background: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
 .login-form .form-group input:focus {
   outline: none;
   border-color: #10b981;
   background: white;
   box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+:root.dark-mode .login-form .form-group input:focus {
+  background: #1e293b;
 }
 
 .login-form .form-group input:focus + .input-icon,
