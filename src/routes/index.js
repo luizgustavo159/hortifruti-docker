@@ -900,8 +900,8 @@ router.post(
             nome_produto: productData?.name, 
             quantidade_perda: quantity, 
             motivo_perda: reason,
-            estoque_anterior: productData?.stock,
-            estoque_atual: (productData?.stock || 0) - quantity,
+            estoque_anterior: productData?.current_stock,
+            estoque_atual: (productData?.current_stock || 0) - quantity,
             mensagem: "Registro de perda de mercadoria"
           },
           performedBy: req.user.id
@@ -999,8 +999,8 @@ router.post(
             nome_produto: productData?.name,
             variacao_estoque: delta, 
             motivo_ajuste: reason,
-            estoque_anterior: productData?.stock,
-            estoque_atual: (productData?.stock || 0) + delta,
+            estoque_anterior: productData?.current_stock,
+            estoque_atual: updatedStock,
             mensagem: "Ajuste manual de estoque realizado"
           },
           performedBy: req.user.id,
@@ -1029,8 +1029,8 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
     const { product_id, delta, quantity, type, reason = "" } = req.body;
-    const deltaValue = delta !== undefined ? delta : (quantity !== undefined ? quantity : 0);
-    const finalDelta = type === "outbound" ? -Math.abs(deltaValue) : Math.abs(deltaValue);
+    const deltaValue = delta !== undefined ? Number(delta) : (quantity !== undefined ? Number(quantity) : 0);
+    const finalDelta = (type === "outbound" || type === "return_to_supplier") ? -Math.abs(deltaValue) : Math.abs(deltaValue);
 
     runWithTransaction((tx, finish) => {
       tx.get("SELECT current_stock FROM products WHERE id = ?", [product_id], (err, product) => {

@@ -219,7 +219,7 @@ export function Estoque() {
     }
 
     if (!hasRequiredRole("supervisor") && !approvalToken) {
-      setPendingAction(() => () => handleStockMovement());
+      setPendingAction(() => (token) => handleStockMovement(token));
       setShowApprovalModal(true);
       return;
     }
@@ -284,12 +284,18 @@ export function Estoque() {
       // Se houver uma ação pendente, precisamos saber qual era o contexto
       // No caso do Estoque, as ações sensíveis são stock_adjust, user_update, etc.
       // Para categorias e fornecedores, usaremos 'user_update' ou 'admin' como fallback de segurança
+      // Determinar a ação correta baseada no contexto
+      let action = "user_update";
+      if (showMovementModal) {
+        action = "stock_adjust";
+      }
+
       const res = await apiFetch("/approvals", {
         method: "POST",
         body: JSON.stringify({
           email: approvalData.email,
           password: approvalData.password,
-          action: "user_update", // Ação de nível administrativo/gerencial
+          action: action,
         }),
       });
       setShowApprovalModal(false);
