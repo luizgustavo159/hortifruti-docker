@@ -7,6 +7,8 @@ const ADMIN_BOOTSTRAP_TOKEN = process.env.ADMIN_BOOTSTRAP_TOKEN || "";
 const PASSWORD_RESET_TTL_MINUTES = Number(process.env.PASSWORD_RESET_TTL_MINUTES || 30);
 const ALERT_SLOW_THRESHOLD_MS = Number(process.env.ALERT_SLOW_THRESHOLD_MS || 2000);
 const METRICS_ENABLED = process.env.METRICS_ENABLED === "true";
+const JWT_EXPIRY = process.env.JWT_EXPIRY || "1h";
+const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || "7d";
 const PASSWORD_RESET_URL = process.env.PASSWORD_RESET_URL || "";
 const RESET_EMAIL_FROM = process.env.RESET_EMAIL_FROM || "";
 const SMTP_HOST = process.env.SMTP_HOST || "";
@@ -18,16 +20,27 @@ const RESET_SMS_WEBHOOK_URL = process.env.RESET_SMS_WEBHOOK_URL || "";
 const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || "";
 
 let JWT_SECRET = process.env.JWT_SECRET || "";
+let JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "";
+
 if (!JWT_SECRET) {
   if (NODE_ENV === "development") {
-    JWT_SECRET = "development-secret";
-    // eslint-disable-next-line no-console
-    console.warn("JWT_SECRET não configurado. Usando segredo temporário apenas para desenvolvimento.");
+    JWT_SECRET = "dev-access-secret-at-least-32-chars-long";
   } else {
     throw new Error("JWT_SECRET inválido. Configure um segredo forte para produção.");
   }
-} else if (JWT_SECRET.length < 32 && NODE_ENV !== "development") {
-  throw new Error("JWT_SECRET deve ter ao menos 32 caracteres.");
+}
+
+if (!JWT_REFRESH_SECRET) {
+  if (NODE_ENV === "development") {
+    JWT_REFRESH_SECRET = "dev-refresh-secret-at-least-32-chars-long";
+  } else {
+    throw new Error("JWT_REFRESH_SECRET inválido. Configure um segredo forte para produção.");
+  }
+}
+
+if (NODE_ENV !== "development") {
+  if (JWT_SECRET.length < 32) throw new Error("JWT_SECRET deve ter ao menos 32 caracteres.");
+  if (JWT_REFRESH_SECRET.length < 32) throw new Error("JWT_REFRESH_SECRET deve ter ao menos 32 caracteres.");
 }
 
 if (NODE_ENV !== "development" && process.env.CORS_ORIGIN === "*") {
@@ -63,5 +76,8 @@ module.exports = {
   RESET_SMS_WEBHOOK_URL,
   ALERT_WEBHOOK_URL,
   JWT_SECRET,
+  JWT_REFRESH_SECRET,
+  JWT_EXPIRY,
+  JWT_REFRESH_EXPIRY,
   corsOrigin,
 };

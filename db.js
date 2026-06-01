@@ -89,7 +89,12 @@ if (!isPostgres) {
 } else {
     const { Pool: PgPool } = require("pg");
     console.log("Ambiente: PostgreSQL (Produção)");
-    const pool = new PgPool({ connectionString: process.env.DATABASE_URL, max: 10 });
+    const pool = new PgPool({ 
+        connectionString: process.env.DATABASE_URL, 
+        max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX) : 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+    });
     const formatQuery = (sql) => { let index = 0; return sql.replace(/\?/g, () => `$${(index += 1)}`); };
     const runQuery = (client, sql, params = [], callback) => {
         client.query(formatQuery(sql), params, (err, result) => { if (callback) callback(err, result); });
