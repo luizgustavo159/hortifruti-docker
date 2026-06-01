@@ -2885,8 +2885,7 @@ router.post(
         performedBy: req.user.id,
       });
       return res.json(closedPayload);
-    });
-  }
+    }
 );
 
 router.get("/api/pos/devices", authenticateToken, (req, res) => {
