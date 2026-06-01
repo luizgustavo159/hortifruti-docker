@@ -66,3 +66,86 @@ input:focus {
   border-color: var(--color-primary) !important;
   box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2) !important;
 }
+
+/* ============ UNIFICAÇÃO GLOBAL DE MODAIS (CORREÇÃO DE ESQUADRO) ============ */
+.modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 2000 !important;
+  backdrop-filter: blur(6px) !important;
+  padding: 20px !important;
+}
+
+.modal {
+  background: var(--bg-secondary) !important;
+  border-radius: 16px !important;
+  padding: 32px !important;
+  max-width: 600px !important;
+  width: 100% !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+  position: relative !important;
+  animation: modalPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+@keyframes modalPopIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal h2 {
+  margin: 0 !important;
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  color: var(--color-primary) !important;
+  border-bottom: 3px solid var(--color-primary) !important;
+  padding-bottom: 12px !important;
+  letter-spacing: -0.5px !important;
+}
+
+.modal-actions {
+  display: flex !important;
+  gap: 16px !important;
+  margin-top: 12px !important;
+}
+
+.modal-actions button {
+  flex: 1 !important;
+  padding: 14px !important;
+  font-size: 15px !important;
+  border-radius: 8px !important;
+}
+
+/* Correção de visibilidade de inputs dentro de modais */
+.modal .form-group label {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  margin-bottom: 4px !important;
+  color: var(--text-primary) !important;
+}
+
+.modal .form-group input, 
+.modal .form-group select, 
+.modal .form-group textarea {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border: 2px solid var(--border-color) !important;
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  padding: 12px !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+}

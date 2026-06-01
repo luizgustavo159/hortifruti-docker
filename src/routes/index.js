@@ -619,6 +619,43 @@ router.post(
   }
 );
 
+router.put(
+  "/api/categories/:id",
+  authenticateToken,
+  requireManager,
+  [body("name").trim().notEmpty().withMessage("Nome é obrigatório.")],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, description = "" } = req.body;
+    const { id } = req.params;
+
+    db.run(
+      "UPDATE categories SET name = ?, description = ? WHERE id = ?",
+      [name, description, id],
+      (err) => {
+        if (err) {
+          return res.status(400).json({ message: "Erro ao atualizar categoria." });
+        }
+        return res.json({ message: "Categoria atualizada com sucesso." });
+      }
+    );
+  }
+);
+
+router.delete("/api/categories/:id", authenticateToken, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  db.run("DELETE FROM categories WHERE id = ?", [id], (err) => {
+    if (err) {
+      return res.status(400).json({ message: "Não é possível excluir uma categoria que possui produtos vinculados." });
+    }
+    return res.json({ message: "Categoria excluída com sucesso." });
+  });
+});
+
 router.get("/api/suppliers", authenticateToken, requireSupervisor, (req, res) => {
   db.all("SELECT * FROM suppliers ORDER BY name", [], (err, rows) => {
     if (err) {
@@ -653,6 +690,43 @@ router.post(
     );
   }
 );
+
+router.put(
+  "/api/suppliers/:id",
+  authenticateToken,
+  requireSupervisor,
+  [body("name").trim().notEmpty().withMessage("Nome é obrigatório.")],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, contact = "", phone = "", email = "" } = req.body;
+    const { id } = req.params;
+
+    db.run(
+      "UPDATE suppliers SET name = ?, contact = ?, phone = ?, email = ? WHERE id = ?",
+      [name, contact, phone, email, id],
+      (err) => {
+        if (err) {
+          return res.status(400).json({ message: "Erro ao atualizar fornecedor." });
+        }
+        return res.json({ message: "Fornecedor atualizado com sucesso." });
+      }
+    );
+  }
+);
+
+router.delete("/api/suppliers/:id", authenticateToken, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  db.run("DELETE FROM suppliers WHERE id = ?", [id], (err) => {
+    if (err) {
+      return res.status(400).json({ message: "Não é possível excluir um fornecedor que possui produtos vinculados." });
+    }
+    return res.json({ message: "Fornecedor excluído com sucesso." });
+  });
+});
 
 router.get("/api/products", authenticateToken, (req, res) => {
   db.all(
