@@ -8,7 +8,7 @@ export function AIAssistant() {
     {
       id: 1,
       type: 'bot',
-      text: 'Olá! 👋 Sou seu Assistente de IA. Posso ajudar você com análise de vendas, sugestões de compras e insights sobre o negócio. O que você gostaria de saber?',
+      text: 'Olá! 👋 Sou seu Assistente de IA. O sistema está agora operando em MODO REAL. No momento, estou sendo preparado para analisar seus dados reais do banco de dados. Em breve, poderei fornecer insights precisos sobre suas vendas e estoque.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -24,34 +24,7 @@ export function AIAssistant() {
   }, [messages]);
 
   const generateAIResponse = (userMessage) => {
-    // Simular respostas de IA baseadas em palavras-chave
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes('venda') || lowerMessage.includes('faturamento')) {
-      return `📊 **Análise de Vendas**\n\nBaseado nos últimos 7 dias:\n- Total: R$ 45.230\n- Crescimento: +12% vs semana anterior\n- Ticket médio: R$ 87.50\n- Produto mais vendido: Banana (1.240 un)\n- Horário de pico: 12h-14h`;
-    }
-
-    if (lowerMessage.includes('compra') || lowerMessage.includes('reposição')) {
-      return `🛒 **Sugestões de Compra**\n\nProdutos que devem ser reabastecidos:\n1. Alface - Crítico (45 un) → Sugerir 200 un\n2. Tomate - Baixo (80 un) → Sugerir 150 un\n3. Banana - Normal (200 un) → Sugerir 100 un\n\nEstimativa: R$ 1.200 de investimento`;
-    }
-
-    if (lowerMessage.includes('operador') || lowerMessage.includes('funcionário')) {
-      return `👥 **Performance de Operadores**\n\n1. Maria Santos - 94.7% da meta ⭐\n2. João Silva - 83.3% da meta\n3. Ana Oliveira - 92.7% da meta\n4. Pedro Costa - 78.7% da meta\n\nRecomendação: Oferecer bônus para Maria!`;
-    }
-
-    if (lowerMessage.includes('lucro') || lowerMessage.includes('margem')) {
-      return `💰 **Análise de Lucratividade**\n\nMargem bruta: 28.5%\nMargem líquida: 12.3%\n\nProdutos mais lucrativos:\n1. Frutas premium - 35% margem\n2. Verduras orgânicas - 32% margem\n3. Tubérculos - 18% margem\n\nDica: Aumentar estoque de frutas premium!`;
-    }
-
-    if (lowerMessage.includes('estoque') || lowerMessage.includes('inventário')) {
-      return `📦 **Status do Estoque**\n\nTotal de itens: 2.450 unidades\nValor total: R$ 18.900\n\nProdutos críticos (< 50 un):\n- Alface Crespa: 45 un\n- Cenoura: 38 un\n\nProdutos parados (sem giro há 7 dias):\n- Couve-flor: 12 un\n\nRecomendação: Fazer promoção!`;
-    }
-
-    if (lowerMessage.includes('horário') || lowerMessage.includes('pico')) {
-      return `⏰ **Análise de Horários**\n\nHorários de maior movimento:\n- 12:00-14:00: Pico máximo (45% das vendas)\n- 18:00-19:30: Pico secundário (28% das vendas)\n- 07:00-09:00: Movimento moderado (18% das vendas)\n\nRecomendação: Aumentar equipe entre 12h-14h`;
-    }
-
-    return `🤖 Entendi sua pergunta! Infelizmente, não tenho dados específicos sobre isso. Posso ajudar com:\n- Análise de vendas\n- Sugestões de compra\n- Performance de operadores\n- Análise de lucratividade\n- Status do estoque\n- Análise de horários de pico`;
+    return `🤖 **Aviso de Sistema Real**\n\nO Assistente de IA está em fase de transição para análise de dados reais. Atualmente, os gráficos do Dashboard já refletem 100% de suas operações reais. \n\nPara insights via chat, a integração direta com seu banco de dados PostgreSQL está sendo finalizada para garantir que cada resposta seja baseada nos seus itens e vendas de hoje.`;
   };
 
   const handleSendMessage = async (e) => {

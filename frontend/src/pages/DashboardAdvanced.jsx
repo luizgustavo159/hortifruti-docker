@@ -34,10 +34,11 @@ export function DashboardAdvanced() {
         end: dateRange.end,
       });
 
-      const [summary, byOperator, byCategory] = await Promise.all([
+      const [summary, byOperator, byCategory, hourlySales] = await Promise.all([
         apiFetch(`/reports/summary?${params}`),
         apiFetch(`/reports/by-operator?${params}`),
         apiFetch(`/reports/by-category?${params}`),
+        apiFetch(`/reports/hourly-sales?${params}`),
       ]);
 
       setSummaryData(summary);
@@ -53,7 +54,7 @@ export function DashboardAdvanced() {
 
       // Processar dados por categoria
       if (Array.isArray(byCategory)) {
-        const colors = ['#ef4444', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];
+        const colors = ['#ef4444', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
         setCategoryData(byCategory.map((cat, idx) => ({
           name: cat.category || "Sem categoria",
           value: Number(cat.total_sales || 0),
@@ -62,12 +63,10 @@ export function DashboardAdvanced() {
         })));
       }
 
-      // Gerar dados de vendas por hora (simulado com base no total)
-      const hourlyData = Array.from({ length: 24 }, (_, i) => ({
-        hora: `${i}:00`,
-        vendas: Math.floor((summary?.total_sales || 0) / 24 * (0.8 + Math.random() * 0.4)),
-      }));
-      setSalesData(hourlyData);
+      // Dados reais de vendas por hora vindos do backend
+      if (Array.isArray(hourlySales)) {
+        setSalesData(hourlySales);
+      }
     } catch (err) {
       setError(err.message || "Erro ao carregar dados do dashboard");
       console.error("Erro ao carregar dashboard:", err);

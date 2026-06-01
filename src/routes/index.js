@@ -2207,6 +2207,43 @@ router.get("/api/reports/by-category", authenticateToken, requireSupervisor, (re
   );
 });
 
+router.get("/api/reports/hourly-sales", authenticateToken, requireSupervisor, (req, res) => {
+  const range = parseDateRange(req, res);
+  if (!range) return;
+  const salesFilter = buildDateFilter("sales.created_at", range);
+  
+  // No Postgres, extraímos a hora usando DATE_PART
+  db.all(
+    `SELECT 
+        CAST(DATE_PART('hour', sales.created_at) AS INTEGER) as hora,
+        SUM(sales.final_total) as vendas
+     FROM sales
+     ${salesFilter.clause}
+     GROUP BY DATE_PART('hour', sales.created_at)
+     ORDER BY hora ASC`,
+    salesFilter.params,
+    (err, rows) => {
+      if (err) {
+        return res.status(500).json({ message: "Erro ao gerar relatório de vendas horárias." });
+      }
+      
+      // Preencher horas vazias para o gráfico ficar completo (0-23)
+      const hourlyMap = {};
+      for (let i = 0; i < 24; i++) hourlyMap[i] = 0;
+      rows.forEach(row => {
+        hourlyMap[row.hora] = Number(row.vendas);
+      });
+      
+      const fullRows = Object.keys(hourlyMap).map(h => ({
+        hora: `${h}:00`,
+        vendas: hourlyMap[h]
+      }));
+      
+      return res.json(fullRows);
+    }
+  );
+});
+
 router.post(
   "/api/approvals",
   [
