@@ -163,12 +163,17 @@ const parseDateRange = (req, res) => {
 const buildDateFilter = (field, range) => {
   const conditions = [];
   const params = [];
+  
+  // No Postgres, usamos a sintaxe de placeholder $1, $2. 
+  // O db.js já faz a conversão de ? para $, mas para queries manuais com filtros dinâmicos, 
+  // precisamos garantir que os parâmetros batam com a posição.
+  
   if (range?.start) {
-    conditions.push(`${field}::date >= $${params.length + 1}::date`);
+    conditions.push(`CAST(${field} AS DATE) >= ?`);
     params.push(range.start);
   }
   if (range?.end) {
-    conditions.push(`${field}::date <= $${params.length + 1}::date`);
+    conditions.push(`CAST(${field} AS DATE) <= ?`);
     params.push(range.end);
   }
   return {
@@ -1753,11 +1758,11 @@ router.get("/api/reports/sales", authenticateToken, requireSupervisor, (req, res
   const conditions = [];
 
   if (range.start) {
-    conditions.push(`sales.created_at::date >= $${params.length + 1}::date`);
+    conditions.push(`CAST(sales.created_at AS DATE) >= ?`);
     params.push(range.start);
   }
   if (range.end) {
-    conditions.push(`sales.created_at::date <= $${params.length + 1}::date`);
+    conditions.push(`CAST(sales.created_at AS DATE) <= ?`);
     params.push(range.end);
   }
   if (operator_id) {
@@ -2166,7 +2171,7 @@ router.get("/api/reports/by-operator", authenticateToken, requireSupervisor, (re
      FROM sales
      LEFT JOIN users ON users.id = sales.sold_by
      ${salesFilter.clause}
-     GROUP BY sales.sold_by
+     GROUP BY users.id, users.name
      ORDER BY total_sales DESC`,
     salesFilter.params,
     (err, rows) => {

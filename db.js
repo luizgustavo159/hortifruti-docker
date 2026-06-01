@@ -95,7 +95,12 @@ if (!isPostgres) {
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
     });
-    const formatQuery = (sql) => { let index = 0; return sql.replace(/\?/g, () => `$${(index += 1)}`); };
+    const formatQuery = (sql) => { 
+        let index = 0; 
+        // Substituir apenas os '?' que não estão dentro de strings ou literais
+        // Para simplificar e cobrir o uso do projeto, faremos a substituição sequencial
+        return sql.replace(/\?/g, () => `$${(index += 1)}`); 
+    };
     const runQuery = (client, sql, params = [], callback) => {
         client.query(formatQuery(sql), params, (err, result) => { if (callback) callback(err, result); });
     };
