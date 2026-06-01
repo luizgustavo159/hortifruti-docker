@@ -2913,33 +2913,34 @@ router.post(
             }
 
 	            tx.run(
-	              `UPDATE cash_sessions
-	               SET closed_at = CURRENT_TIMESTAMP,
-	                   closing_amount = ?,
-	                   expected_amount = ?,
-	                   difference_amount = ?,
-	                   notes = CASE WHEN ? <> '' THEN ? ELSE notes END
-	               WHERE id = ?`,
-	              [closing_amount, expectedAmount, differenceAmount, notes, notes, session.id],
-	              (updateErr) => {
-	                if (updateErr) {
-	                  finish(updateErr);
-	                  return;
-	                }
-	                closedPayload = {
-	                  id: session.id,
-	                  opening_amount: Number(session.opening_amount),
-	                  closing_amount: Number(closing_amount),
-	                  expected_amount: expectedAmount,
-	                  difference_amount: differenceAmount,
-	                };
-	                finish(null);
-	              }
-	            );
-	          }
-	        );
-	      },
-	      (transactionErr) => {
+		              `UPDATE cash_sessions
+		               SET closed_at = CURRENT_TIMESTAMP,
+		                   closing_amount = ?,
+		                   expected_amount = ?,
+		                   difference_amount = ?,
+		                   notes = CASE WHEN ? <> '' THEN ? ELSE notes END
+		               WHERE id = ?`,
+		              [closing_amount, expectedAmount, differenceAmount, notes, notes, session.id],
+		              (updateErr) => {
+		                if (updateErr) {
+		                  finish(updateErr);
+		                  return;
+		                }
+		                closedPayload = {
+		                  id: session.id,
+		                  opening_amount: Number(session.opening_amount),
+		                  closing_amount: Number(closing_amount),
+		                  expected_amount: expectedAmount,
+		                  difference_amount: differenceAmount,
+		                };
+                finish(null);
+              }
+            );
+          }
+        );
+      });
+    },
+    (transactionErr) => {
       if (transactionErr) {
         if (transactionErr.status) {
           return res.status(transactionErr.status).json({ message: transactionErr.message });
