@@ -51,6 +51,18 @@ services:
     # Removido o seed automático para acelerar o boot diário. 
     # Se precisar de dados de teste, rode manualmente uma vez: docker compose exec app node scripts/seed-test-users.js
     command: sh -c "npm start"
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - node_modules/
+            - frontend/node_modules/
+        - action: rebuild
+          path: package.json
+        - action: rebuild
+          path: frontend/package.json
 
 volumes:
   db-data:
