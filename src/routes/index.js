@@ -1845,7 +1845,6 @@ router.post(
       return res.status(201).json(responsePayload);
     });
   });
-    } // fim processSale
 });
 
 router.get("/api/reports/summary", authenticateToken, requireSupervisor, (req, res) => {

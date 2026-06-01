@@ -40,9 +40,12 @@ const run = async () => {
     
     await new Promise((resolve, reject) => {
       db.withTransaction((tx, done) => {
+        // No PostgreSQL, o exec do pg-pool não é o mesmo que o exec do sqlite3.
+        // O db.js já mapeia exec para pool.query ou client.query.
         tx.exec(sql, (err) => {
           if (err) return done(err);
-          tx.run("INSERT INTO schema_migrations (filename) VALUES ($1)", [file], (insertErr) => {
+          // O db.js já mapeia run para formatQuery que converte ? em $n
+          tx.run("INSERT INTO schema_migrations (filename) VALUES (?)", [file], (insertErr) => {
             done(insertErr);
           });
         });
