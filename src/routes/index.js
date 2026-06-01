@@ -646,12 +646,18 @@ router.put(
   }
 );
 
-router.delete("/api/categories/:id", authenticateToken, requireAdmin, (req, res) => {
+router.delete("/api/categories/:id", authenticateToken, requireApproval("user_update"), (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM categories WHERE id = ?", [id], (err) => {
     if (err) {
       return res.status(400).json({ message: "Não é possível excluir uma categoria que possui produtos vinculados." });
     }
+    logAudit({
+      action: "categoria_excluida",
+      details: { id_categoria: id, mensagem: "Categoria excluída com autorização" },
+      performedBy: req.user.id,
+      approvedBy: req.approval?.approved_by,
+    });
     return res.json({ message: "Categoria excluída com sucesso." });
   });
 });
@@ -718,12 +724,18 @@ router.put(
   }
 );
 
-router.delete("/api/suppliers/:id", authenticateToken, requireAdmin, (req, res) => {
+router.delete("/api/suppliers/:id", authenticateToken, requireApproval("user_update"), (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM suppliers WHERE id = ?", [id], (err) => {
     if (err) {
       return res.status(400).json({ message: "Não é possível excluir um fornecedor que possui produtos vinculados." });
     }
+    logAudit({
+      action: "fornecedor_excluido",
+      details: { id_fornecedor: id, mensagem: "Fornecedor excluído com autorização" },
+      performedBy: req.user.id,
+      approvedBy: req.approval?.approved_by,
+    });
     return res.json({ message: "Fornecedor excluído com sucesso." });
   });
 });

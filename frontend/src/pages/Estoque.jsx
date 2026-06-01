@@ -137,10 +137,18 @@ export function Estoque() {
     }
   };
 
-  const handleDeleteCategory = async (id) => {
-    if (!window.confirm("Tem certeza que deseja excluir esta categoria?")) return;
+  const handleDeleteCategory = async (id, approvalToken = null) => {
+    if (!approvalToken) {
+      if (!window.confirm("Tem certeza que deseja excluir esta categoria? Esta ação requer senha de gerente.")) return;
+      setPendingAction(() => (token) => handleDeleteCategory(id, token));
+      setShowApprovalModal(true);
+      return;
+    }
     try {
-      await apiFetch(`/categories/${id}`, { method: "DELETE" });
+      await apiFetch(`/categories/${id}`, { 
+        method: "DELETE",
+        headers: { "x-approval-token": approvalToken }
+      });
       setSuccessMessage("Categoria excluída!");
       loadData();
       setTimeout(() => setSuccessMessage(""), 2000);
@@ -177,11 +185,19 @@ export function Estoque() {
     }
   };
 
-  const handleDeleteSupplier = async (id) => {
-    if (!window.confirm("Tem certeza que deseja excluir este fornecedor?")) return;
+  const handleDeleteSupplier = async (id, approvalToken = null) => {
+    if (!approvalToken) {
+      if (!window.confirm("Tem certeza que deseja excluir este fornecedor? Esta ação requer senha de gerente.")) return;
+      setPendingAction(() => (token) => handleDeleteSupplier(id, token));
+      setShowApprovalModal(true);
+      return;
+    }
     try {
-      await apiFetch(`/suppliers/${id}`, { method: "DELETE" });
-      setSuccessMessage("Fornecedor excluída!");
+      await apiFetch(`/suppliers/${id}`, { 
+        method: "DELETE",
+        headers: { "x-approval-token": approvalToken }
+      });
+      setSuccessMessage("Fornecedor excluído!");
       loadData();
       setTimeout(() => setSuccessMessage(""), 2000);
     } catch (err) {
@@ -264,12 +280,16 @@ export function Estoque() {
   const handleApprovalSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Determinar a ação correta baseada no que estamos tentando fazer
+      // Se houver uma ação pendente, precisamos saber qual era o contexto
+      // No caso do Estoque, as ações sensíveis são stock_adjust, user_update, etc.
+      // Para categorias e fornecedores, usaremos 'user_update' ou 'admin' como fallback de segurança
       const res = await apiFetch("/approvals", {
         method: "POST",
         body: JSON.stringify({
           email: approvalData.email,
           password: approvalData.password,
-          action: "stock_adjust",
+          action: "user_update", // Ação de nível administrativo/gerencial
         }),
       });
       setShowApprovalModal(false);
