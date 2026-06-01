@@ -942,8 +942,10 @@ router.post(
     });
 
     function saveAdjustment(approval) {
+      const performedBy = req.user?.id || (approval?.performed_by);
       let updatedStock = null;
       let productData = null;
+      
       runWithTransaction((tx, finish) => {
         tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
           if (err) {
@@ -956,7 +958,7 @@ router.post(
           }
           productData = product;
 
-          const nextStock = product.current_stock + Number(delta);
+          const nextStock = Number(product.current_stock) + Number(delta);
           updatedStock = nextStock;
           if (nextStock < 0) {
             finish({ status: 400, message: "Estoque não pode ficar negativo." });
@@ -973,7 +975,7 @@ router.post(
               }
               tx.run(
                 "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-                [product_id, "adjustment", delta, reason, req.user.id],
+                [product_id, "adjustment", delta, reason, performedBy],
                 (movementErr) => {
                   if (movementErr) {
                     finish(movementErr);
@@ -1038,7 +1040,7 @@ router.post(
           finish({ status: 404, message: "Produto não encontrado." });
           return;
         }
-        const nextStock = product.current_stock + finalDelta;
+        const nextStock = Number(product.current_stock) + Number(finalDelta);
         if (nextStock < 0) {
           finish({ status: 400, message: "Estoque insuficiente." });
           return;
