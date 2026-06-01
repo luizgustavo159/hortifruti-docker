@@ -2596,11 +2596,28 @@ router.get("/api/pos/cash-session/current", authenticateToken, (req, res) => {
             const value = Number(movement.amount || 0);
             return movement.type === "supply" ? acc + value : acc - value;
           }, 0);
-          const expectedAmount = Number(row.opening_amount || 0) + movementNet;
-          return res.json({
-            ...row,
-            expected_amount: expectedAmount
-          });
+          const expectedAmount = Number(row.expected_amount || row.opening_amount || 0);
+          
+          // Buscar resumo de vendas por forma de pagamento para esta sessão
+          db.all(
+            `SELECT payment_method, SUM(final_total) as total 
+             FROM sales 
+             WHERE sold_by = ? AND created_at >= ? AND created_at <= CURRENT_TIMESTAMP
+             GROUP BY payment_method`,
+            [row.operator_id, row.opened_at],
+            (salesErr, salesSummary) => {
+              const summary = {};
+              if (!salesErr && salesSummary) {
+                salesSummary.forEach(s => { summary[s.payment_method] = Number(s.total); });
+              }
+              
+              return res.json({
+                ...row,
+                expected_amount: expectedAmount,
+                sales_summary: summary
+              });
+            }
+          );
         }
       );
     }
@@ -2641,9 +2658,9 @@ router.post(
           }
 
           return db.get(
-            `INSERT INTO cash_sessions (operator_id, opening_amount, notes, approved_by, approval_token)
-             VALUES (?, ?, ?, ?, ?) RETURNING id, operator_id, opening_amount, opened_at, notes`,
-            [req.user.id, opening_amount, notes, approval.approved_by, approval_token],
+            `INSERT INTO cash_sessions (operator_id, opening_amount, expected_amount, notes, approved_by, approval_token)
+             VALUES (?, ?, ?, ?, ?, ?) RETURNING id, operator_id, opening_amount, expected_amount, opened_at, notes`,
+            [req.user.id, opening_amount, opening_amount, notes, approval.approved_by, approval_token],
             (insertErr, session) => {
               if (insertErr) {
                 return res.status(500).json({ message: "Erro ao abrir caixa." });
