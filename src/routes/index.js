@@ -776,8 +776,8 @@ router.post(
     const payload = req.body;
     db.get(
       `INSERT INTO products
-       (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+       (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at, avg_cost, last_cost, profit_margin)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         payload.name,
         payload.sku,
@@ -789,6 +789,9 @@ router.post(
         payload.category_id || null,
         payload.supplier_id || null,
         payload.expires_at || null,
+        payload.cost || 0,
+        payload.cost || 0,
+        payload.profit_margin || 0,
       ],
       (err, row) => {
         if (err) {
@@ -1030,7 +1033,7 @@ router.post(
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
-    const { product_id, delta, quantity, type, reason = "" } = req.body;
+    const { product_id, delta, quantity, type, reason = "", unit_cost } = req.body;
     const deltaValue = delta !== undefined ? Number(delta) : (quantity !== undefined ? Number(quantity) : 0);
     const finalDelta = (type === "outbound" || type === "return_to_supplier") ? -Math.abs(deltaValue) : Math.abs(deltaValue);
 
@@ -1045,14 +1048,45 @@ router.post(
           finish({ status: 400, message: "Estoque insuficiente." });
           return;
         }
-        tx.run("UPDATE products SET current_stock = ? WHERE id = ?", [nextStock, product_id], (updErr) => {
-          if (updErr) {
-            finish(updErr);
-            return;
-          }
+        // Se for entrada (delta positivo), recalcular custo médio
+        let updateSql = "UPDATE products SET current_stock = ? WHERE id = ?";
+        let updateParams = [nextStock, product_id];
+
+        if (finalDelta > 0 && unit_cost > 0) {
+          tx.get("SELECT current_stock, avg_cost FROM products WHERE id = ?", [product_id], (prodErr, product) => {
+            if (prodErr) { finish(prodErr); return; }
+            
+            const currentQty = Number(product.current_stock) || 0;
+            const currentAvgCost = Number(product.avg_cost) || 0;
+            const totalQty = currentQty + finalDelta;
+            let nextAvgCost = currentAvgCost;
+            
+            if (totalQty > 0) {
+              nextAvgCost = ((currentQty * currentAvgCost) + (finalDelta * unit_cost)) / totalQty;
+            } else {
+              nextAvgCost = unit_cost;
+            }
+
+            tx.run(
+              "UPDATE products SET current_stock = ?, avg_cost = ?, last_cost = ? WHERE id = ?",
+              [nextStock, nextAvgCost, unit_cost, product_id],
+              (updErr) => {
+                if (updErr) { finish(updErr); return; }
+                saveMovement();
+              }
+            );
+          });
+        } else {
+          tx.run(updateSql, updateParams, (updErr) => {
+            if (updErr) { finish(updErr); return; }
+            saveMovement();
+          });
+        }
+
+        function saveMovement() {
           tx.run(
-            "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-            [product_id, type, finalDelta, reason, req.user.id],
+            "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, ?, ?, ?, ?, ?)",
+            [product_id, type, finalDelta, reason, req.user.id, unit_cost || 0],
             (moveErr) => {
               if (moveErr) {
                 finish(moveErr);
@@ -1167,8 +1201,8 @@ router.post(
           let processed = 0;
           items.forEach((item) => {
             tx.run(
-              "INSERT INTO purchase_order_items (order_id, product_id, quantity) VALUES (?, ?, ?)",
-              [orderId, item.product_id, item.quantity],
+              "INSERT INTO purchase_order_items (order_id, product_id, quantity, unit_cost) VALUES (?, ?, ?, ?)",
+              [orderId, item.product_id, item.quantity, item.unit_cost || 0],
               (itemErr) => {
                 if (itemErr) {
                   finish(itemErr);
@@ -1251,17 +1285,39 @@ router.post(
             }
             let processed = 0;
             items.forEach((item) => {
-              tx.run(
-                "UPDATE products SET current_stock = current_stock + ? WHERE id = ?",
-                [item.quantity, item.product_id],
-                (updateErr) => {
-                  if (updateErr) {
-                    finish(updateErr);
-                    return;
-                  }
-                  tx.run(
-                    "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-                    [item.product_id, "inbound", item.quantity, "Recebimento de pedido", req.user.id],
+              // Buscar produto atual para calcular custo médio
+              tx.get("SELECT current_stock, avg_cost FROM products WHERE id = ?", [item.product_id], (prodErr, product) => {
+                if (prodErr) {
+                  finish(prodErr);
+                  return;
+                }
+
+                const currentQty = Number(product.current_stock) || 0;
+                const currentAvgCost = Number(product.avg_cost) || 0;
+                const newQty = Number(item.quantity);
+                const newUnitCost = Number(item.unit_cost) || 0;
+
+                // Cálculo do Custo Médio Ponderado
+                const totalQty = currentQty + newQty;
+                let nextAvgCost = currentAvgCost;
+                
+                if (totalQty > 0) {
+                  nextAvgCost = ((currentQty * currentAvgCost) + (newQty * newUnitCost)) / totalQty;
+                } else {
+                  nextAvgCost = newUnitCost;
+                }
+
+                tx.run(
+                  "UPDATE products SET current_stock = current_stock + ?, avg_cost = ?, last_cost = ? WHERE id = ?",
+                  [newQty, nextAvgCost, newUnitCost, item.product_id],
+                  (updateErr) => {
+                    if (updateErr) {
+                      finish(updateErr);
+                      return;
+                    }
+                    tx.run(
+                      "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, ?, ?, ?, ?, ?)",
+                      [item.product_id, "inbound", newQty, "Recebimento de pedido", req.user.id, newUnitCost],
                     (movementErr) => {
                       if (movementErr) {
                         finish(movementErr);
@@ -1807,11 +1863,11 @@ router.get("/api/reports/summary", authenticateToken, requireSupervisor, (req, r
       }
 
       const lossFilter = buildDateFilter("stock_losses.created_at", range);
-      db.get(
-        `SELECT SUM(products.price * stock_losses.quantity) AS total_losses
-         FROM stock_losses
-         JOIN products ON products.id = stock_losses.product_id
-         ${lossFilter.clause}`,
+	      db.get(
+	        `SELECT SUM(COALESCE(NULLIF(products.avg_cost, 0), products.price) * stock_losses.quantity) AS total_losses
+	         FROM stock_losses
+	         JOIN products ON products.id = stock_losses.product_id
+	         ${lossFilter.clause}`,
         lossFilter.params,
         (lossErr, lossRow) => {
           if (lossErr) {
@@ -1840,12 +1896,23 @@ router.get("/api/reports/summary", authenticateToken, requireSupervisor, (req, r
                     return res.status(500).json({ message: "Erro ao gerar relatório." });
                   }
 
-                  return res.json({
-                    total_sales: salesRow?.total_sales || 0,
-                    total_losses: lossRow?.total_losses || 0,
-                    low_stock: lowStockRows,
-                    expiring_products: expRows,
-                  });
+	                  // Calcular lucro estimado nas vendas
+	                  db.get(
+	                    `SELECT SUM(sales.final_total - (COALESCE(NULLIF(products.avg_cost, 0), products.price) * sales.quantity)) AS estimated_profit
+	                     FROM sales
+	                     JOIN products ON products.id = sales.product_id
+	                     ${salesFilter.clause}`,
+	                    salesFilter.params,
+	                    (profitErr, profitRow) => {
+	                      return res.json({
+	                        total_sales: salesRow?.total_sales || 0,
+	                        total_losses: lossRow?.total_losses || 0,
+	                        estimated_profit: profitRow?.estimated_profit || 0,
+	                        low_stock: lowStockRows,
+	                        expiring_products: expRows,
+	                      });
+	                    }
+	                  );
                 }
               );
             }
@@ -1945,7 +2012,8 @@ router.get("/api/reports/receivables", authenticateToken, requireSupervisor, (re
 
 router.get("/api/reports/inventory", authenticateToken, requireSupervisor, (req, res) => {
   db.all(
-    `SELECT products.name, categories.name as category, products.current_stock, products.unit_type, products.price, (products.current_stock * products.price) as inventory_value
+    `SELECT products.name, categories.name as category, products.current_stock, products.unit_type, products.price, 
+            products.avg_cost, (products.current_stock * COALESCE(NULLIF(products.avg_cost, 0), products.price)) as inventory_value
      FROM products
      LEFT JOIN categories ON categories.id = products.category_id
      ORDER BY products.name ASC`,

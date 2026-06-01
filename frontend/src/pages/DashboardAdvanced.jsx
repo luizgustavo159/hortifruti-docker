@@ -121,9 +121,11 @@ export function DashboardAdvanced() {
               <p className="card-subtitle">No período selecionado</p>
             </div>
             <div className="card">
-              <h3>Perdas de Estoque</h3>
-              <strong className="value-large loss">R$ {Number(summaryData.total_losses || 0).toFixed(2)}</strong>
-              <p className="card-subtitle">Descartes e perdas</p>
+              <h3>Lucro Estimado</h3>
+              <strong className="value-large" style={{ color: (Number(summaryData.estimated_profit || 0) - Number(summaryData.total_losses || 0)) >= 0 ? '#10b981' : '#ef4444' }}>
+                R$ {(Number(summaryData.estimated_profit || 0) - Number(summaryData.total_losses || 0)).toFixed(2)}
+              </strong>
+              <p className="card-subtitle">Descontando CMV e Perdas</p>
             </div>
             <div className="card">
               <h3>Itens Críticos</h3>

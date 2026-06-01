@@ -55,8 +55,12 @@ export function AdminDashboard() {
 
   const totalSales = Number(summary.total_sales || 0);
   const totalLosses = Number(summary.total_losses || 0);
+  const estimatedProfit = Number(summary.estimated_profit || 0);
   const lowStockCount = summary.low_stock?.length || 0;
-  const margin = totalSales > 0 ? ((totalSales - totalLosses) / totalSales) * 100 : 0;
+  
+  // Lucro líquido aproximado (Vendas - Custo das Vendas - Perdas)
+  const netProfit = estimatedProfit - totalLosses;
+  const margin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0;
 
   return (
     <PageShell
@@ -107,19 +111,19 @@ export function AdminDashboard() {
             <strong className="value-large">
               R$ {totalSales.toFixed(2)}
             </strong>
-            <p className="card-subtitle">Período selecionado</p>
+            <p className="card-subtitle">Faturamento bruto</p>
           </div>
           <div className="card">
-            <h3>Perdas Estimadas</h3>
-            <strong className="value-large loss">
-              R$ {totalLosses.toFixed(2)}
+            <h3>Lucro Estimado</h3>
+            <strong className="value-large" style={{ color: netProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+              R$ {netProfit.toFixed(2)}
             </strong>
-            <p className="card-subtitle">Descartes e devoluções</p>
+            <p className="card-subtitle">Já descontado o custo (CMV)</p>
           </div>
           <div className="card">
             <h3>Margem Líquida</h3>
             <strong className="value-large">{margin.toFixed(1)}%</strong>
-            <p className="card-subtitle">Lucro sobre vendas</p>
+            <p className="card-subtitle">Lucro real sobre vendas</p>
           </div>
           <div className="card">
             <h3>Itens Críticos</h3>
