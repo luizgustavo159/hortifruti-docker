@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getAuthUser } from "../lib/auth";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { Leaf } from "lucide-react";
 
 // Definição de abas por role - cada role vê apenas o que está permitido
 const getNavItemsByRole = (role) => {
@@ -50,7 +51,9 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo-icon-small">🌿</div>
+        <div className="logo-icon-small-container">
+          <Leaf size={24} className="logo-icon-small" />
+        </div>
         <div>
           <h1>GreenStore</h1>
           <p>Painel de Controle</p>
