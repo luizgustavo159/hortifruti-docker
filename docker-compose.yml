@@ -45,6 +45,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=sua_chave_secreta_muito_longa_e_segura_123
       - ADMIN_BOOTSTRAP_TOKEN=bootstrap_token_123
+      - CORS_ORIGIN=http://localhost:3000
     command: >
       sh -c "npm run migrate && 
              node scripts/seed-test-users.js && 
