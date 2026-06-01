@@ -2688,8 +2688,8 @@ router.post(
     let finalType = type;
     if (type === "deposit") finalType = "supply";
 
-    // Sangrias (withdrawal) exigem aprovação de superior
-    const needsApproval = finalType === "withdrawal";
+    // Sangrias e Suprimentos manuais exigem aprovação de superior (Proteção de Caixa)
+    const needsApproval = finalType === "withdrawal" || finalType === "supply";
 
     const finalizeMovement = (approval = null) => {
       const loadSql = session_id

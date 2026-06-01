@@ -54,38 +54,55 @@ export function CaixaFechamento() {
   }, []);
 
   // Calcular diferença
-    useEffect(() => {
-    const loadCaixaData = async () => {
-      try {
-        setLoading(true);
-        // Tentar carregar caixa atual
-        try {
-          const caixa = await apiFetch('/pos/cash-session/current');
-          if (caixa) {
-            setCaixaData(caixa);
-            setTotalExpected(parseFloat(caixa.expected_amount || caixa.opening_amount || 0));
-          }
-        } catch (e) {
-          console.error('Erro ao buscar caixa atual:', e);
-        }
+  useEffect(() => {
+    setDifference(totalCounted - totalExpected);
+  }, [totalCounted, totalExpected]);
 
-        // Tentar carregar movimentos
-        try {
-          const movs = await apiFetch('/pos/cash-session/movement?limit=50');
-          setMovements(Array.isArray(movs) ? movs : (movs.data || []));
-        } catch (e) {
-          console.error('Erro ao buscar movimentos:', e);
-        }
-      } catch (error) {
-        console.error(error);
-        // Só mostrar toast se realmente for um erro crítico não tratado
-        if (caixaData) toast.error('Erro ao carregar dados complementares');
-      } finally {
-        setLoading(false);
+  const addMovement = async (type, amount, approvalToken = null) => {
+    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+      if (amount !== null) toast.error('Informe um valor válido.');
+      return;
+    }
+
+    const val = parseFloat(amount);
+
+    // Proteção: Sangria e Suprimento exigem aprovação
+    if (!approvalToken) {
+      setPendingMovement({ type, amount: val });
+      setShowApprovalModal(true);
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      const res = await apiFetch('/pos/cash-session/movement', {
+        method: 'POST',
+        body: JSON.stringify({
+          type,
+          amount: val,
+          reason: type === 'withdrawal' ? 'Sangria manual' : 'Suprimento manual',
+          approval_token: approvalToken
+        }),
+      });
+
+      toast.success(`${type === 'withdrawal' ? 'Sangria' : 'Suprimento'} realizada com sucesso!`);
+      
+      // Atualizar lista de movimentos e valor esperado
+      setMovements(prev => [res, ...prev]);
+      if (type === 'withdrawal') {
+        setTotalExpected(prev => prev - val);
+      } else {
+        setTotalExpected(prev => prev + val);
       }
-    };
-    loadCaixaData();
-  }, []);
+      
+      setShowApprovalModal(false);
+      setPendingMovement(null);
+    } catch (error) {
+      toast.error('Erro ao registrar movimentação: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const handleMovementApproved = (token) => {
     if (pendingMovement) {
@@ -142,8 +159,8 @@ export function CaixaFechamento() {
       {showApprovalModal && (
         <ApprovalModal
           action="cash_withdrawal"
-          title="Autorização de Sangria"
-          message={`Uma sangria de R$ ${parseFloat(pendingMovement?.amount).toFixed(2)} está sendo solicitada. Um gerente deve autorizar.`}
+          title={pendingMovement?.type === 'withdrawal' ? "Autorização de Sangria" : "Autorização de Suprimento"}
+          message={`Uma movimentação de ${pendingMovement?.type === 'withdrawal' ? 'sangria' : 'suprimento'} no valor de R$ ${parseFloat(pendingMovement?.amount).toFixed(2)} está sendo solicitada. Um gerente deve autorizar.`}
           onApproved={handleMovementApproved}
           onCancel={() => {
             setShowApprovalModal(false);
