@@ -2781,7 +2781,11 @@ router.post(
     if (typeof closing_amount === "undefined") {
       return res.status(400).json({ message: "Valor de fechamento é obrigatório." });
     }
-    const { notes = "" } = req.body;
+    const { notes = "", approval_token } = req.body;
+    
+    if (!notes || notes.trim().length < 5) {
+      return res.status(400).json({ message: "A observação é obrigatória para fechar o caixa (mínimo 5 caracteres)." });
+    }
 
     let closedPayload = null;
 
@@ -2811,6 +2815,12 @@ router.post(
             }, 0);
             const expectedAmount = Number(session.opening_amount || 0) + movementNet;
             const differenceAmount = Number(closing_amount) - expectedAmount;
+
+            // Validação de Quebra: Se houver diferença, exige token de aprovação
+            if (Math.abs(differenceAmount) > 0.01 && !approval_token) {
+              finish({ status: 403, message: "Fechamento com quebra requer aprovação de um superior." });
+              return;
+            }
 
             tx.run(
               `UPDATE cash_sessions

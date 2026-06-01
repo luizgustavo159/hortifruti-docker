@@ -17,7 +17,9 @@ export function CaixaFechamento() {
 
   // Estado para Aprovação
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showBreakApprovalModal, setShowBreakApprovalModal] = useState(false);
   const [pendingMovement, setPendingMovement] = useState(null);
+  const [breakApprovalToken, setBreakApprovalToken] = useState(null);
 
   // Carregar dados de caixa
     useEffect(() => {
@@ -111,8 +113,16 @@ export function CaixaFechamento() {
   };
 
   // Fechar caixa
-  const handleCloseCaixa = async () => {
-    if (totalCounted === 0 && !window.confirm('Deseja fechar o caixa com valor zero?')) {
+  const handleCloseCaixa = async (e, approvalToken = null) => {
+    if (!notes || notes.trim().length < 5) {
+      toast.error('A observação é obrigatória para fechar o caixa (mínimo 5 caracteres).');
+      return;
+    }
+
+    const hasBreak = Math.abs(difference) > 0.01;
+    
+    if (hasBreak && !approvalToken && !breakApprovalToken) {
+      setShowBreakApprovalModal(true);
       return;
     }
 
@@ -121,8 +131,9 @@ export function CaixaFechamento() {
       await apiFetch('/pos/cash-session/close', {
         method: 'POST',
         body: JSON.stringify({
-          closing_amount: totalCounted, // Corrigido para contrato do backend
+          closing_amount: totalCounted,
           notes,
+          approval_token: approvalToken || breakApprovalToken
         }),
       });
       toast.success('Caixa fechado com sucesso!');
@@ -166,6 +177,20 @@ export function CaixaFechamento() {
             setShowApprovalModal(false);
             setPendingMovement(null);
           }}
+        />
+      )}
+
+      {showBreakApprovalModal && (
+        <ApprovalModal
+          action="cash_close_break"
+          title="Autorização de Quebra de Caixa"
+          message={`O caixa apresenta uma ${difference > 0 ? 'sobra' : 'falta'} de R$ ${Math.abs(difference).toFixed(2)}. Um gerente deve autorizar o fechamento com quebra.`}
+          onApproved={(token) => {
+            setBreakApprovalToken(token);
+            setShowBreakApprovalModal(false);
+            handleCloseCaixa(null, token);
+          }}
+          onCancel={() => setShowBreakApprovalModal(false)}
         />
       )}
       <div className="caixa-fechamento-container">
@@ -236,8 +261,9 @@ export function CaixaFechamento() {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Ex: Diferença de R$ 0,50 devido a arredondamento de troco..."
+            placeholder="A observação é OBRIGATÓRIA (ex: conferência realizada, troco em moedas...)"
             rows="3"
+            required
           />
         </div>
 
