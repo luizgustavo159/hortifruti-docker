@@ -2723,6 +2723,8 @@ router.post(
           return res.status(404).json({ message: "Sessão de caixa aberta não encontrada." });
         }
 
+        const movementValue = finalType === "supply" ? Number(amount) : -Number(amount);
+        
         return db.get(
           `INSERT INTO cash_movements (session_id, type, amount, reason, performed_by)
            VALUES (?, ?, ?, ?, ?) RETURNING id, session_id, type, amount, reason, performed_by, created_at`,
@@ -2731,19 +2733,29 @@ router.post(
             if (insertErr) {
               return res.status(500).json({ message: "Erro ao registrar movimentação de caixa." });
             }
-            logAudit({
-              action: "movimentacao_caixa",
-              details: { 
-                session_id: session.id, 
-                type: finalType, 
-                amount: Number(amount), 
-                reason: finalReason,
-                approved_by: approval?.approved_by
-              },
-              performedBy: req.user.id,
-              approvedBy: approval?.approved_by
-            });
-            return res.status(201).json(movement);
+            
+            // Atualizar o valor esperado da sessão de caixa
+            db.run(
+              "UPDATE cash_sessions SET expected_amount = expected_amount + ? WHERE id = ?",
+              [movementValue, session.id],
+              (updateErr) => {
+                if (updateErr) console.error("Erro ao atualizar expected_amount no caixa:", updateErr);
+                
+                logAudit({
+                  action: "movimentacao_caixa",
+                  details: { 
+                    session_id: session.id, 
+                    type: finalType, 
+                    amount: Number(amount), 
+                    reason: finalReason,
+                    approved_by: approval?.approved_by
+                  },
+                  performedBy: req.user.id,
+                  approvedBy: approval?.approved_by
+                });
+                return res.status(201).json(movement);
+              }
+            );
           }
         );
       });
@@ -2803,18 +2815,12 @@ router.post(
             return;
           }
 
-          tx.all("SELECT type, amount FROM cash_movements WHERE session_id = ?", [session.id], (moveErr, movements) => {
-            if (moveErr) {
-              finish(moveErr);
-              return;
-            }
-
-            const movementNet = (movements || []).reduce((acc, movement) => {
-              const value = Number(movement.amount || 0);
-              return movement.type === "supply" ? acc + value : acc - value;
-            }, 0);
-            const expectedAmount = Number(session.opening_amount || 0) + movementNet;
-            const differenceAmount = Number(closing_amount) - expectedAmount;
+          // O expected_amount já é atualizado em tempo real por:
+          // 1. Vendas em dinheiro
+          // 2. Sangrias
+          // 3. Suprimentos
+          const expectedAmount = Number(session.expected_amount || session.opening_amount || 0);
+          const differenceAmount = Number(closing_amount) - expectedAmount;
 
             // Validação de Quebra: Se houver diferença, exige token de aprovação
             if (Math.abs(differenceAmount) > 0.01 && !approval_token) {
