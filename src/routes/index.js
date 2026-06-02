@@ -1581,11 +1581,11 @@ router.post(
           return res.status(400).json({ message: "O caixa precisa estar aberto para registrar vendas. Abra o caixa antes de continuar." });
         }
 
-        return processSale();
+        return processSale(cashSession);
       }
     );
 
-    function processSale() {
+    function processSale(cashSession) {
     let responsePayload = null;
     const saleItems = [];
 
@@ -1797,6 +1797,11 @@ router.post(
           // Se for venda em dinheiro, atualizar o valor esperado na sessão de caixa
           if (payment_method === "cash") {
             const netAmount = totals.final_total;
+            if (!cashSession || !cashSession.id) {
+              console.error("ERRO: cashSession não definida no fechamento da venda", { payment_method, netAmount });
+              finish(new Error("Sessão de caixa não identificada para atualização de saldo."));
+              return;
+            }
             tx.run(
               "UPDATE cash_sessions SET expected_amount = expected_amount + ? WHERE id = ?",
               [netAmount, cashSession.id],

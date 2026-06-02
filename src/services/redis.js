@@ -40,7 +40,7 @@ if (REDIS_URL) {
 // Wrapper para garantir que usamos Redis se disponível, senão memória
 const clientWrapper = {
   get isOpen() {
-    return isRedisAvailable || true;
+    return isRedisAvailable;
   },
   async set(key, value, options) {
     if (isRedisAvailable) {
