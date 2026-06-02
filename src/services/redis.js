@@ -5,6 +5,7 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 const REDIS_URL = process.env.REDIS_URL;
 let client;
 let isRedisAvailable = false;
+let isConnecting = false;
 
 // Blacklist em memória como fallback quando Redis não está disponível
 const memoryBlacklist = new Map();
@@ -21,11 +22,23 @@ setInterval(() => {
 
 if (REDIS_URL) {
   client = createClient({
-    url: REDIS_URL
+    url: REDIS_URL,
+    socket: {
+      reconnectStrategy: (retries) => {
+        if (retries > 10) {
+          logger.warn('Redis indisponível após 10 tentativas. Mantendo modo de fallback.');
+          return false; // Para de tentar reconectar agressivamente
+        }
+        return Math.min(retries * 100, 3000);
+      }
+    }
   });
 
   client.on('error', (err) => {
-    logger.error('Erro no cliente Redis:', err);
+    // Apenas loga erro se o Redis estava disponível anteriormente (evita spam no boot)
+    if (isRedisAvailable) {
+      logger.error('Conexão com Redis perdida. Usando memória.');
+    }
     isRedisAvailable = false;
   });
 
@@ -33,11 +46,8 @@ if (REDIS_URL) {
     logger.info('Conectado ao Redis com sucesso');
     isRedisAvailable = true;
   });
-} else {
-  logger.warn('REDIS_URL não definida. Usando modo de fallback em memória.');
 }
 
-// Wrapper para garantir que usamos Redis se disponível, senão memória
 const clientWrapper = {
   get isOpen() {
     return isRedisAvailable;
@@ -47,7 +57,7 @@ const clientWrapper = {
       try {
         return await client.set(key, value, options);
       } catch (err) {
-        logger.error('Falha ao gravar no Redis, usando memória:', err);
+        isRedisAvailable = false;
       }
     }
     const ttlMs = options && options.EX ? options.EX * 1000 : 3600 * 1000;
@@ -59,7 +69,7 @@ const clientWrapper = {
       try {
         return await client.get(key);
       } catch (err) {
-        logger.error('Falha ao ler do Redis, usando memória:', err);
+        isRedisAvailable = false;
       }
     }
     const expiry = memoryBlacklist.get(key);
@@ -77,12 +87,15 @@ const clientWrapper = {
 };
 
 async function connectRedis() {
-  if (client) {
+  if (client && !isRedisAvailable && !isConnecting) {
+    isConnecting = true;
     try {
       await client.connect();
     } catch (err) {
-      logger.error('Não foi possível conectar ao Redis:', err);
-      isRedisAvailable = false;
+      // Loga apenas uma vez no início se falhar
+      logger.warn('Aviso: Redis não responde no momento. O sistema funcionará usando a memória local.');
+    } finally {
+      isConnecting = false;
     }
   }
 }
