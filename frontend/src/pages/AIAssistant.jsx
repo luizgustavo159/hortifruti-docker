@@ -8,7 +8,7 @@ export function AIAssistant() {
     {
       id: 1,
       type: 'bot',
-      text: 'Olá! 👋 Sou seu Assistente de IA. O sistema está agora operando em MODO REAL. No momento, estou sendo preparado para analisar seus dados reais do banco de dados. Em breve, poderei fornecer insights precisos sobre suas vendas e estoque.',
+      text: 'Olá! 👋 Sou seu Assistente de IA. O sistema está agora operando 100% com seus dados REAIS de produção. No momento, estou finalizando a integração para responder perguntas complexas via chat, mas todos os seus relatórios e dashboards já utilizam os dados reais do seu banco de dados PostgreSQL.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -24,7 +24,7 @@ export function AIAssistant() {
   }, [messages]);
 
   const generateAIResponse = (userMessage) => {
-    return `🤖 **Aviso de Sistema Real**\n\nO Assistente de IA está em fase de transição para análise de dados reais. Atualmente, os gráficos do Dashboard já refletem 100% de suas operações reais. \n\nPara insights via chat, a integração direta com seu banco de dados PostgreSQL está sendo finalizada para garantir que cada resposta seja baseada nos seus itens e vendas de hoje.`;
+    return `🤖 **Status do Sistema**\n\nSeu sistema Hortifruti está totalmente operacional em ambiente de produção. \n\nOs cálculos de lucro agora utilizam o **CMV (Custo de Mercadoria Vendida)** real baseado nos seus preços de custo. \n\nEstou à disposição para ajudar com dúvidas sobre o uso do sistema enquanto finalizamos as análises preditivas!`;
   };
 
   const handleSendMessage = async (e) => {
