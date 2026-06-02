@@ -20,11 +20,12 @@ services:
     image: redis:7-alpine
     container_name: greenstore_redis
     restart: always
+    command: redis-server --bind 0.0.0.0
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   app:
     build: .

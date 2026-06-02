@@ -2,49 +2,40 @@ const { createClient } = require('redis');
 const pino = require('pino');
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
-const REDIS_URL = process.env.REDIS_URL;
+// Em Docker, o host deve ser o nome do serviço (redis)
+const REDIS_URL = process.env.REDIS_URL || 'redis://redis:6379';
 let client;
 let isRedisAvailable = false;
-let isConnecting = false;
 
-// Blacklist em memória como fallback quando Redis não está disponível
+// Fallback em memória
 const memoryBlacklist = new Map();
-
-// Limpar entradas expiradas da memória periodicamente
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, expiry] of memoryBlacklist.entries()) {
-    if (expiry < now) {
-      memoryBlacklist.delete(key);
-    }
-  }
-}, 60 * 1000);
 
 if (REDIS_URL) {
   client = createClient({
     url: REDIS_URL,
     socket: {
+      connectTimeout: 10000,
+      keepAlive: 5000,
       reconnectStrategy: (retries) => {
-        if (retries > 10) {
-          logger.warn('Redis indisponível após 10 tentativas. Mantendo modo de fallback.');
-          return false; // Para de tentar reconectar agressivamente
-        }
-        return Math.min(retries * 100, 3000);
+        // Tenta reconectar a cada 5 segundos
+        return 5000;
       }
     }
   });
 
   client.on('error', (err) => {
-    // Apenas loga erro se o Redis estava disponível anteriormente (evita spam no boot)
-    if (isRedisAvailable) {
-      logger.error('Conexão com Redis perdida. Usando memória.');
-    }
+    // Log detalhado para diagnóstico
+    logger.error({ err: err.message }, 'Erro de conexão Redis');
     isRedisAvailable = false;
   });
 
-  client.on('connect', () => {
-    logger.info('Conectado ao Redis com sucesso');
+  client.on('ready', () => {
+    logger.info('Redis está PRONTO para uso');
     isRedisAvailable = true;
+  });
+
+  client.on('connect', () => {
+    logger.info('Conectando ao servidor Redis...');
   });
 }
 
@@ -57,6 +48,7 @@ const clientWrapper = {
       try {
         return await client.set(key, value, options);
       } catch (err) {
+        logger.error({ err: err.message }, 'Falha no SET do Redis');
         isRedisAvailable = false;
       }
     }
@@ -69,6 +61,7 @@ const clientWrapper = {
       try {
         return await client.get(key);
       } catch (err) {
+        logger.error({ err: err.message }, 'Falha no GET do Redis');
         isRedisAvailable = false;
       }
     }
@@ -87,15 +80,11 @@ const clientWrapper = {
 };
 
 async function connectRedis() {
-  if (client && !isRedisAvailable && !isConnecting) {
-    isConnecting = true;
+  if (client && !isRedisAvailable) {
     try {
       await client.connect();
     } catch (err) {
-      // Loga apenas uma vez no início se falhar
-      logger.warn('Aviso: Redis não responde no momento. O sistema funcionará usando a memória local.');
-    } finally {
-      isConnecting = false;
+      logger.error({ err: err.message }, 'Falha na inicialização do Redis');
     }
   }
 }
