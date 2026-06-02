@@ -4,14 +4,14 @@ services:
     container_name: greenstore_db
     restart: always
     environment:
-      POSTGRES_DB: greenstore_prod
-      POSTGRES_USER: greenstore_admin
-      POSTGRES_PASSWORD: gs_prod_secure_pass_9921
+      POSTGRES_DB: ${DB_NAME:-greenstore_prod}
+      POSTGRES_USER: ${DB_USER:-greenstore_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gs_prod_secure_pass_9921}
       LANG: pt_BR.utf8
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U greenstore_admin -d greenstore_prod"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,8 +41,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgres://greenstore_admin:gs_prod_secure_pass_9921@db:5432/greenstore_prod
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - ADMIN_BOOTSTRAP_TOKEN=${ADMIN_BOOTSTRAP_TOKEN}

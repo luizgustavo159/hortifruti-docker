@@ -67,7 +67,7 @@ Quando você vir uma mensagem escrita: **`GreenStore API rodando na porta 3000`*
 1.  Abra o seu navegador (Chrome, Edge, etc).
 2.  Digite o endereço: **[http://localhost:3000](http://localhost:3000)**
 3.  Use os dados abaixo para entrar:
-    *   **E-mail:** `admin@hortifruti.com`
+    *   **E-mail:** `admin@greenstore.com`
     *   **Senha:** `admin123456`
 
 ---
