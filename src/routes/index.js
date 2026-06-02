@@ -1095,7 +1095,7 @@ router.post(
               finish(null);
             }
           );
-        });
+        }
       });
     }, (transactionErr) => {
       if (transactionErr) {
