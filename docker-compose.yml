@@ -42,10 +42,10 @@ services:
       - PORT=3000
       - DATABASE_URL=postgres://greenstore:greenstore_password@db:5432/greenstore
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-sua_chave_secreta_muito_longa_e_segura_123}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-outra_chave_secreta_muito_longa_e_segura_456}
-      - ADMIN_BOOTSTRAP_TOKEN=${ADMIN_BOOTSTRAP_TOKEN:-bootstrap_token_123}
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - ADMIN_BOOTSTRAP_TOKEN=${ADMIN_BOOTSTRAP_TOKEN}
+      - CORS_ORIGIN=${CORS_ORIGIN}
       - DB_POOL_MAX=20
       - LOG_LEVEL=warn
     # Removido o seed automático para acelerar o boot diário. 
