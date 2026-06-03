@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import "./AdminFuncionarios.css";
@@ -29,21 +29,22 @@ export function AdminFuncionarios() {
   ];
 
   // Carregar funcionários
-  useEffect(() => {
-    const loadEmployees = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const data = await apiFetch("/users");
-        setEmployees(data || []);
-      } catch (loadError) {
-        setError(loadError.message || "Falha ao carregar funcionários.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadEmployees();
+  const loadEmployees = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch("/users");
+      setEmployees(Array.isArray(data) ? data : []);
+    } catch (loadError) {
+      setError(loadError.message || "Falha ao carregar funcionários.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
 
   // Filtrar funcionários
   const filteredEmployees = employees.filter(
@@ -80,11 +81,7 @@ export function AdminFuncionarios() {
       setSuccessMessage("Funcionário criado com sucesso!");
       setFormData({ name: "", email: "", password: "", role: "operator", is_active: true });
       setShowNewEmployeeModal(false);
-
-      // Recarregar funcionários
-      const data = await apiFetch("/users");
-      setEmployees(data || []);
-
+      loadEmployees();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (createError) {
       setError(createError.message || "Erro ao criar funcionário.");
@@ -103,15 +100,10 @@ export function AdminFuncionarios() {
         name: formData.name,
         email: formData.email,
         role: formData.role,
-        is_active: formData.is_active,
+        is_active: formData.is_active ? 1 : 0,
       };
 
-      // Incluir senha apenas se foi fornecida
       if (formData.password && formData.password.trim().length > 0) {
-        if (formData.password.length < 8) {
-          setError("A senha deve ter pelo menos 8 caracteres.");
-          return;
-        }
         updatedEmployee.password = formData.password;
       }
 
@@ -121,14 +113,9 @@ export function AdminFuncionarios() {
       });
 
       setSuccessMessage("Funcionário atualizado com sucesso!");
-      setFormData({ name: "", email: "", password: "", role: "operator", is_active: true });
       setShowEditModal(false);
       setSelectedEmployee(null);
-
-      // Recarregar funcionários
-      const data = await apiFetch("/users");
-      setEmployees(data || []);
-
+      loadEmployees();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (editError) {
       setError(editError.message || "Erro ao atualizar funcionário.");
@@ -137,26 +124,17 @@ export function AdminFuncionarios() {
 
   // Deletar funcionário
   const handleDeleteEmployee = async (id) => {
-    if (!window.confirm("Tem certeza que deseja deletar este funcionário?")) {
-      return;
-    }
-
+    if (!window.confirm("Tem certeza que deseja deletar este funcionário?")) return;
     try {
       await apiFetch(`/users/${id}`, { method: "DELETE" });
-
       setSuccessMessage("Funcionário deletado com sucesso!");
-
-      // Recarregar funcionários
-      const data = await apiFetch("/users");
-      setEmployees(data || []);
-
+      loadEmployees();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (deleteError) {
       setError(deleteError.message || "Erro ao deletar funcionário.");
     }
   };
 
-  // Abrir modal de edição
   const openEditModal = (employee) => {
     setSelectedEmployee(employee);
     setFormData({
@@ -164,303 +142,107 @@ export function AdminFuncionarios() {
       email: employee.email,
       role: employee.role,
       is_active: Boolean(employee.is_active),
+      password: ""
     });
     setShowEditModal(true);
-  };
-
-  // Resetar formulário
-  const resetForm = () => {
-    setFormData({ name: "", email: "", password: "", role: "operator", is_active: true });
-    setError("");
-    setSuccessMessage("");
-  };
-
-  const getRoleLabel = (role) => {
-    return roles.find((r) => r.value === role)?.label || role;
-  };
-
-  const getRoleColor = (role) => {
-    return roles.find((r) => r.value === role)?.color || "#999";
   };
 
   return (
     <PageShell
       title="Gerenciamento de Funcionários"
-      subtitle="Cadastro, edição e controle de acesso de usuários"
-      actions={
-        <button
-          className="button"
-          onClick={() => {
-            resetForm();
-            setShowNewEmployeeModal(true);
-          }}
-        >
-          Novo Funcionário
-        </button>
-      }
+      subtitle="Cadastro e controle de acesso"
+      actions={<button className="button" onClick={() => { setFormData({ name: "", email: "", password: "", role: "operator", is_active: true }); setShowNewEmployeeModal(true); }}>Novo Funcionário</button>}
     >
       <div className="employees-container">
-        {/* Mensagens */}
         {error && <div className="error-message">{error}</div>}
-        {successMessage && (
-          <div className="success-message">{successMessage}</div>
-        )}
+        {successMessage && <div className="success-message">{successMessage}</div>}
 
-        {/* Filtro de Busca */}
-        <div className="search-section">
+        <div className="search-section" style={{ marginBottom: '20px' }}>
           <input
             type="text"
             placeholder="Buscar por nome ou email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
+            className="input"
+            style={{ width: '100%' }}
           />
         </div>
 
-        {/* Tabela de Funcionários */}
-        {loading ? (
-          <p className="loading">Carregando funcionários...</p>
-        ) : (
-          <div className="table-wrapper">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Email</th>
-                  <th>Cargo</th>
-                  <th>Status</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.length > 0 ? (
-                  filteredEmployees.map((employee) => (
-                    <tr key={employee.id}>
-                      <td>{employee.name}</td>
-                      <td>{employee.email}</td>
-                      <td>
-                        <span
-                          className="role-badge"
-                          style={{
-                            backgroundColor: getRoleColor(employee.role),
-                          }}
-                        >
-                          {getRoleLabel(employee.role)}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className={`status-badge ${employee.is_active ? "active" : "inactive"}`}
-                        >
-                          {employee.is_active ? "Ativo" : "Inativo"}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          <button
-                            className="btn-edit"
-                            onClick={() => openEditModal(employee)}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            className="btn-delete"
-                            onClick={() => handleDeleteEmployee(employee.id)}
-                          >
-                            Deletar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="5" className="no-data">
-                      Nenhum funcionário encontrado.
+        <div className="table-wrapper">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Email</th>
+                <th>Cargo</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="5" className="loading">Carregando...</td></tr>
+              ) : filteredEmployees.length > 0 ? (
+                filteredEmployees.map((employee) => (
+                  <tr key={employee.id}>
+                    <td><strong>{employee.name}</strong></td>
+                    <td>{employee.email}</td>
+                    <td><span className="user-role-badge">{employee.role}</span></td>
+                    <td>
+                      <span className={`status ${employee.is_active ? "ok" : "critical"}`}>
+                        {employee.is_active ? "Ativo" : "Inativo"}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn-action" onClick={() => openEditModal(employee)}>Editar</button>
+                        <button className="btn-action" style={{ background: 'var(--accent-danger)' }} onClick={() => handleDeleteEmployee(employee.id)}>Deletar</button>
+                      </div>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              ) : (
+                <tr><td colSpan="5" className="no-data">Nenhum funcionário encontrado.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Modal: Novo Funcionário */}
-      {showNewEmployeeModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => setShowNewEmployeeModal(false)}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Novo Funcionário</h2>
-
+      {(showNewEmployeeModal || showEditModal) && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>{showEditModal ? "Editar Funcionário" : "Novo Funcionário"}</h2>
             <div className="form-group">
-              <label>Nome Completo *</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="Digite o nome completo"
-              />
+              <label>Nome Completo</label>
+              <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input" />
             </div>
-
             <div className="form-group">
-              <label>Email *</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                placeholder="Digite o email"
-              />
+              <label>Email</label>
+              <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="input" />
             </div>
-
             <div className="form-group">
-              <label>Senha *</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                placeholder="Digite a senha (mín. 8 caracteres)"
-              />
+              <label>Senha {showEditModal && "(deixe em branco para manter)"}</label>
+              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="input" />
             </div>
-
             <div className="form-row">
               <div className="form-group">
-                <label>Cargo *</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) =>
-                    setFormData({ ...formData, role: e.target.value })
-                  }
-                >
-                  {roles.map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
+                <label>Cargo</label>
+                <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="input">
+                  {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
-
               <div className="form-group">
-                <label>Status *</label>
-                <select
-                  value={formData.is_active ? "active" : "inactive"}
-                  onChange={(e) =>
-                    setFormData({ ...formData, is_active: e.target.value === "active" })
-                  }
-                >
+                <label>Status</label>
+                <select value={formData.is_active ? "active" : "inactive"} onChange={e => setFormData({...formData, is_active: e.target.value === "active"})} className="input">
                   <option value="active">Ativo</option>
                   <option value="inactive">Inativo</option>
                 </select>
               </div>
             </div>
-
             <div className="modal-actions">
-              <button className="btn-primary" onClick={handleCreateEmployee}>
-                Criar Funcionário
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => setShowNewEmployeeModal(false)}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Editar Funcionário */}
-      {showEditModal && selectedEmployee && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Editar Funcionário</h2>
-            <p className="modal-subtitle">ID: {selectedEmployee.id}</p>
-
-            <div className="form-group">
-              <label>Nome Completo *</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="Digite o nome completo"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Email *</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                placeholder="Digite o email"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Senha (deixe em branco para manter a atual)</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                placeholder="Digite a senha (mín. 8 caracteres)"
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Cargo *</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) =>
-                    setFormData({ ...formData, role: e.target.value })
-                  }
-                >
-                  {roles.map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Status *</label>
-                <select
-                  value={formData.is_active ? "active" : "inactive"}
-                  onChange={(e) =>
-                    setFormData({ ...formData, is_active: e.target.value === "active" })
-                  }
-                >
-                  <option value="active">Ativo</option>
-                  <option value="inactive">Inativo</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn-primary" onClick={handleEditEmployee}>
-                Atualizar Funcionário
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => setShowEditModal(false)}
-              >
-                Cancelar
-              </button>
+              <button className="btn-primary" onClick={showEditModal ? handleEditEmployee : handleCreateEmployee}>Salvar</button>
+              <button className="btn-secondary" onClick={() => { setShowNewEmployeeModal(false); setShowEditModal(false); }}>Cancelar</button>
             </div>
           </div>
         </div>

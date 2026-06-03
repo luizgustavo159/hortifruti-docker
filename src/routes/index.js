@@ -242,10 +242,47 @@ router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT * FR
 router.get("/suppliers", authenticateToken, (req, res) => { db.all("SELECT * FROM suppliers", [], (err, rows) => res.json(rows)); });
 
 // --- USUÁRIOS ---
-router.get("/users", authenticateToken, requireRole("admin"), (req, res) => {
-  db.all("SELECT id, name, email, role, is_active, phone, permissions, created_at FROM users WHERE deleted_at IS NULL", [], (err, rows) => {
+router.get("/users", authenticateToken, (req, res) => {
+  db.all("SELECT id, name, email, role, is_active, phone, permissions, created_at FROM users WHERE is_active = 1", [], (err, rows) => {
     if (err) return res.status(500).json({ message: "Erro ao buscar usuários." });
     res.json(rows);
+  });
+});
+
+router.post("/users", authenticateToken, requireRole("admin"), async (req, res) => {
+  const { name, email, password, role, is_active } = req.body;
+  const bcrypt = require("bcryptjs");
+  const password_hash = await bcrypt.hash(password, 10);
+  db.get("INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?) RETURNING id",
+    [name, email, password_hash, role, is_active ? 1 : 0], (err, row) => {
+      if (err) return res.status(400).json({ message: "Erro ao criar usuário: " + err.message });
+      res.status(201).json(row);
+    });
+});
+
+router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, res) => {
+  const { name, email, password, role, is_active } = req.body;
+  if (password) {
+    const bcrypt = require("bcryptjs");
+    const password_hash = await bcrypt.hash(password, 10);
+    db.run("UPDATE users SET name=?, email=?, password_hash=?, role=?, is_active=? WHERE id=?",
+      [name, email, password_hash, role, is_active ? 1 : 0, req.params.id], (err) => {
+        if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
+        res.json({ status: "ok" });
+      });
+  } else {
+    db.run("UPDATE users SET name=?, email=?, role=?, is_active=? WHERE id=?",
+      [name, email, role, is_active ? 1 : 0, req.params.id], (err) => {
+        if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
+        res.json({ status: "ok" });
+      });
+  }
+});
+
+router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) => {
+  db.run("UPDATE users SET is_active = 0 WHERE id = ?", [req.params.id], (err) => {
+    if (err) return res.status(500).json({ message: "Erro ao desativar usuário." });
+    res.json({ status: "ok" });
   });
 });
 

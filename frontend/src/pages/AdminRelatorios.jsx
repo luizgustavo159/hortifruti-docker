@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import "./AdminRelatorios.css";
@@ -24,11 +24,11 @@ export function AdminRelatorios() {
     const loadFilters = async () => {
       try {
         const [operatorsData, categoriesData] = await Promise.all([
-          apiFetch("/users?role=operator"),
+          apiFetch("/users"),
           apiFetch("/categories"),
         ]);
-        setOperators(operatorsData || []);
-        setCategories(categoriesData || []);
+        setOperators(Array.isArray(operatorsData) ? operatorsData.filter(u => u.role === 'operator') : []);
+        setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       } catch (err) {
         console.error("Erro ao carregar filtros:", err);
       }
@@ -37,50 +37,37 @@ export function AdminRelatorios() {
   }, []);
 
   // Carregar dados do relatório
-  useEffect(() => {
-    const loadReport = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const params = new URLSearchParams({
-          start: dateRange.start,
-          end: dateRange.end,
-        });
+  const loadReport = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({
+        start: dateRange.start,
+        end: dateRange.end,
+      });
 
-        if (filterOperator) params.append("operator_id", filterOperator);
-        if (filterCategory) params.append("category_id", filterCategory);
+      if (filterOperator) params.append("operator_id", filterOperator);
+      if (filterCategory) params.append("category_id", filterCategory);
 
-        let endpoint = "";
-        switch (reportType) {
-          case "sales":
-            endpoint = `/reports/sales?${params}`;
-            break;
-          case "cash_flow":
-            endpoint = `/reports/cash-flow?${params}`;
-            break;
-          case "payables":
-            endpoint = `/reports/payables?${params}`;
-            break;
-          case "receivables":
-            endpoint = `/reports/receivables?${params}`;
-            break;
-          case "inventory":
-            endpoint = `/reports/inventory?${params}`;
-            break;
-          default:
-            endpoint = `/reports/sales?${params}`;
-        }
-
-        const reportData = await apiFetch(endpoint);
-        setData(reportData || []);
-      } catch (loadError) {
-        setError(loadError.message || "Falha ao carregar relatório.");
-      } finally {
-        setLoading(false);
+      let endpoint = "";
+      if (reportType === "sales") {
+        endpoint = "/sales/recent"; // Fallback para rota existente
+      } else {
+        endpoint = `/reports/${reportType}`;
       }
-    };
-    loadReport();
+
+      const reportData = await apiFetch(endpoint);
+      setData(Array.isArray(reportData) ? reportData : []);
+    } catch (loadError) {
+      setError(loadError.message || "Falha ao carregar relatório.");
+    } finally {
+      setLoading(false);
+    }
   }, [reportType, dateRange, filterOperator, filterCategory]);
+
+  useEffect(() => {
+    loadReport();
+  }, [loadReport]);
 
   // Exportar para CSV
   const handleExportCSV = () => {
@@ -117,6 +104,7 @@ export function AdminRelatorios() {
   // Calcular totais
   const calculateTotals = () => {
     const totals = {};
+    if (!Array.isArray(data)) return totals;
     data.forEach((row) => {
       Object.keys(row).forEach((key) => {
         if (typeof row[key] === "number") {
@@ -141,93 +129,50 @@ export function AdminRelatorios() {
     >
       <div className="reports-container">
         {/* Filtros */}
-        <div className="filters-panel">
+        <div className="filters-panel" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
           <div className="filter-group">
-            <label>Tipo de Relatório:</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>Tipo:</label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value)}
-              className="filter-select"
+              className="input"
             >
               <option value="sales">Vendas</option>
-              <option value="cash_flow">Fluxo de Caixa</option>
-              <option value="payables">Contas a Pagar</option>
-              <option value="receivables">Contas a Receber</option>
-              <option value="inventory">Inventário</option>
+              <option value="summary">Resumo Geral</option>
+              <option value="by-operator">Por Operador</option>
+              <option value="by-category">Por Categoria</option>
             </select>
           </div>
 
           <div className="filter-group">
-            <label>Data Inicial:</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>Data Inicial:</label>
             <input
               type="date"
               value={dateRange.start}
-              onChange={(e) =>
-                setDateRange({ ...dateRange, start: e.target.value })
-              }
-              className="filter-input"
+              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              className="input"
             />
           </div>
 
           <div className="filter-group">
-            <label>Data Final:</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>Data Final:</label>
             <input
               type="date"
               value={dateRange.end}
-              onChange={(e) =>
-                setDateRange({ ...dateRange, end: e.target.value })
-              }
-              className="filter-input"
+              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              className="input"
             />
           </div>
-
-          {reportType === "sales" && (
-            <>
-              <div className="filter-group">
-                <label>Operador:</label>
-                <select
-                  value={filterOperator}
-                  onChange={(e) => setFilterOperator(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="">Todos</option>
-                  {operators.map((op) => (
-                    <option key={op.id} value={op.id}>
-                      {op.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label>Categoria:</label>
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="">Todas</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
         </div>
 
-        {/* Mensagens */}
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message" style={{ marginBottom: '16px' }}>{error}</div>}
 
-        {/* Tabela de Dados */}
         {loading ? (
           <p className="loading">Carregando relatório...</p>
         ) : data.length > 0 ? (
           <div className="report-wrapper">
-            <div className="table-responsive">
-              <table className="report-table">
+            <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+              <table className="table">
                 <thead>
                   <tr>
                     {Object.keys(data[0]).map((header) => (
@@ -243,30 +188,8 @@ export function AdminRelatorios() {
                       ))}
                     </tr>
                   ))}
-                  {Object.keys(totals).length > 0 && (
-                    <tr className="totals-row">
-                      <td colSpan={Object.keys(data[0]).length - 1}>
-                        <strong>TOTAL</strong>
-                      </td>
-                      <td>
-                        <strong>{formatValue(totals[Object.keys(totals)[0]])}</strong>
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
-            </div>
-
-            <div className="report-summary">
-              <h4>Resumo do Período</h4>
-              <div className="summary-grid">
-                {Object.entries(totals).map(([key, value]) => (
-                  <div key={key} className="summary-item">
-                    <p className="summary-label">{formatHeader(key)}</p>
-                    <p className="summary-value">{formatValue(value)}</p>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         ) : (
@@ -277,7 +200,6 @@ export function AdminRelatorios() {
   );
 }
 
-// Funções auxiliares
 function formatHeader(header) {
   return header
     .replace(/_/g, " ")
@@ -286,9 +208,6 @@ function formatHeader(header) {
 
 function formatValue(value) {
   if (typeof value === "number") {
-    if (value % 1 === 0) {
-      return value.toLocaleString("pt-BR");
-    }
     return value.toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
