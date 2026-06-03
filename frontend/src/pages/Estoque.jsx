@@ -758,6 +758,19 @@ export function Estoque() {
                 <option value="loss">Perda / Descarte</option>
               </select>
             </div>
+            {movement.type === "adjust" && (
+              <div className="form-group">
+                <label>Custo Unitário (R$) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={movement.unit_cost || ''}
+                  onChange={e => setMovement({...movement, unit_cost: e.target.value})}
+                  placeholder="Quanto você pagou por unidade?"
+                />
+                <small style={{ color: '#64748b' }}>Usado para calcular o custo médio e preço sugerido.</small>
+              </div>
+            )}
             <div className="form-group">
               <label>Quantidade {selectedProduct.unit_type === 'kg' ? '(kg) *' : '*'}</label>
               <input
