@@ -1,12 +1,12 @@
-import { z } from 'zod';
+const { z } = require('zod');
 
 // ============ AUTH SCHEMAS ============
-export const loginSchema = z.object({
+const loginSchema = z.object({
   email: z.string().email('Email inválido').toLowerCase(),
   password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
 });
 
-export const registerSchema = z.object({
+const registerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   email: z.string().email('Email inválido').toLowerCase(),
   password: z.string()
@@ -17,12 +17,12 @@ export const registerSchema = z.object({
   role: z.enum(['operator', 'supervisor', 'manager', 'admin']).default('operator'),
 });
 
-export const refreshTokenSchema = z.object({
+const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token é obrigatório'),
 });
 
 // ============ PRODUCT SCHEMAS ============
-export const productSchema = z.object({
+const productSchema = z.object({
   name: z.string().min(1, 'Nome do produto é obrigatório').max(100),
   description: z.string().optional().default(''),
   price: z.number().positive('Preço deve ser positivo'),
@@ -35,17 +35,17 @@ export const productSchema = z.object({
   unit: z.enum(['kg', 'un', 'l', 'g', 'ml']).default('un'),
 });
 
-export const productUpdateSchema = productSchema.partial();
+const productUpdateSchema = productSchema.partial();
 
 // ============ SALE SCHEMAS ============
-export const saleItemSchema = z.object({
+const saleItemSchema = z.object({
   product_id: z.number().positive('ID do produto é obrigatório'),
   quantity: z.number().positive('Quantidade deve ser positiva'),
   price: z.number().positive('Preço deve ser positivo'),
   discount_id: z.number().positive().optional().nullable(),
 });
 
-export const saleSchema = z.object({
+const saleSchema = z.object({
   items: z.array(saleItemSchema).min(1, 'Venda deve ter no mínimo 1 item'),
   payment_method: z.enum(['cash', 'credit', 'debit', 'pix']),
   discount_amount: z.number().min(0).default(0),
@@ -53,7 +53,7 @@ export const saleSchema = z.object({
 });
 
 // ============ DISCOUNT SCHEMAS ============
-export const discountSchema = z.object({
+const discountSchema = z.object({
   name: z.string().min(1, 'Nome do desconto é obrigatório').max(100),
   type: z.enum(['percentage', 'fixed', 'combo']),
   value: z.number().positive('Valor deve ser positivo'),
@@ -63,10 +63,10 @@ export const discountSchema = z.object({
   max_uses: z.number().int().positive().optional(),
 });
 
-export const discountUpdateSchema = discountSchema.partial();
+const discountUpdateSchema = discountSchema.partial();
 
 // ============ USER SCHEMAS ============
-export const userSchema = z.object({
+const userSchema = z.object({
   name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   email: z.string().email('Email inválido').toLowerCase(),
   password: z.string()
@@ -77,7 +77,7 @@ export const userSchema = z.object({
   active: z.boolean().default(true),
 });
 
-export const userUpdateSchema = z.object({
+const userUpdateSchema = z.object({
   name: z.string().min(3).max(100).optional(),
   email: z.string().email().toLowerCase().optional(),
   role: z.enum(['operator', 'supervisor', 'manager', 'admin']).optional(),
@@ -85,7 +85,7 @@ export const userUpdateSchema = z.object({
 });
 
 // ============ PAGINATION SCHEMAS ============
-export const paginationSchema = z.object({
+const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   sort: z.string().optional(),
@@ -93,7 +93,7 @@ export const paginationSchema = z.object({
 });
 
 // ============ CASH MOVEMENT SCHEMAS ============
-export const cashMovementSchema = z.object({
+const cashMovementSchema = z.object({
   type: z.enum(['opening', 'closing', 'withdrawal', 'deposit']),
   amount: z.number().positive('Valor deve ser positivo'),
   description: z.string().optional().default(''),
@@ -101,7 +101,7 @@ export const cashMovementSchema = z.object({
 });
 
 // ============ STOCK MOVEMENT SCHEMAS ============
-export const stockMovementSchema = z.object({
+const stockMovementSchema = z.object({
   product_id: z.number().positive('ID do produto é obrigatório'),
   type: z.enum(['adjustment', 'loss', 'transfer', 'return']),
   quantity: z.number().int().positive('Quantidade deve ser positiva'),
@@ -110,16 +110,16 @@ export const stockMovementSchema = z.object({
 });
 
 // ============ CATEGORY SCHEMAS ============
-export const categorySchema = z.object({
+const categorySchema = z.object({
   name: z.string().min(1, 'Nome da categoria é obrigatório').max(100),
   description: z.string().optional().default(''),
   active: z.boolean().default(true),
 });
 
-export const categoryUpdateSchema = categorySchema.partial();
+const categoryUpdateSchema = categorySchema.partial();
 
 // ============ VALIDATION HELPER ============
-export const validate = (schema) => {
+const validate = (schema) => {
   return (req, res, next) => {
     try {
       const validated = schema.parse(req.body);
@@ -140,7 +140,7 @@ export const validate = (schema) => {
   };
 };
 
-export const validateQuery = (schema) => {
+const validateQuery = (schema) => {
   return (req, res, next) => {
     try {
       const validated = schema.parse(req.query);
@@ -159,4 +159,25 @@ export const validateQuery = (schema) => {
       next(error);
     }
   };
+};
+
+module.exports = {
+  loginSchema,
+  registerSchema,
+  refreshTokenSchema,
+  productSchema,
+  productUpdateSchema,
+  saleItemSchema,
+  saleSchema,
+  discountSchema,
+  discountUpdateSchema,
+  userSchema,
+  userUpdateSchema,
+  paginationSchema,
+  cashMovementSchema,
+  stockMovementSchema,
+  categorySchema,
+  categoryUpdateSchema,
+  validate,
+  validateQuery
 };

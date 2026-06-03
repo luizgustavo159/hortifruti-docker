@@ -9,6 +9,7 @@ const {
   verifyRefreshToken,
   addToBlacklist
 } = require("../middleware/tokenManagement");
+const { loginSchema, validate } = require("../validators/schemas");
 
 const router = express.Router();
 const { JWT_SECRET } = config;
@@ -17,12 +18,8 @@ const { JWT_SECRET } = config;
  * @route POST /api/auth/login
  * @desc Autenticar usuário e retornar tokens
  */
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email e senha são obrigatórios." });
-  }
+router.post("/login", validate(loginSchema), async (req, res) => {
+  const { email, password } = req.validated;
 
   try {
     db.get("SELECT * FROM users WHERE email = ? AND is_active = 1", [email], async (err, user) => {
