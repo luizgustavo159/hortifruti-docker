@@ -444,6 +444,22 @@ router.get("/reports/summary", authenticateToken, requireSupervisor, (req, res) 
   });
 });
 
+
+// Atualizar margem de lucro de um produto específico
+router.put("/products/:id/margin", authenticateToken, requireSupervisor, (req, res) => {
+  const { margin } = req.body;
+  if (margin === undefined) return res.status(400).json({ message: "Margem não informada." });
+  
+  db.run(
+    "UPDATE products SET product_profit_margin = ?, price_manually_adjusted = 1 WHERE id = ?",
+    [margin, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ message: "Erro ao atualizar margem." });
+      res.json({ status: "ok" });
+    }
+  );
+});
+
 // --- CONFIGURAÇÕES E USUÁRIOS ---
 
 router.get("/settings", authenticateToken, requireAdmin, (req, res) => {
@@ -487,4 +503,4 @@ router.post("/approvals", (req, res) => {
 
 router.get("/health", (req, res) => res.json({ status: "ok" }));
 
-module.exports = { router, ALERT_SLOW_THRESHOLD_MS, METRICS_ENABLED };
+module.exports = { router };
