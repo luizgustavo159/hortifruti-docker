@@ -320,9 +320,9 @@ router.get("/products", authenticateToken, (req, res) => {
 router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
   const p = req.body;
   db.get(`
-    INSERT INTO products (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at, product_profit_margin, avg_cost, last_cost)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
-  `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at, p.product_profit_margin, p.avg_cost || 0, p.avg_cost || 0], (err, row) => {
+    INSERT INTO products (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at, product_profit_margin, avg_cost, last_cost, expiry_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+  `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at, p.product_profit_margin, p.avg_cost || 0, p.avg_cost || 0, p.expiry_date], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar produto." });
     logAudit({ action: "produto_criado", details: { name: p.name, price: p.price }, performedBy: req.user.id, type: "stock" });
     res.status(201).json({ id: row.id });
@@ -330,6 +330,10 @@ router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
 });
 
 // --- ESTOQUE ---
+
+router.get("/stock/expiring", authenticateToken, (req, res) => {
+    db.all("SELECT * FROM v_expiring_products", [], (err, rows) => res.json(rows));
+});
 
 router.post("/stock/loss", authenticateToken, (req, res) => {
   const { product_id, quantity, reason } = req.body;
@@ -424,6 +428,19 @@ router.post("/pos/cash-session/open", authenticateToken, (req, res) => {
       res.status(201).json(row);
     });
   });
+});
+
+router.post("/pos/cash-movement", authenticateToken, (req, res) => {
+    const { session_id, type, amount, reason } = req.body;
+    db.run(
+        "INSERT INTO cash_movements (session_id, type, amount, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+        [session_id, type, amount, reason, req.user.id],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Erro ao registrar movimentação de caixa." });
+            logAudit({ action: type === 'in' ? 'suprimento_caixa' : 'sangria_caixa', details: { amount, reason }, performedBy: req.user.id, type: "system" });
+            res.json({ status: "ok" });
+        }
+    );
 });
 
 router.post("/sales", authenticateToken, (req, res) => {
