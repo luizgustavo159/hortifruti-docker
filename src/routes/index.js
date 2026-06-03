@@ -91,10 +91,10 @@ const buildDocumentNumber = (saleId) => {
   return `PDV-${date}-${String(saleId).padStart(6, "0")}`;
 };
 
-const logAudit = ({ action, details, performedBy, approvedBy }) => {
+const logAudit = ({ action, details, performedBy, approvedBy, type = "system", level = "info" }) => {
   db.run(
-    "INSERT INTO audit_logs (action, details, performed_by, approved_by) VALUES (?, ?, ?, ?)",
-    [action, details ? JSON.stringify(details) : null, performedBy, approvedBy]
+    "INSERT INTO audit_logs (action, details, performed_by, approved_by, type, level) VALUES (?, ?, ?, ?, ?, ?)",
+    [action, details ? JSON.stringify(details) : null, performedBy, approvedBy, type, level]
   );
 };
 
@@ -148,7 +148,7 @@ const buildDateFilter = (field, range) => {
     params.push(range.end);
   }
   return {
-    clause: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    clause: conditions.length ? conditions.join(" AND ") : "1=1",
     params,
   };
 };
@@ -225,6 +225,7 @@ router.post("/auth/login", (req, res) => {
 
     db.run("DELETE FROM login_attempts WHERE email = ?", [email]);
     db.run("INSERT INTO sessions (user_id, token) VALUES (?, ?)", [user.id, accessToken], () => {
+      logAudit({ action: "login_sucesso", details: { email: user.email }, performedBy: user.id, type: "auth" });
       res.json({
         accessToken,
         refreshToken,
@@ -254,6 +255,7 @@ router.post("/categories", authenticateToken, requireManager, (req, res) => {
   const { name, description = "", target_margin = 30 } = req.body;
   db.get("INSERT INTO categories (name, description, target_margin) VALUES (?, ?, ?) RETURNING id", [name, description, target_margin], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar categoria." });
+    logAudit({ action: "categoria_criada", details: { name }, performedBy: req.user.id, type: "stock" });
     res.status(201).json({ id: row.id });
   });
 });
@@ -283,6 +285,7 @@ router.post("/suppliers", authenticateToken, requireSupervisor, (req, res) => {
   const { name, contact = "", phone = "", email = "" } = req.body;
   db.get("INSERT INTO suppliers (name, contact, phone, email) VALUES (?, ?, ?, ?) RETURNING id", [name, contact, phone, email], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar fornecedor." });
+    logAudit({ action: "fornecedor_cadastrado", details: { name }, performedBy: req.user.id, type: "stock" });
     res.status(201).json({ id: row.id });
   });
 });
@@ -321,6 +324,7 @@ router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
   `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at, p.product_profit_margin, p.avg_cost || 0, p.avg_cost || 0], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar produto." });
+    logAudit({ action: "produto_criado", details: { name: p.name, price: p.price }, performedBy: req.user.id, type: "stock" });
     res.status(201).json({ id: row.id });
   });
 });
@@ -330,14 +334,19 @@ router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
 router.post("/stock/loss", authenticateToken, (req, res) => {
   const { product_id, quantity, reason } = req.body;
   runWithTransaction((tx, finish) => {
-    tx.get("SELECT current_stock, avg_cost FROM products WHERE id = ?", [product_id], (err, p) => {
+    tx.get("SELECT current_stock, avg_cost, name FROM products WHERE id = ?", [product_id], (err, p) => {
       if (!p || p.current_stock < quantity) return finish({ status: 400, message: "Estoque insuficiente." });
       tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [quantity, product_id], (err) => {
         if (err) return finish(err);
         tx.run("INSERT INTO stock_losses (product_id, quantity, reason, reported_by) VALUES (?, ?, ?, ?)", [product_id, quantity, reason, req.user.id], (err2) => {
             if (err2) return finish(err2);
             tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, 'loss', ?, ?, ?, ?)", 
-                [product_id, -quantity, reason, req.user.id, p.avg_cost || 0], finish);
+                [product_id, -quantity, reason, req.user.id, p.avg_cost || 0], (err3) => {
+                  if (!err3) {
+                    logAudit({ action: "perda_estoque", details: { product: p.name, quantity, reason }, performedBy: req.user.id, type: "stock", level: "warning" });
+                  }
+                  finish(err3);
+                });
         });
       });
     });
@@ -367,7 +376,12 @@ router.post("/stock/adjust", authenticateToken, requireSupervisor, (req, res) =>
                 tx.run(
                     "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, 'adjust', ?, ?, ?, ?)",
                     [product_id, delta, reason, req.user.id, unit_cost || (delta < 0 ? p.avg_cost : 0)],
-                    finish
+                    (err3) => {
+                      if (!err3) {
+                        logAudit({ action: "ajuste_estoque", details: { product: p.name, delta, reason }, performedBy: req.user.id, type: "stock" });
+                      }
+                      finish(err3);
+                    }
                 );
             }
         );
@@ -379,11 +393,12 @@ router.post("/stock/move", authenticateToken, requireSupervisor, (req, res) => {
   const { product_id, quantity, type, reason } = req.body;
   const delta = type === "inbound" ? quantity : -quantity;
   
-  db.get("SELECT avg_cost FROM products WHERE id = ?", [product_id], (err, p) => {
+  db.get("SELECT avg_cost, name FROM products WHERE id = ?", [product_id], (err, p) => {
       db.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id], (err) => {
         if (err) return res.status(400).json({ message: "Erro ao mover estoque." });
         db.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, ?, ?, ?, ?, ?)", 
             [product_id, type, delta, reason, req.user.id, p?.avg_cost || 0]);
+        logAudit({ action: "movimentacao_estoque", details: { product: p.name, type, quantity }, performedBy: req.user.id, type: "stock" });
         res.json({ status: "ok" });
       });
   });
@@ -405,6 +420,7 @@ router.post("/pos/cash-session/open", authenticateToken, (req, res) => {
     if (err) return res.status(err.status).json({ message: err.message });
     db.get("INSERT INTO cash_sessions (operator_id, opening_amount, expected_amount, notes) VALUES (?, ?, ?, ?) RETURNING id", [req.user.id, opening_amount, opening_amount, notes], (err, row) => {
       if (err) return res.status(500).json({ message: "Erro ao abrir caixa." });
+      logAudit({ action: "caixa_aberto", details: { amount: opening_amount }, performedBy: req.user.id, type: "system" });
       res.status(201).json(row);
     });
   });
@@ -426,7 +442,7 @@ router.post("/sales", authenticateToken, (req, res) => {
       }
 
       const item = items[index];
-      tx.get("SELECT price, current_stock, avg_cost FROM products WHERE id = ?", [item.product_id], (err, product) => {
+      tx.get("SELECT price, current_stock, avg_cost, name FROM products WHERE id = ?", [item.product_id], (err, product) => {
         if (err || !product) return finish(err || new Error("Produto não encontrado"));
         
         const total = Number(product.price) * Number(item.quantity);
@@ -445,6 +461,8 @@ router.post("/sales", authenticateToken, (req, res) => {
             
             tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, 'sale', ?, 'Venda PDV', ?, ?)",
                 [item.product_id, -item.quantity, req.user.id, product.avg_cost || 0]);
+
+            logAudit({ action: "venda_realizada", details: { product: product.name, quantity: item.quantity, total: finalTotal }, performedBy: req.user.id, type: "sale" });
 
             saleItems.push({ id: row.id, document_number: docNum });
             processItem(index + 1);
@@ -474,7 +492,7 @@ router.get("/reports/summary", authenticateToken, requireSupervisor, (req, res) 
       COALESCE(SUM(s.final_total - (s.quantity * p.avg_cost)), 0) as real_profit
     FROM sales s
     JOIN products p ON s.product_id = p.id
-    ${filter.clause}
+    WHERE ${filter.clause}
   `;
   
   db.get(sql, filter.params, (err, row) => {
@@ -488,6 +506,45 @@ router.get("/reports/summary", authenticateToken, requireSupervisor, (req, res) 
         low_stock: lowStock || [] 
       });
     });
+  });
+});
+
+router.get("/reports/by-operator", authenticateToken, requireSupervisor, (req, res) => {
+  const range = parseDateRange(req, res);
+  if (!range) return;
+  const filter = buildDateFilter("s.created_at", range);
+  
+  const sql = `
+    SELECT u.name, SUM(s.final_total) as total_sales, SUM(s.quantity) as total_items
+    FROM sales s
+    JOIN users u ON s.sold_by = u.id
+    WHERE ${filter.clause}
+    GROUP BY u.id
+  `;
+  
+  db.all(sql, filter.params, (err, rows) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar vendas por operador." });
+    res.json(rows);
+  });
+});
+
+router.get("/reports/by-category", authenticateToken, requireSupervisor, (req, res) => {
+  const range = parseDateRange(req, res);
+  if (!range) return;
+  const filter = buildDateFilter("s.created_at", range);
+  
+  const sql = `
+    SELECT c.name as category, SUM(s.final_total) as total_sales, SUM(s.quantity) as total_items
+    FROM sales s
+    JOIN products p ON s.product_id = p.id
+    JOIN categories c ON p.category_id = c.id
+    WHERE ${filter.clause}
+    GROUP BY c.id
+  `;
+  
+  db.all(sql, filter.params, (err, rows) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar vendas por categoria." });
+    res.json(rows);
   });
 });
 
@@ -538,15 +595,46 @@ router.delete("/discounts/:id", authenticateToken, requireManager, (req, res) =>
 
 // --- LOGS DE AUDITORIA ---
 router.get("/logs", authenticateToken, requireAdmin, (req, res) => {
-  const { limit = 100, offset = 0 } = req.query;
-  db.all(
-    "SELECT l.*, u.name as user_name FROM audit_logs l LEFT JOIN users u ON l.performed_by = u.id ORDER BY l.created_at DESC LIMIT ? OFFSET ?",
-    [limit, offset],
-    (err, rows) => {
-      if (err) return res.status(500).json({ message: "Erro ao buscar logs." });
-      res.json(rows);
-    }
-  );
+  const { limit = 100, offset = 0, type, level, start, end } = req.query;
+  
+  let conditions = ["1=1"];
+  let params = [];
+  
+  if (type && type !== "all") {
+    conditions.push("l.type = ?");
+    params.push(type);
+  }
+  
+  if (level && level !== "all") {
+    conditions.push("l.level = ?");
+    params.push(level);
+  }
+  
+  if (start) {
+    conditions.push("CAST(l.created_at AS DATE) >= ?");
+    params.push(start);
+  }
+  
+  if (end) {
+    conditions.push("CAST(l.created_at AS DATE) <= ?");
+    params.push(end);
+  }
+
+  const sql = `
+    SELECT l.*, u.name as user_name 
+    FROM audit_logs l 
+    LEFT JOIN users u ON l.performed_by = u.id 
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY l.created_at DESC 
+    LIMIT ? OFFSET ?
+  `;
+  
+  params.push(Number(limit), Number(offset));
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar logs." });
+    res.json(rows);
+  });
 });
 
 // --- CONFIGURAÇÕES E USUÁRIOS ---
