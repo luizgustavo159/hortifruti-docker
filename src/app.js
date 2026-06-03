@@ -130,8 +130,9 @@ const limiter = rateLimit({
 
 app.use("/api", limiter);
 app.use(checkBlacklist);
-app.use("/api", router);
-app.use("/api", (req, res) => {
+app.use("/api", router); // Rota principal da API
+// Removendo 404 genérico para depuração
+app.use("/api-debug", (req, res) => {
   res.status(404).json({ message: "Rota de API não encontrada." });
 });
 app.get("*", (req, res, next) => {
