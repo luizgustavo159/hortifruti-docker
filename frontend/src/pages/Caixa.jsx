@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
@@ -16,12 +16,11 @@ export function Caixa() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [processingPayment, setProcessingPayment] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  const [selectedDiscount, setSelectedDiscount] = useState(null);
   const [discounts, setDiscounts] = useState([]);
   const [manualDiscount, setManualDiscount] = useState("");
-  const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
   const [tempApprovalToken, setTempApprovalToken] = useState(null);
   const [amountReceived, setAmountReceived] = useState("");
+  const [lastSale, setLastSale] = useState(null);
 
   // Estado do Caixa
   const [caixaAberto, setCaixaAberto] = useState(false);
@@ -32,36 +31,28 @@ export function Caixa() {
 
   // Balança
   const scale = useScale();
-  const [scaleModalProduct, setScaleModalProduct] = useState(null); // produto aguardando peso
-  const [manualWeight, setManualWeight] = useState("");              // peso digitado manualmente
+  const [scaleModalProduct, setScaleModalProduct] = useState(null); 
+  const [manualWeight, setManualWeight] = useState("");              
 
-  // Carregar produtos, descontos e status do caixa ao montar o componente
+  // Ref para o leitor de código de barras
+  const barcodeBuffer = useRef("");
+  const lastKeyTime = useRef(0);
+
+  // Carregar dados
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError("");
       try {
         const currentCaixa = await apiFetch("/pos/cash-session/current");
-        if (currentCaixa) {
-          setCaixaAberto(true);
-        } else {
-          setCaixaAberto(false);
-        }
+        setCaixaAberto(!!currentCaixa);
 
-        const promises = [apiFetch("/products")];
-        promises.push(apiFetch("/discounts"));
-
-        const results = await Promise.allSettled(promises);
-
-        if (results[0].status === "fulfilled") {
-          setProducts(results[0].value || []);
-        } else {
-          throw new Error(results[0].reason?.message || "Falha ao carregar produtos.");
-        }
-
-        if (results[1]?.status === "fulfilled") {
-          setDiscounts(results[1].value || []);
-        }
+        const [prods, discs] = await Promise.all([
+          apiFetch("/products"),
+          apiFetch("/discounts")
+        ]);
+        setProducts(prods || []);
+        setDiscounts(discs || []);
       } catch (loadError) {
         setError(loadError.message || "Falha ao carregar dados.");
       } finally {
@@ -71,15 +62,55 @@ export function Caixa() {
     loadData();
   }, []);
 
-  // Filtrar produtos pela busca
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Listener para o leitor de código de barras
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignora se o foco estiver em um input de texto (exceto a busca principal)
+      if (
+        (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") &&
+        e.target.type !== "search" && !e.target.classList.contains("barcode-friendly")
+      ) {
+        return;
+      }
 
-  // Detecta se produto é vendido por peso
+      const currentTime = Date.now();
+      
+      // Se o tempo entre as teclas for muito curto (< 50ms), é um leitor de código de barras
+      if (currentTime - lastKeyTime.current > 50) {
+        barcodeBuffer.current = "";
+      }
+
+      if (e.key === "Enter") {
+        if (barcodeBuffer.current.length > 2) {
+          const code = barcodeBuffer.current;
+          barcodeBuffer.current = "";
+          handleBarcodeScanned(code);
+        }
+      } else if (e.key.length === 1) {
+        barcodeBuffer.current += e.key;
+      }
+
+      lastKeyTime.current = currentTime;
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [products]); // Re-bind quando os produtos mudarem
+
+  const handleBarcodeScanned = (code) => {
+    const product = products.find(p => p.sku === code || p.barcode === code);
+    if (product) {
+      addToCart(product);
+      setSuccessMessage(`Bip: ${product.name}`);
+      setTimeout(() => setSuccessMessage(""), 2000);
+    } else {
+      setError(`Produto não encontrado: ${code}`);
+      setTimeout(() => setError(""), 3000);
+    }
+  };
+
   const isKgProduct = (product) => product?.unit_type === "kg";
 
-  // Encontrar desconto automático para um produto
   const findAutoDiscount = useCallback((product) => {
     return discounts.find((d) => {
       if (d.active !== 1 && d.active !== true) return false;
@@ -97,12 +128,8 @@ export function Caixa() {
     });
   }, [discounts]);
 
-  // Adicionar produto ao carrinho
-  // Para produtos por kg: abre modal de pesagem
-  // Para produtos por unidade: adiciona diretamente
   const addToCart = useCallback((product) => {
     if (isKgProduct(product)) {
-      // Abre modal de pesagem
       setScaleModalProduct(product);
       setManualWeight(scale.weight ? String(scale.weight) : "");
       return;
@@ -121,9 +148,8 @@ export function Caixa() {
       }
       return [...prev, { ...product, quantity: 1, discount_id: autoDiscount?.id || null }];
     });
-  }, [discounts, scale.weight, findAutoDiscount]);
+  }, [scale.weight, findAutoDiscount]);
 
-  // Confirmar pesagem e adicionar produto por kg ao carrinho
   const confirmWeightAndAdd = useCallback(() => {
     if (!scaleModalProduct) return;
 
@@ -134,7 +160,7 @@ export function Caixa() {
     );
 
     if (isNaN(weightValue) || weightValue <= 0) {
-      setError("Informe um peso válido (maior que zero).");
+      setError("Informe um peso válido.");
       return;
     }
 
@@ -144,7 +170,6 @@ export function Caixa() {
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
-        // Acumula peso
         return prev.map((item) =>
           item.id === product.id
             ? { ...item, quantity: parseFloat((item.quantity + weightValue).toFixed(3)) }
@@ -166,12 +191,10 @@ export function Caixa() {
     setError("");
   }, [scaleModalProduct, scale.connected, scale.weight, manualWeight, findAutoDiscount]);
 
-  // Remover item do carrinho
   const removeFromCart = useCallback((productId) => {
     setCartItems((prev) => prev.filter((item) => item.id !== productId));
   }, []);
 
-  // Atualizar quantidade/peso do item
   const updateQuantity = useCallback((productId, quantity) => {
     const product = products.find((p) => p.id === productId);
     const isKg = isKgProduct(product);
@@ -185,689 +208,210 @@ export function Caixa() {
     setCartItems((prev) =>
       prev.map((item) => {
         if (item.id !== productId) return item;
-        let discountId = item.discount_id;
-        if (!discountId) {
-          const autoDiscount = findAutoDiscount(item);
-          discountId = autoDiscount?.id || null;
-        }
-        return { ...item, quantity: isKg ? parseFloat(parsed.toFixed(3)) : parsed, discount_id: discountId };
+        return { ...item, quantity: isKg ? parseFloat(parsed.toFixed(3)) : parsed };
       })
     );
-  }, [removeFromCart, findAutoDiscount, products]);
+  }, [removeFromCart, products]);
 
-  // Aplicar desconto a um item
-  const applyDiscountToItem = useCallback((productId, discountId) => {
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === productId ? { ...item, discount_id: discountId } : item
-      )
-    );
-  }, []);
-
-  // Calcular total do carrinho
-  const calculateTotal = () => {
-    return cartItems.reduce((sum, item) => {
-      const itemTotal = item.price * item.quantity;
-      return sum + itemTotal;
-    }, 0);
-  };
-
-  // Calcular desconto de um item
-  const calculateTotalDiscountForItem = (item) => {
+  const calculateTotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  const calculateItemDiscount = (item) => {
     if (!item.discount_id) return 0;
-    const discount = discounts.find((d) => d.id === item.discount_id);
-    if (!discount) return 0;
-
-    const itemTotal = item.price * item.quantity;
-    const quantity = item.quantity;
-    let discountAmount = 0;
-
-    if (discount.type === "percent") {
-      discountAmount = itemTotal * (Number(discount.value) / 100);
-    } else if (discount.type === "fixed") {
-      discountAmount = Number(discount.value);
-    } else if (discount.type === "buy_x_get_y") {
-      const buyQty = Number(discount.buy_quantity);
-      const getQty = Number(discount.get_quantity);
-      if (buyQty > 0 && quantity >= buyQty) {
-        discountAmount = Number(item.price) * getQty;
-      }
-    } else if (discount.type === "fixed_bundle") {
-      const bundleQty = Number(discount.buy_quantity);
-      const bundlePrice = Number(discount.value);
-      if (bundleQty > 0 && bundlePrice >= 0) {
-        const bundles = Math.floor(quantity / bundleQty);
-        const remainder = quantity % bundleQty;
-        const bundleTotal = bundles * bundlePrice;
-        const remainderTotal = remainder * Number(item.price);
-        discountAmount = itemTotal - (bundleTotal + remainderTotal);
-      }
-    }
-
-    if (discount.min_quantity && quantity < Number(discount.min_quantity)) {
-      discountAmount = 0;
-    }
-
-    return Math.max(discountAmount, 0);
-  };
-
-  const calculateTotalDiscount = () => {
-    return cartItems.reduce((sum, item) => sum + calculateTotalDiscountForItem(item), 0);
+    const d = discounts.find(dis => dis.id === item.discount_id);
+    if (!d) return 0;
+    if (d.type === "percent") return (item.price * item.quantity) * (d.value / 100);
+    if (d.type === "fixed") return d.value;
+    return 0;
   };
 
   const total = calculateTotal();
-  const totalDiscount = calculateTotalDiscount();
+  const totalDiscount = cartItems.reduce((sum, item) => sum + calculateItemDiscount(item), 0);
   const finalTotal = Math.max(total - totalDiscount - (parseFloat(manualDiscount) || 0), 0);
 
-  // Lógica de Abertura de Caixa
-  const handleOpenCaixaRequest = (e) => {
-    e.preventDefault();
-    if (!openingAmount || isNaN(openingAmount)) {
-      setError("Informe um valor de abertura válido.");
-      return;
-    }
-    setShowApprovalModal(true);
-  };
+  const handleCheckout = async () => {
+    if (!caixaAberto || cartItems.length === 0) return;
 
-  const handleAberturaAprovada = async (token) => {
+    setProcessingPayment(true);
     try {
-      setLoading(true);
-      setError("");
-      await apiFetch("/pos/cash-session/open", {
-        method: "POST",
-        body: JSON.stringify({
-          opening_amount: parseFloat(openingAmount),
-          notes: openingNotes || "Abertura de caixa",
-          approval_token: token,
-        }),
-      });
-      setCaixaAberto(true);
-      setShowAberturaModal(false);
-      setShowApprovalModal(false);
-      setSuccessMessage("Caixa aberto com sucesso!");
+      const payload = {
+        items: cartItems.map(item => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          calculated_discount: calculateItemDiscount(item)
+        })),
+        payment_method: paymentMethod,
+        amount_received: parseFloat(amountReceived || 0),
+        change_amount: Math.max(parseFloat(amountReceived || 0) - finalTotal, 0)
+      };
 
-      const currentCaixa = await apiFetch("/pos/cash-session/current");
-      if (currentCaixa) setCaixaAberto(true);
+      const res = await apiFetch("/sales", { method: "POST", body: JSON.stringify(payload) });
+      
+      const saleData = {
+        ...payload,
+        id: res.id || Date.now(),
+        document_number: res.document_number || res.items?.[0]?.document_number,
+        items_details: cartItems,
+        total: finalTotal,
+        date: new Date().toLocaleString()
+      };
+
+      setLastSale(saleData);
+      setCartItems([]);
+      setAmountReceived("");
+      setSuccessMessage("Venda realizada!");
+      
+      // Auto-imprimir se desejar ou apenas mostrar o botão
+      // printReceipt(saleData); 
 
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      setError(err.message || "Erro ao abrir caixa.");
-      setShowApprovalModal(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Finalizar venda
-  const handleCheckout = async () => {
-    if (!caixaAberto) {
-      setError("O caixa está fechado. Abra o caixa para realizar vendas.");
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      setError("Adicione itens ao carrinho antes de finalizar.");
-      return;
-    }
-
-    setProcessingPayment(true);
-    setError("");
-    setSuccessMessage("");
-
-    try {
-      const saleItems = cartItems.map((item) => ({
-        product_id: item.id,
-        quantity: item.quantity,
-        discount_id: item.discount_id,
-        calculated_discount: calculateTotalDiscountForItem(item),
-      }));
-
-      const payload = {
-        items: saleItems,
-        payment_method: paymentMethod,
-      };
-
-      if (paymentMethod === "cash" && amountReceived) {
-        payload.amount_received = parseFloat(amountReceived);
-        payload.change_amount = Math.max(parseFloat(amountReceived) - finalTotal, 0);
-      }
-
-      if (parseFloat(manualDiscount) > 0) {
-        payload.manual_discount = parseFloat(manualDiscount);
-        payload.approval_token = tempApprovalToken;
-      }
-
-      const response = await apiFetch("/sales", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      let documentNumber = response.document_number;
-      if (!documentNumber && response.items && response.items.length > 0) {
-        documentNumber = response.items[0].document_number;
-      }
-
-      setSuccessMessage(
-        `Venda finalizada com sucesso! Documento: ${documentNumber || response.id || "OK"}`
-      );
-      setCartItems([]);
-      setPaymentMethod("cash");
-      setManualDiscount("");
-      setAmountReceived("");
-      setTempApprovalToken(null);
-
-      setTimeout(() => setSuccessMessage(""), 5000);
-    } catch (checkoutError) {
-      setError(checkoutError.message || "Erro ao finalizar venda.");
+      setError(err.message);
     } finally {
       setProcessingPayment(false);
     }
   };
 
-  // Formatar exibição de quantidade no carrinho
-  const formatQuantity = (item) => {
-    if (isKgProduct(item)) {
-      return `${Number(item.quantity).toFixed(3)} kg`;
-    }
-    return item.quantity;
+  const printReceipt = (sale = lastSale) => {
+    if (!sale) return;
+    
+    const printWindow = window.open("", "_blank", "width=300,height=600");
+    const receiptHtml = `
+      <html>
+        <head>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; width: 58mm; font-size: 12px; margin: 0; padding: 5mm; }
+            .center { text-align: center; }
+            .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+            .item { display: flex; justify-content: space-between; margin-bottom: 2px; }
+            .total { font-weight: bold; font-size: 14px; margin-top: 10px; }
+            @media print { @page { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <strong>HORTIFRUTI SMART</strong><br>
+            CNPJ: 00.000.000/0001-00<br>
+            Rua do Horti, 123 - Centro<br>
+            ${sale.date}
+          </div>
+          <div class="line"></div>
+          <div class="center">CUPOM NÃO FISCAL</div>
+          <div class="line"></div>
+          ${sale.items_details.map(item => `
+            <div class="item">
+              <span>${item.name}</span>
+            </div>
+            <div class="item">
+              <span>${item.quantity}${item.unit_type === 'kg' ? 'kg' : 'un'} x ${item.price.toFixed(2)}</span>
+              <span>R$ ${(item.quantity * item.price).toFixed(2)}</span>
+            </div>
+          `).join("")}
+          <div class="line"></div>
+          <div class="item"><span>SUBTOTAL:</span><span>R$ ${sale.total.toFixed(2)}</span></div>
+          <div class="item"><span>PAGAMENTO:</span><span>${sale.payment_method.toUpperCase()}</span></div>
+          ${sale.amount_received ? `<div class="item"><span>RECEBIDO:</span><span>R$ ${sale.amount_received.toFixed(2)}</span></div>` : ""}
+          ${sale.change_amount ? `<div class="item"><span>TROCO:</span><span>R$ ${sale.change_amount.toFixed(2)}</span></div>` : ""}
+          <div class="line"></div>
+          <div class="center">OBRIGADO PELA PREFERÊNCIA!</div>
+          <script>window.print(); window.close();</script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
   };
 
   return (
     <PageShell
-      title="Frente de Caixa"
-      subtitle="Ponto de Venda - Registre vendas em tempo real"
+      title="Caixa"
+      subtitle="Ponto de Venda"
       actions={
-        <div className="pos-actions">
-          {/* Botão de balança */}
-          <button
-            className={`btn-scale ${scale.connected ? "connected" : ""}`}
-            onClick={scale.connected ? scale.disconnect : scale.connect}
-            title={scale.connected ? "Desconectar balança" : "Conectar balança serial"}
-            style={{
-              background: scale.connected ? "#10b981" : "#6b7280",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              padding: "8px 14px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: "13px",
-            }}
-          >
-            ⚖️ {scale.connected ? `Balança: ${scale.weight !== null ? `${scale.weight} kg` : "Aguardando..."}` : "Conectar Balança"}
-          </button>
-
-          <button
-            className="btn-movimentacao"
-            onClick={() => navigate("/caixa/fechamento")}
-          >
-            💰 Movimentações / Fechar
-          </button>
-          <button
-            className="btn-focus-mode"
-            onClick={() => {
-              if (!caixaAberto) {
-                setError("O Modo Foco só pode ser aberto se o caixa estiver aberto.");
-                return;
-              }
-              navigate("/caixa/focus");
-            }}
-            title="Modo Foco - Tela Cheia"
-          >
-            🎯 Modo Foco
-          </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+            <button className={`btn-scale ${scale.connected ? "connected" : ""}`} onClick={scale.connected ? scale.disconnect : scale.connect}>
+                ⚖️ {scale.connected ? `${scale.weight || 0} kg` : "Balança"}
+            </button>
+            {lastSale && (
+                <button className="button" style={{ background: '#059669' }} onClick={() => printReceipt()}>
+                    Print Cupom
+                </button>
+            )}
+            <button className="button" onClick={() => navigate("/caixa/fechamento")}>Fechar Caixa</button>
         </div>
       }
     >
-      {/* Modal de Abertura de Caixa */}
-      {showAberturaModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Abertura de Caixa</h3>
-            <p>Informe o valor inicial em dinheiro para começar as operações.</p>
-            <form onSubmit={handleOpenCaixaRequest}>
-              <div className="form-group">
-                <label>Valor de Abertura (R$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={openingAmount}
-                  onChange={(e) => setOpeningAmount(e.target.value)}
-                  placeholder="0,00"
-                  required
-                  autoFocus
-                />
+      <div className="pos-container">
+        <div className="products-side">
+          <input 
+            type="search" 
+            placeholder="Bipe o código ou busque pelo nome..." 
+            value={searchTerm} 
+            onChange={e => setSearchTerm(e.target.value)}
+            className="search-input"
+            autoFocus
+          />
+          <div className="products-grid">
+            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+              <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
+                <h4>{p.name}</h4>
+                <p>R$ {p.price.toFixed(2)}/{p.unit_type}</p>
               </div>
-              <div className="form-group">
-                <label>Observações (Opcional)</label>
-                <textarea
-                  value={openingNotes}
-                  onChange={(e) => setOpeningNotes(e.target.value)}
-                  placeholder="Ex: Fundo de caixa inicial"
-                />
-              </div>
-              <button type="button" className="button button-secondary" onClick={() => setShowAberturaModal(false)}>
-                Cancelar
-              </button>
-              <button type="submit" className="btn-finalize" style={{ width: "100%" }}>
-                Solicitar Abertura
-              </button>
-            </form>
+            ))}
           </div>
         </div>
-      )}
 
-      {/* Modal de Aprovação do Superior */}
-      {showApprovalModal && (
-        <ApprovalModal
-          action="open_cash_session"
-          title="Autorização de Abertura"
-          message={`O operador está solicitando a abertura do caixa com R$ ${parseFloat(openingAmount).toFixed(2)}. Um gerente deve autorizar.`}
-          onApproved={handleAberturaAprovada}
-          onCancel={() => setShowApprovalModal(false)}
-        />
-      )}
-
-      {showManualDiscountApproval && (
-        <ApprovalModal
-          action="discount_override"
-          title="Autorização de Desconto Manual"
-          message={`O operador está solicitando um desconto manual de R$ ${parseFloat(manualDiscount).toFixed(2)}. Um gerente deve autorizar.`}
-          onApproved={(token) => {
-            setTempApprovalToken(token);
-            setShowManualDiscountApproval(false);
-            setSuccessMessage("Desconto manual autorizado!");
-            setTimeout(() => setSuccessMessage(""), 3000);
-          }}
-          onCancel={() => {
-            setShowManualDiscountApproval(false);
-            setManualDiscount("");
-          }}
-        />
-      )}
-
-      {/* Modal de Pesagem — aparece ao clicar em produto por kg */}
-      {scaleModalProduct && (
-        <div className="modal-overlay" onClick={() => setScaleModalProduct(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "420px" }}>
-            <h3>⚖️ Pesagem — {scaleModalProduct.name}</h3>
-            <p style={{ color: "#6b7280", marginBottom: "16px" }}>
-              Preço: <strong>R$ {Number(scaleModalProduct.price).toFixed(2)}/kg</strong>
-            </p>
-
-            {scale.connected ? (
-              <div style={{ textAlign: "center", marginBottom: "20px" }}>
-                <div style={{
-                  fontSize: "48px",
-                  fontWeight: "bold",
-                  color: "#1d4ed8",
-                  background: "#eff6ff",
-                  borderRadius: "12px",
-                  padding: "16px",
-                  letterSpacing: "2px",
-                }}>
-                  {scale.weight !== null ? `${scale.weight.toFixed(3)} kg` : "---"}
+        <div className="cart-side">
+          <h3>Carrinho</h3>
+          {successMessage && <div className="success-message">{successMessage}</div>}
+          {error && <div className="error-message">{error}</div>}
+          
+          <div className="cart-items">
+            {cartItems.map(item => (
+              <div key={item.id} className="cart-item">
+                <div className="item-info">
+                  <strong>{item.name}</strong>
+                  <span>{item.quantity} x R$ {item.price.toFixed(2)}</span>
                 </div>
-                <p style={{ color: "#6b7280", fontSize: "13px", marginTop: "8px" }}>
-                  Leitura em tempo real da balança
-                </p>
-                {scale.weight !== null && (
-                  <p style={{ color: "#16a34a", fontWeight: "bold", marginTop: "4px" }}>
-                    Total: R$ {(Number(scaleModalProduct.price) * scale.weight).toFixed(2)}
-                  </p>
-                )}
+                <button onClick={() => removeFromCart(item.id)}>❌</button>
               </div>
-            ) : (
-              <div style={{ marginBottom: "16px" }}>
-                <label style={{ display: "block", marginBottom: "6px", fontWeight: "bold" }}>
-                  Peso (kg) — entrada manual:
-                </label>
-                <input
-                  type="number"
-                  step="0.001"
-                  min="0.001"
-                  value={manualWeight}
-                  onChange={(e) => setManualWeight(e.target.value)}
-                  placeholder="Ex: 1.250"
-                  autoFocus
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    fontSize: "24px",
-                    textAlign: "center",
-                    border: "2px solid #3b82f6",
-                    borderRadius: "8px",
-                  }}
-                  onKeyDown={(e) => { if (e.key === "Enter") confirmWeightAndAdd(); }}
-                />
-                {manualWeight && parseFloat(manualWeight) > 0 && (
-                  <p style={{ color: "#16a34a", fontWeight: "bold", marginTop: "8px", textAlign: "center" }}>
-                    Total: R$ {(Number(scaleModalProduct.price) * parseFloat(manualWeight)).toFixed(2)}
-                  </p>
-                )}
-                <p style={{ color: "#9ca3af", fontSize: "12px", marginTop: "8px" }}>
-                  Dica: conecte a balança pelo botão "⚖️ Conectar Balança" para leitura automática.
-                </p>
-              </div>
+            ))}
+          </div>
+
+          <div className="cart-footer">
+            <div className="total-row"><span>Total:</span> <strong>R$ {finalTotal.toFixed(2)}</strong></div>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+              <option value="cash">Dinheiro</option>
+              <option value="pix">PIX</option>
+              <option value="debit">Débito</option>
+              <option value="credit">Crédito</option>
+            </select>
+            {paymentMethod === "cash" && (
+              <input type="number" placeholder="Valor recebido" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} />
             )}
+            <button className="btn-checkout" disabled={processingPayment || cartItems.length === 0} onClick={handleCheckout}>
+              {processingPayment ? "Processando..." : "Finalizar Venda"}
+            </button>
+          </div>
+        </div>
+      </div>
 
-            {error && <p style={{ color: "#dc2626", marginBottom: "12px" }}>{error}</p>}
-
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                className="btn-finalize"
-                style={{ flex: 1 }}
-                onClick={confirmWeightAndAdd}
-                disabled={
-                  scale.connected
-                    ? scale.weight === null || scale.weight <= 0
-                    : !manualWeight || parseFloat(manualWeight) <= 0
-                }
-              >
-                ✓ Confirmar Peso e Adicionar
-              </button>
-              <button
-                className="button button-secondary"
-                onClick={() => { setScaleModalProduct(null); setError(""); }}
-              >
-                Cancelar
-              </button>
+      {scaleModalProduct && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>⚖️ Pesagem: {scaleModalProduct.name}</h3>
+            <div className="weight-display">
+                {scale.connected ? (
+                    <div className="live-weight">{scale.weight !== null ? `${scale.weight.toFixed(3)} kg` : "Aguardando..."}</div>
+                ) : (
+                    <input type="number" step="0.001" placeholder="Peso manual (kg)" value={manualWeight} onChange={e => setManualWeight(e.target.value)} autoFocus />
+                )}
+            </div>
+            <div className="modal-actions">
+                <button className="btn-primary" onClick={confirmWeightAndAdd}>Confirmar</button>
+                <button className="btn-secondary" onClick={() => setScaleModalProduct(null)}>Cancelar</button>
             </div>
           </div>
         </div>
       )}
-
-      <div className="pos-container">
-        {/* Seção de Produtos */}
-        <div className="pos-products">
-          <div className="search-section" style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-            <input
-              type="text"
-              placeholder="Buscar produtos..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="search-input"
-              style={{ flex: 1 }}
-            />
-            {!caixaAberto && (
-              <button
-                className="button button-primary"
-                onClick={() => setShowAberturaModal(true)}
-                style={{ whiteSpace: "nowrap", backgroundColor: "#10b981" }}
-              >
-                🔓 Abrir Caixa
-              </button>
-            )}
-            {caixaAberto && (
-              <span style={{ color: "#10b981", fontWeight: "bold", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                🟢 Caixa Aberto
-              </span>
-            )}
-          </div>
-
-          {loading && <p className="loading">Carregando produtos...</p>}
-          {error && !scaleModalProduct && <p className="error-message">{error}</p>}
-
-          <div className="products-grid">
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <div key={product.id} className={`product-card ${isKgProduct(product) ? "product-card-kg" : ""}`}>
-                  <div className="product-info">
-                    <h4>
-                      {product.name}
-                      {isKgProduct(product) && (
-                        <span style={{
-                          marginLeft: "6px",
-                          fontSize: "10px",
-                          background: "#dbeafe",
-                          color: "#1d4ed8",
-                          padding: "1px 6px",
-                          borderRadius: "10px",
-                          verticalAlign: "middle",
-                        }}>
-                          ⚖️ kg
-                        </span>
-                      )}
-                    </h4>
-                    <p className="product-category">
-                      {product.category_name || "Sem categoria"}
-                    </p>
-                    <p className="product-stock">
-                      {isKgProduct(product)
-                        ? `Estoque: ${Number(product.current_stock).toFixed(3)} kg`
-                        : `Estoque: ${product.current_stock}`}
-                    </p>
-                    <p className="product-price">
-                      R$ {Number(product.price).toFixed(2)}{isKgProduct(product) ? "/kg" : ""}
-                    </p>
-                  </div>
-                  <button
-                    className="btn-add-cart"
-                    onClick={() => addToCart(product)}
-                    disabled={Number(product.current_stock) <= 0}
-                  >
-                    {Number(product.current_stock) > 0
-                      ? isKgProduct(product) ? "⚖️ Pesar" : "Adicionar"
-                      : "Sem estoque"}
-                  </button>
-                </div>
-              ))
-            ) : (
-              <p className="no-products">Nenhum produto encontrado.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Seção de Carrinho */}
-        <div className="pos-cart">
-          <h3>Carrinho</h3>
-
-          {successMessage && (
-            <div className="success-message">{successMessage}</div>
-          )}
-
-          {cartItems.length > 0 ? (
-            <>
-              <div className="cart-items">
-                {cartItems.map((item) => (
-                  <div key={item.id} className="cart-item">
-                    <div className="item-details">
-                      <h5>
-                        {item.name}
-                        {isKgProduct(item) && (
-                          <span style={{ marginLeft: "4px", fontSize: "10px", color: "#1d4ed8" }}>⚖️</span>
-                        )}
-                      </h5>
-                      <p className="item-price">
-                        R$ {Number(item.price).toFixed(2)}{isKgProduct(item) ? "/kg" : ""}
-                      </p>
-                    </div>
-
-                    <div className="item-quantity">
-                      {isKgProduct(item) ? (
-                        // Produto por kg: input decimal + botão de re-pesagem
-                        <>
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            step="0.001"
-                            min="0.001"
-                            onChange={(e) => updateQuantity(item.id, e.target.value)}
-                            style={{ width: "80px", textAlign: "center" }}
-                          />
-                          <span style={{ fontSize: "12px", color: "#6b7280", marginLeft: "4px" }}>kg</span>
-                          <button
-                            title="Re-pesar"
-                            onClick={() => {
-                              setScaleModalProduct(item);
-                              setManualWeight(String(item.quantity));
-                            }}
-                            style={{
-                              marginLeft: "4px",
-                              background: "#eff6ff",
-                              border: "1px solid #3b82f6",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              padding: "2px 6px",
-                              fontSize: "14px",
-                            }}
-                          >
-                            ⚖️
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 1)}
-                            min="1"
-                          />
-                          <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="item-total" style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: "14px", fontWeight: "bold" }}>
-                        R$ {((item.price * item.quantity) - calculateTotalDiscountForItem(item)).toFixed(2)}
-                      </div>
-                      {calculateTotalDiscountForItem(item) > 0 && (
-                        <div style={{ fontSize: "11px", color: "#ef4444", textDecoration: "line-through" }}>
-                          R$ {(item.price * item.quantity).toFixed(2)}
-                        </div>
-                      )}
-                      {isKgProduct(item) && (
-                        <div style={{ fontSize: "11px", color: "#6b7280" }}>
-                          {formatQuantity(item)}
-                        </div>
-                      )}
-                      {discounts.length > 0 && (
-                        <div className="item-discount-selector">
-                          <select
-                            value={item.discount_id || ""}
-                            onChange={(e) => applyDiscountToItem(item.id, parseInt(e.target.value) || null)}
-                            style={{ fontSize: "11px", marginTop: "4px", width: "100%" }}
-                          >
-                            <option value="">Sem desc. auto.</option>
-                            {discounts.map((d) => (
-                              <option key={d.id} value={d.id}>{d.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      className="cart-item-remove"
-                      onClick={() => removeFromCart(item.id)}
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="cart-summary">
-                <div className="summary-row">
-                  <span>Subtotal:</span>
-                  <span>R$ {total.toFixed(2)}</span>
-                </div>
-                {totalDiscount > 0 && (
-                  <div className="summary-row discount">
-                    <span>Descontos Automáticos:</span>
-                    <span>-R$ {totalDiscount.toFixed(2)}</span>
-                  </div>
-                )}
-
-                <div className="summary-row discount manual" style={{ borderTop: "1px dashed #eee", paddingTop: "8px" }}>
-                  <span>Desconto Manual (R$):</span>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={manualDiscount}
-                      onChange={(e) => setManualDiscount(e.target.value)}
-                      onBlur={() => {
-                        if (parseFloat(manualDiscount) > 0 && !tempApprovalToken) {
-                          setShowManualDiscountApproval(true);
-                        }
-                      }}
-                      placeholder="0.00"
-                      style={{ width: "80px", textAlign: "right", padding: "4px" }}
-                    />
-                    {tempApprovalToken && <span title="Autorizado" style={{ color: "#10b981" }}>✅</span>}
-                  </div>
-                </div>
-
-                <div className="summary-row total">
-                  <span>Total:</span>
-                  <span>R$ {finalTotal.toFixed(2)}</span>
-                </div>
-                
-                {paymentMethod === "cash" && (
-                  <div className="change-calculator" style={{ borderTop: "2px solid #3b82f6", marginTop: "12px", paddingTop: "12px" }}>
-                    <div className="summary-row">
-                      <span style={{ fontWeight: "bold" }}>Valor Recebido:</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={finalTotal}
-                        value={amountReceived}
-                        onChange={(e) => setAmountReceived(e.target.value)}
-                        placeholder="0.00"
-                        style={{ width: "100px", textAlign: "right", padding: "6px", fontSize: "16px", border: "2px solid #3b82f6", borderRadius: "4px" }}
-                        autoFocus={paymentMethod === "cash"}
-                      />
-                    </div>
-                    {parseFloat(amountReceived) >= finalTotal && (
-                      <div className="summary-row" style={{ marginTop: "8px", color: "#10b981", fontSize: "18px", fontWeight: "bold" }}>
-                        <span>Troco:</span>
-                        <span>R$ {(parseFloat(amountReceived) - finalTotal).toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="payment-section">
-                <label>Forma de Pagamento:</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="payment-select"
-                >
-                  <option value="cash">Dinheiro</option>
-                  <option value="credit">Cartão de Crédito</option>
-                  <option value="debit">Cartão de Débito</option>
-                  <option value="pix">PIX</option>
-                </select>
-              </div>
-
-              <div className="cart-actions">
-                <button
-                  className="btn-finalize"
-                  onClick={handleCheckout}
-                  disabled={processingPayment || cartItems.length === 0}
-                >
-                  {processingPayment ? "Processando..." : "Finalizar Venda"}
-                </button>
-
-                <button
-                  className="btn-clear"
-                  onClick={() => setCartItems([])}
-                >
-                  Limpar Carrinho
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="empty-cart">Carrinho vazio</p>
-          )}
-        </div>
-      </div>
     </PageShell>
   );
 }
