@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS cash_movements (
 ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE DEFAULT NULL;
 
 -- View para produtos próximos ao vencimento (7 dias)
-CREATE OR REPLACE VIEW v_expiring_products AS
+-- PostgreSQL não permite remover/alterar colunas de uma view existente com
+-- CREATE OR REPLACE VIEW. Como a migração 005/009 criou esta view com outra
+-- lista de colunas, removemos a versão anterior antes de recriá-la.
+DROP VIEW IF EXISTS v_expiring_products;
+CREATE VIEW v_expiring_products AS
 SELECT 
     id, 
     name, 
