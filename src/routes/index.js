@@ -10,7 +10,8 @@ const {
   generateAccessToken, 
   generateRefreshToken, 
   refreshTokenMiddleware,
-  logoutMiddleware 
+  logoutMiddleware,
+  checkBlacklist
 } = require("../middleware/tokenManagement");
 
 const router = express.Router();
@@ -25,8 +26,16 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ message: "Token não informado." });
   const token = authHeader.replace("Bearer ", "");
-  return jwt.verify(token, JWT_SECRET, (err, user) => {
+  
+  return jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ message: "Token inválido." });
+    
+    // Aplicar checkBlacklist manualmente aqui ou como middleware antes
+    const { isTokenBlacklisted } = require("../middleware/tokenManagement");
+    if (await isTokenBlacklisted(token)) {
+      return res.status(401).json({ message: "Sessão encerrada." });
+    }
+
     db.get("SELECT * FROM sessions WHERE token = ? AND revoked_at IS NULL", [token], (sessionErr, session) => {
       if (sessionErr || !session) return res.status(401).json({ message: "Sessão expirada." });
       req.user = user;
