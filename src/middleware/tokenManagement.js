@@ -1,5 +1,13 @@
 const jwt = require("jsonwebtoken");
+const config = require("../../config");
 const { client, connectRedis } = require("../services/redis");
+
+const { 
+  JWT_SECRET, 
+  JWT_REFRESH_SECRET, 
+  JWT_EXPIRY, 
+  JWT_REFRESH_EXPIRY 
+} = config;
 
 /**
  * Adicionar token à blacklist (logout)
@@ -59,8 +67,8 @@ const checkBlacklist = async (req, res, next) => {
 const generateRefreshToken = (userId, email, role) => {
   return jwt.sign(
     { id: userId, email, role, type: "refresh" },
-    process.env.JWT_REFRESH_SECRET || "refresh-secret",
-    { expiresIn: process.env.JWT_REFRESH_EXPIRY || "7d" }
+    JWT_REFRESH_SECRET,
+    { expiresIn: JWT_REFRESH_EXPIRY }
   );
 };
 
@@ -70,8 +78,8 @@ const generateRefreshToken = (userId, email, role) => {
 const generateAccessToken = (userId, email, role) => {
   return jwt.sign(
     { id: userId, email, role, type: "access" },
-    process.env.JWT_SECRET || "secret",
-    { expiresIn: process.env.JWT_EXPIRY || "1h" }
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRY }
   );
 };
 
@@ -82,7 +90,7 @@ const verifyRefreshToken = (refreshToken) => {
   try {
     const decoded = jwt.verify(
       refreshToken,
-      process.env.JWT_REFRESH_SECRET || 'refresh-secret'
+      JWT_REFRESH_SECRET
     );
     
     if (decoded.type !== 'refresh') {

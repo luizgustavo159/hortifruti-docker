@@ -14,7 +14,11 @@ const {
 } = require("../middleware/tokenManagement");
 
 const router = express.Router();
+const authRouter = require("./auth");
 const { JWT_SECRET } = config;
+
+// --- AUTH ROUTES ---
+router.use("/auth", authRouter);
 
 // --- MIDDLEWARES ---
 const authenticateToken = (req, res, next) => {
