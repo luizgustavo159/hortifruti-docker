@@ -36,13 +36,14 @@ export function Estoque() {
     unit_type: "un",
   });
 
-  const [newCategory, setNewCategory] = useState({ name: "", description: "" });
+  const [newCategory, setNewCategory] = useState({ name: "", description: "", target_margin: "30" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
 
   const [movement, setMovement] = useState({
     type: "adjust",
     quantity: "",
     reason: "",
+    unit_cost: "",
   });
 
   const loadData = useCallback(async () => {
@@ -127,7 +128,7 @@ export function Estoque() {
         setNewProduct({ ...newProduct, category_id: res.id });
         setSuccessMessage("Categoria criada!");
       }
-      setNewCategory({ name: "", description: "" });
+      setNewCategory({ name: "", description: "", target_margin: "30" });
       setSelectedCategory(null);
       setShowCategoryModal(false);
       loadData();
@@ -229,7 +230,6 @@ export function Estoque() {
       let movementData = {};
 
       if (movement.type === "loss") {
-        // Perda: sempre envia quantidade positiva, o backend subtrai
         endpoint = "/stock/loss";
         movementData = {
           product_id: selectedProduct.id,
@@ -237,15 +237,14 @@ export function Estoque() {
           reason: movement.reason
         };
       } else if (movement.type === "adjust") {
-        // Ajuste: pode ser positivo (entrada) ou negativo (saída)
         endpoint = "/stock/adjust";
         movementData = {
           product_id: selectedProduct.id,
           delta: qty,
-          reason: movement.reason
+          reason: movement.reason,
+          unit_cost: movement.unit_cost ? parseFloat(movement.unit_cost) : undefined
         };
       } else if (movement.type === "adjust_negative") {
-        // Ajuste negativo: reduz o estoque
         endpoint = "/stock/adjust";
         movementData = {
           product_id: selectedProduct.id,
@@ -266,7 +265,7 @@ export function Estoque() {
       await apiFetch(endpoint, { method: "POST", headers, body: JSON.stringify(movementData) });
 
       setSuccessMessage("Movimentação registrada com sucesso!");
-      setMovement({ type: "adjust", quantity: "", reason: "" });
+      setMovement({ type: "adjust", quantity: "", reason: "", unit_cost: "" });
       setSelectedProduct(null);
       setShowMovementModal(false);
       setShowApprovalModal(false);
@@ -280,11 +279,6 @@ export function Estoque() {
   const handleApprovalSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Determinar a ação correta baseada no que estamos tentando fazer
-      // Se houver uma ação pendente, precisamos saber qual era o contexto
-      // No caso do Estoque, as ações sensíveis são stock_adjust, user_update, etc.
-      // Para categorias e fornecedores, usaremos 'user_update' ou 'admin' como fallback de segurança
-      // Determinar a ação correta baseada no contexto
       let action = "user_update";
       if (showMovementModal) {
         action = "stock_adjust";
@@ -314,6 +308,11 @@ export function Estoque() {
   const getRestockQuantity = (product) => {
     const max = Number(product.max_stock) || Number(product.min_stock) * 3;
     return Math.max(0, max - Number(product.current_stock));
+  };
+
+  const calculateMargin = (price, cost) => {
+    if (!price || !cost || cost <= 0) return 0;
+    return ((price - cost) / price) * 100;
   };
 
   return (
@@ -379,12 +378,11 @@ export function Estoque() {
                     <thead>
                     <tr>
                       <th>Produto</th>
-                      <th>Unidade</th>
                       <th>Categoria</th>
-                      <th>Fornecedor</th>
                       <th>Preço</th>
+                      <th>Custo Médio</th>
+                      <th>Margem Atual</th>
                       <th>Estoque</th>
-                      <th>Mínimo</th>
                       <th>Status</th>
                       <th>Ações</th>
                     </tr>
@@ -392,47 +390,51 @@ export function Estoque() {
                   <tbody>
                     {filteredProducts.length === 0 ? (
                       <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>Nenhum produto encontrado.</td></tr>
-                    ) : filteredProducts.map((product) => (
-                      <tr key={product.id}>
-                        <td>
-                          <strong>{product.name}</strong>
-                          {product.unit_type === 'kg' && <span style={{ marginLeft: '6px', fontSize: '11px', background: '#dbeafe', color: '#1d4ed8', padding: '1px 6px', borderRadius: '10px' }}>⚖️ kg</span>}
-                        </td>
-                        <td>
-                          <span style={{ fontSize: '12px', background: '#f3f4f6', padding: '2px 8px', borderRadius: '10px' }}>
-                            {product.unit_type || 'un'}
-                          </span>
-                        </td>
-                        <td>{product.category_name || "-"}</td>
-                        <td>{product.supplier_name || "-"}</td>
-                        <td>R$ {Number(product.price).toFixed(2)}/{product.unit_type === 'kg' ? 'kg' : 'un'}</td>
-                        <td>
-                          <span style={{ fontWeight: 'bold', color: Number(product.current_stock) <= Number(product.min_stock) ? '#dc2626' : '#16a34a' }}>
-                            {product.unit_type === 'kg'
-                              ? `${Number(product.current_stock).toFixed(3)} kg`
-                              : product.current_stock}
-                          </span>
-                        </td>
-                        <td>{product.unit_type === 'kg' ? `${Number(product.min_stock).toFixed(3)} kg` : product.min_stock}</td>
-                        <td>
-                          <span className={`status ${Number(product.current_stock) <= Number(product.min_stock) ? "critical" : "ok"}`}>
-                            {Number(product.current_stock) <= Number(product.min_stock) ? "⚠ Crítico" : "✓ OK"}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            className="btn-action"
-                            onClick={() => {
+                    ) : filteredProducts.map((product) => {
+                      const margin = calculateMargin(product.price, product.avg_cost);
+                      const targetMargin = product.product_profit_margin || product.category_margin || 30;
+                      const isLowMargin = product.avg_cost > 0 && margin < targetMargin;
+
+                      return (
+                        <tr key={product.id}>
+                          <td>
+                            <strong>{product.name}</strong>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>SKU: {product.sku}</div>
+                          </td>
+                          <td>{product.category_name}</td>
+                          <td>R$ {Number(product.price).toFixed(2)}</td>
+                          <td>R$ {Number(product.avg_cost || 0).toFixed(2)}</td>
+                          <td>
+                            <span style={{ 
+                                color: isLowMargin ? '#dc2626' : '#16a34a',
+                                fontWeight: 'bold'
+                            }}>
+                                {margin.toFixed(1)}%
+                                {isLowMargin && <span title="Margem abaixo da meta" style={{ marginLeft: '4px' }}>⚠️</span>}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ color: Number(product.current_stock) <= Number(product.min_stock) ? '#dc2626' : 'inherit', fontWeight: 'bold' }}>
+                              {product.unit_type === 'kg' ? `${Number(product.current_stock).toFixed(3)} kg` : product.current_stock}
+                            </span>
+                          </td>
+                          <td>
+                            {Number(product.current_stock) <= Number(product.min_stock) ? (
+                              <span className="badge badge-critical">Crítico</span>
+                            ) : (
+                              <span className="badge badge-success">OK</span>
+                            )}
+                          </td>
+                          <td>
+                            <button className="btn-action" onClick={() => {
                               setSelectedProduct(product);
-                              setMovement({ type: "adjust", quantity: "", reason: "" });
+                              setMovement({ type: "adjust", quantity: "", reason: "", unit_cost: "" });
                               setShowMovementModal(true);
-                            }}
-                          >
-                            Movimentar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                            }}>Movimentar</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -444,60 +446,46 @@ export function Estoque() {
           <div className="tab-content">
             {loading ? (
               <p className="loading">Carregando sugestões...</p>
-            ) : restockSuggestions.length === 0 ? (
-              <div className="empty-state">
-                <p style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-                  ✅ Todos os produtos estão com estoque adequado. Nenhuma reposição necessária.
-                </p>
-              </div>
             ) : (
               <>
-                <p style={{ marginBottom: '16px', color: '#6b7280', fontSize: '14px' }}>
-                  {restockSuggestions.length} produto(s) abaixo do estoque mínimo precisam de reposição.
-                </p>
+                <div className="info-banner">
+                  💡 Sugestões baseadas no estoque mínimo configurado para cada produto.
+                </div>
                 <div className="table-wrapper">
                   <table className="table">
                     <thead>
                       <tr>
                         <th>Produto</th>
-                        <th>Categoria</th>
-                        <th>Fornecedor</th>
                         <th>Estoque Atual</th>
-                        <th>Estoque Mínimo</th>
-                        <th>Qtd. Sugerida</th>
+                        <th>Mínimo</th>
+                        <th>Necessidade</th>
                         <th>Urgência</th>
-                        <th>Ação</th>
+                        <th>Ações</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {restockSuggestions.map((product) => {
+                      {restockSuggestions.length === 0 ? (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>Tudo em dia! Nenhuma reposição necessária.</td></tr>
+                      ) : restockSuggestions.map((product) => {
                         const deficit = Number(product.min_stock) - Number(product.current_stock);
-                        const urgency = Number(product.current_stock) === 0 ? "Crítico" :
-                          deficit > Number(product.min_stock) * 0.5 ? "Alta" : "Média";
-                        const urgencyColor = urgency === "Crítico" ? "#dc2626" : urgency === "Alta" ? "#f97316" : "#eab308";
+                        const ratio = Number(product.current_stock) / Number(product.min_stock);
+                        let urgency = "Baixa";
+                        let color = "#16a34a";
+                        if (ratio <= 0.2) { urgency = "Crítica"; color = "#dc2626"; }
+                        else if (ratio <= 0.5) { urgency = "Média"; color = "#f97316"; }
+
                         return (
                           <tr key={product.id}>
                             <td><strong>{product.name}</strong></td>
-                            <td>{product.category_name || "-"}</td>
-                            <td>{product.supplier_name || "-"}</td>
+                            <td>{product.unit_type === 'kg' ? `${Number(product.current_stock).toFixed(3)} kg` : product.current_stock}</td>
+                            <td>{product.unit_type === 'kg' ? `${Number(product.min_stock).toFixed(3)} kg` : product.min_stock}</td>
+                            <td><strong style={{ color: '#2563eb' }}>{product.unit_type === 'kg' ? `${getRestockQuantity(product).toFixed(3)} kg` : getRestockQuantity(product)}</strong></td>
                             <td>
-                              <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                                {product.current_stock}
-                              </span>
-                            </td>
-                            <td>{product.min_stock}</td>
-                            <td>
-                              <span style={{ color: '#2563eb', fontWeight: 'bold' }}>
-                                {getRestockQuantity(product)}
-                              </span>
-                            </td>
-                            <td>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '2px 10px',
-                                borderRadius: '12px',
-                                backgroundColor: urgencyColor + '20',
-                                color: urgencyColor,
+                              <span style={{ 
+                                color: 'white', 
+                                background: color, 
+                                padding: '2px 8px', 
+                                borderRadius: '12px', 
                                 fontWeight: 'bold',
                                 fontSize: '12px'
                               }}>
@@ -512,7 +500,8 @@ export function Estoque() {
                                   setMovement({
                                     type: "adjust",
                                     quantity: String(getRestockQuantity(product)),
-                                    reason: "Reposição de estoque"
+                                    reason: "Reposição de estoque",
+                                    unit_cost: ""
                                   });
                                   setShowMovementModal(true);
                                 }}
@@ -536,7 +525,7 @@ export function Estoque() {
             <div className="search-section">
               <button className="button" onClick={() => {
                 setSelectedCategory(null);
-                setNewCategory({ name: "", description: "" });
+                setNewCategory({ name: "", description: "", target_margin: "30" });
                 setShowCategoryModal(true);
               }}>Nova Categoria</button>
             </div>
@@ -546,6 +535,7 @@ export function Estoque() {
                   <tr>
                     <th>Nome</th>
                     <th>Descrição</th>
+                    <th>Margem Alvo</th>
                     <th style={{ textAlign: 'center' }}>Ações</th>
                   </tr>
                 </thead>
@@ -554,10 +544,11 @@ export function Estoque() {
                     <tr key={cat.id}>
                       <td><strong>{cat.name}</strong></td>
                       <td>{cat.description || "-"}</td>
+                      <td>{cat.target_margin}%</td>
                       <td style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                         <button className="btn-action" onClick={() => {
                           setSelectedCategory(cat);
-                          setNewCategory({ name: cat.name, description: cat.description || "" });
+                          setNewCategory({ name: cat.name, description: cat.description || "", target_margin: String(cat.target_margin || 30) });
                           setShowCategoryModal(true);
                         }}>Editar</button>
                         <button className="btn-action" style={{ background: '#dc2626' }} onClick={() => handleDeleteCategory(cat.id)}>Excluir</button>
@@ -656,11 +647,6 @@ export function Estoque() {
                 <option value="cx">Caixa (cx)</option>
                 <option value="pct">Pacote (pct)</option>
               </select>
-              {newProduct.unit_type === 'kg' && (
-                <small style={{ color: '#2563eb', marginTop: '4px', display: 'block' }}>
-                  ⚖️ Produto por peso — suporta leitura de balança no caixa
-                </small>
-              )}
             </div>
 
             <div className="form-row">
@@ -669,12 +655,12 @@ export function Estoque() {
                 <input type="number" step="0.01" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })} placeholder="0,00" />
               </div>
               <div className="form-group">
-                <label>Estoque Inicial * {newProduct.unit_type === 'kg' ? '(kg)' : ''}</label>
-                <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.current_stock} onChange={(e) => setNewProduct({ ...newProduct, current_stock: e.target.value })} placeholder={newProduct.unit_type === 'kg' ? 'Ex: 10.500' : 'Ex: 50'} />
+                <label>Estoque Inicial *</label>
+                <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.current_stock} onChange={(e) => setNewProduct({ ...newProduct, current_stock: e.target.value })} placeholder="Ex: 50" />
               </div>
               <div className="form-group">
-                <label>Estoque Mínimo * {newProduct.unit_type === 'kg' ? '(kg)' : ''}</label>
-                <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.min_stock} onChange={(e) => setNewProduct({ ...newProduct, min_stock: e.target.value })} placeholder={newProduct.unit_type === 'kg' ? 'Ex: 2.000' : 'Ex: 10'} />
+                <label>Estoque Mínimo *</label>
+                <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.min_stock} onChange={(e) => setNewProduct({ ...newProduct, min_stock: e.target.value })} placeholder="Ex: 10" />
               </div>
             </div>
 
@@ -695,6 +681,10 @@ export function Estoque() {
               <div className="form-group">
                 <label>Nome *</label>
                 <input autoFocus type="text" value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Margem Alvo (%)</label>
+                <input type="number" value={newCategory.target_margin} onChange={e => setNewCategory({...newCategory, target_margin: e.target.value})} placeholder="Ex: 30" />
               </div>
               <div className="form-group">
                 <label>Descrição</label>
@@ -746,9 +736,7 @@ export function Estoque() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Movimentar Estoque</h2>
             <p className="modal-subtitle">
-              <strong>{selectedProduct.name}</strong>
-              {selectedProduct.unit_type === 'kg' && <span style={{ marginLeft: '8px', fontSize: '12px', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '10px' }}>⚖️ Produto por kg</span>}
-              {' '}— Estoque atual: <strong>{selectedProduct.unit_type === 'kg' ? `${Number(selectedProduct.current_stock).toFixed(3)} kg` : selectedProduct.current_stock}</strong>
+              <strong>{selectedProduct.name}</strong> — Estoque atual: <strong>{selectedProduct.unit_type === 'kg' ? `${Number(selectedProduct.current_stock).toFixed(3)} kg` : selectedProduct.current_stock}</strong>
             </p>
             <div className="form-group">
               <label>Tipo de Movimentação</label>
@@ -764,44 +752,22 @@ export function Estoque() {
                 <input
                   type="number"
                   step="0.01"
-                  value={movement.unit_cost || ''}
+                  value={movement.unit_cost}
                   onChange={e => setMovement({...movement, unit_cost: e.target.value})}
                   placeholder="Quanto você pagou por unidade?"
                 />
-                <small style={{ color: '#64748b' }}>Usado para calcular o custo médio e preço sugerido.</small>
+                <small style={{ color: '#64748b' }}>Usado para calcular o custo médio e margem.</small>
               </div>
             )}
             <div className="form-group">
               <label>Quantidade {selectedProduct.unit_type === 'kg' ? '(kg) *' : '*'}</label>
               <input
                 type="number"
-                min={selectedProduct.unit_type === 'kg' ? '0.001' : '1'}
                 step={selectedProduct.unit_type === 'kg' ? '0.001' : '1'}
                 value={movement.quantity}
                 onChange={e => setMovement({...movement, quantity: e.target.value})}
                 placeholder={selectedProduct.unit_type === 'kg' ? 'Ex: 5.500' : 'Ex: 10'}
               />
-              {movement.type === "adjust" && movement.quantity && (
-                <small style={{ color: '#16a34a' }}>
-                  Novo estoque: {selectedProduct.unit_type === 'kg'
-                    ? `${(Number(selectedProduct.current_stock) + Number(movement.quantity || 0)).toFixed(3)} kg`
-                    : Number(selectedProduct.current_stock) + Number(movement.quantity || 0)}
-                </small>
-              )}
-              {movement.type === "adjust_negative" && movement.quantity && (
-                <small style={{ color: '#dc2626' }}>
-                  Novo estoque: {selectedProduct.unit_type === 'kg'
-                    ? `${(Number(selectedProduct.current_stock) - Number(movement.quantity || 0)).toFixed(3)} kg`
-                    : Number(selectedProduct.current_stock) - Number(movement.quantity || 0)}
-                </small>
-              )}
-              {movement.type === "loss" && movement.quantity && (
-                <small style={{ color: '#f97316' }}>
-                  Novo estoque após perda: {selectedProduct.unit_type === 'kg'
-                    ? `${(Number(selectedProduct.current_stock) - Number(movement.quantity || 0)).toFixed(3)} kg`
-                    : Number(selectedProduct.current_stock) - Number(movement.quantity || 0)}
-                </small>
-              )}
             </div>
             <div className="form-group">
               <label>Motivo *</label>

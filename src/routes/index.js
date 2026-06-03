@@ -251,16 +251,16 @@ router.get("/categories", authenticateToken, (req, res) => {
 });
 
 router.post("/categories", authenticateToken, requireManager, (req, res) => {
-  const { name, description = "" } = req.body;
-  db.get("INSERT INTO categories (name, description) VALUES (?, ?) RETURNING id", [name, description], (err, row) => {
+  const { name, description = "", target_margin = 30 } = req.body;
+  db.get("INSERT INTO categories (name, description, target_margin) VALUES (?, ?, ?) RETURNING id", [name, description, target_margin], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar categoria." });
     res.status(201).json({ id: row.id });
   });
 });
 
 router.put("/categories/:id", authenticateToken, requireManager, (req, res) => {
-  const { name, description = "" } = req.body;
-  db.run("UPDATE categories SET name = ?, description = ? WHERE id = ?", [name, description, req.params.id], (err) => {
+  const { name, description = "", target_margin } = req.body;
+  db.run("UPDATE categories SET name = ?, description = ?, target_margin = ? WHERE id = ?", [name, description, target_margin, req.params.id], (err) => {
     if (err) return res.status(400).json({ message: "Erro ao atualizar categoria." });
     res.json({ message: "Categoria atualizada." });
   });
@@ -287,11 +287,26 @@ router.post("/suppliers", authenticateToken, requireSupervisor, (req, res) => {
   });
 });
 
+router.put("/suppliers/:id", authenticateToken, requireSupervisor, (req, res) => {
+  const { name, contact, phone, email } = req.body;
+  db.run("UPDATE suppliers SET name = ?, contact = ?, phone = ?, email = ? WHERE id = ?", [name, contact, phone, email, req.params.id], (err) => {
+    if (err) return res.status(400).json({ message: "Erro ao atualizar fornecedor." });
+    res.json({ message: "Fornecedor atualizado." });
+  });
+});
+
+router.delete("/suppliers/:id", authenticateToken, requireManager, (req, res) => {
+  db.run("DELETE FROM suppliers WHERE id = ?", [req.params.id], (err) => {
+    if (err) return res.status(400).json({ message: "Erro ao excluir fornecedor." });
+    res.json({ message: "Fornecedor excluído." });
+  });
+});
+
 // --- PRODUTOS ---
 
 router.get("/products", authenticateToken, (req, res) => {
   db.all(`
-    SELECT p.*, c.name AS category_name, s.name AS supplier_name
+    SELECT p.*, c.name AS category_name, s.name AS supplier_name, c.target_margin as category_margin
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -302,9 +317,9 @@ router.get("/products", authenticateToken, (req, res) => {
 router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
   const p = req.body;
   db.get(`
-    INSERT INTO products (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
-  `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at], (err, row) => {
+    INSERT INTO products (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at, product_profit_margin)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+  `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at, p.product_profit_margin], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar produto." });
     res.status(201).json({ id: row.id });
   });
@@ -315,37 +330,67 @@ router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
 router.post("/stock/loss", authenticateToken, (req, res) => {
   const { product_id, quantity, reason } = req.body;
   runWithTransaction((tx, finish) => {
-    tx.get("SELECT current_stock FROM products WHERE id = ?", [product_id], (err, p) => {
+    tx.get("SELECT current_stock, avg_cost FROM products WHERE id = ?", [product_id], (err, p) => {
       if (!p || p.current_stock < quantity) return finish({ status: 400, message: "Estoque insuficiente." });
       tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [quantity, product_id], (err) => {
         if (err) return finish(err);
-        tx.run("INSERT INTO stock_losses (product_id, quantity, reason, reported_by) VALUES (?, ?, ?, ?)", [product_id, quantity, reason, req.user.id], finish);
+        tx.run("INSERT INTO stock_losses (product_id, quantity, reason, reported_by) VALUES (?, ?, ?, ?)", [product_id, quantity, reason, req.user.id], (err2) => {
+            if (err2) return finish(err2);
+            tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, 'loss', ?, ?, ?, ?)", 
+                [product_id, -quantity, reason, req.user.id, p.avg_cost || 0], finish);
+        });
       });
     });
   }, (err) => err ? res.status(err.status || 500).json({ message: err.message }) : res.json({ status: "ok" }));
 });
 
 router.post("/stock/adjust", authenticateToken, requireSupervisor, (req, res) => {
-  const { product_id, delta, reason } = req.body;
-  db.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id], (err) => {
-    if (err) return res.status(400).json({ message: "Erro ao ajustar estoque." });
-    db.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, 'adjust', ?, ?, ?)", [product_id, delta, reason, req.user.id]);
-    res.json({ status: "ok" });
-  });
+  const { product_id, delta, reason, unit_cost } = req.body;
+  
+  runWithTransaction((tx, finish) => {
+    tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, p) => {
+        if (err || !p) return finish({ status: 404, message: "Produto não encontrado." });
+
+        let newAvgCost = p.avg_cost;
+        let newLastCost = p.last_cost;
+
+        if (delta > 0 && unit_cost && unit_cost > 0) {
+            newLastCost = unit_cost;
+            newAvgCost = calculateWeightedAverageCost(Number(p.current_stock), Number(p.avg_cost), Number(delta), Number(unit_cost));
+        }
+
+        tx.run(
+            "UPDATE products SET current_stock = current_stock + ?, avg_cost = ?, last_cost = ? WHERE id = ?",
+            [delta, newAvgCost, newLastCost, product_id],
+            (err2) => {
+                if (err2) return finish(err2);
+                tx.run(
+                    "INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, 'adjust', ?, ?, ?, ?)",
+                    [product_id, delta, reason, req.user.id, unit_cost || (delta < 0 ? p.avg_cost : 0)],
+                    finish
+                );
+            }
+        );
+    });
+  }, (err) => err ? res.status(err.status || 500).json({ message: err.message }) : res.json({ status: "ok" }));
 });
 
 router.post("/stock/move", authenticateToken, requireSupervisor, (req, res) => {
   const { product_id, quantity, type, reason } = req.body;
   const delta = type === "inbound" ? quantity : -quantity;
-  db.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id], (err) => {
-    if (err) return res.status(400).json({ message: "Erro ao mover estoque." });
-    db.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)", [product_id, type, delta, reason, req.user.id]);
-    res.json({ status: "ok" });
+  
+  db.get("SELECT avg_cost FROM products WHERE id = ?", [product_id], (err, p) => {
+      db.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id], (err) => {
+        if (err) return res.status(400).json({ message: "Erro ao mover estoque." });
+        db.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, ?, ?, ?, ?, ?)", 
+            [product_id, type, delta, reason, req.user.id, p?.avg_cost || 0]);
+        res.json({ status: "ok" });
+      });
   });
 });
 
 router.get("/stock/restock-suggestions", authenticateToken, (req, res) => {
-  db.all("SELECT * FROM products WHERE current_stock <= min_stock", [], (err, rows) => res.json(rows));
+  db.all("SELECT * FROM v_critical_stock", [], (err, rows) => res.json(rows));
 });
 
 // --- VENDAS E PDV ---
@@ -373,7 +418,6 @@ router.post("/sales", authenticateToken, (req, res) => {
   }
 
   runWithTransaction((tx, finish) => {
-    let processed = 0;
     const saleItems = [];
 
     const processItem = (index) => {
@@ -382,7 +426,7 @@ router.post("/sales", authenticateToken, (req, res) => {
       }
 
       const item = items[index];
-      tx.get("SELECT price, current_stock FROM products WHERE id = ?", [item.product_id], (err, product) => {
+      tx.get("SELECT price, current_stock, avg_cost FROM products WHERE id = ?", [item.product_id], (err, product) => {
         if (err || !product) return finish(err || new Error("Produto não encontrado"));
         
         const total = Number(product.price) * Number(item.quantity);
@@ -399,6 +443,9 @@ router.post("/sales", authenticateToken, (req, res) => {
             tx.run("UPDATE sales SET document_number = ? WHERE id = ?", [docNum, row.id]);
             tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id]);
             
+            tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, unit_cost) VALUES (?, 'sale', ?, 'Venda PDV', ?, ?)",
+                [item.product_id, -item.quantity, req.user.id, product.avg_cost || 0]);
+
             saleItems.push({ id: row.id, document_number: docNum });
             processItem(index + 1);
           }
