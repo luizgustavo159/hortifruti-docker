@@ -317,9 +317,9 @@ router.get("/products", authenticateToken, (req, res) => {
 router.post("/products", authenticateToken, requireSupervisor, (req, res) => {
   const p = req.body;
   db.get(`
-    INSERT INTO products (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at, product_profit_margin)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
-  `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at, p.product_profit_margin], (err, row) => {
+    INSERT INTO products (name, sku, unit_type, price, current_stock, min_stock, max_stock, category_id, supplier_id, expires_at, product_profit_margin, avg_cost, last_cost)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+  `, [p.name, p.sku, p.unit_type, p.price, p.current_stock || 0, p.min_stock || 0, p.max_stock || 0, p.category_id, p.supplier_id, p.expires_at, p.product_profit_margin, p.avg_cost || 0, p.avg_cost || 0], (err, row) => {
     if (err) return res.status(400).json({ message: "Erro ao criar produto." });
     res.status(201).json({ id: row.id });
   });

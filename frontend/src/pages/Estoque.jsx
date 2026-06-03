@@ -31,6 +31,8 @@ export function Estoque() {
     category_id: "",
     supplier_id: "",
     price: "",
+    avg_cost: "",
+    product_profit_margin: "30",
     current_stock: "",
     min_stock: "",
     unit_type: "un",
@@ -89,6 +91,8 @@ export function Estoque() {
         category_id: parseInt(newProduct.category_id),
         supplier_id: newProduct.supplier_id ? parseInt(newProduct.supplier_id) : null,
         price: parseFloat(newProduct.price),
+        avg_cost: newProduct.avg_cost ? parseFloat(newProduct.avg_cost) : 0,
+        product_profit_margin: parseFloat(newProduct.product_profit_margin),
         current_stock: isKg ? parseFloat(newProduct.current_stock) : parseInt(newProduct.current_stock),
         min_stock: isKg ? parseFloat(newProduct.min_stock) : parseInt(newProduct.min_stock),
         sku: `PROD-${Date.now()}`,
@@ -101,7 +105,7 @@ export function Estoque() {
       });
 
       setSuccessMessage("Produto criado com sucesso!");
-      setNewProduct({ name: "", category_id: "", supplier_id: "", price: "", current_stock: "", min_stock: "", unit_type: "un" });
+      setNewProduct({ name: "", category_id: "", supplier_id: "", price: "", avg_cost: "", product_profit_margin: "30", current_stock: "", min_stock: "", unit_type: "un" });
       setShowNewProductModal(false);
       loadData();
       setTimeout(() => setSuccessMessage(""), 3000);
@@ -315,6 +319,12 @@ export function Estoque() {
     return ((price - cost) / price) * 100;
   };
 
+  const suggestedPrice = (cost, margin) => {
+    if (!cost || isNaN(cost)) return 0;
+    const m = parseFloat(margin || 0);
+    return cost * (1 + m / 100);
+  };
+
   return (
     <PageShell
       title="Controle de Estoque"
@@ -399,7 +409,6 @@ export function Estoque() {
                         <tr key={product.id}>
                           <td>
                             <strong>{product.name}</strong>
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>SKU: {product.sku}</div>
                           </td>
                           <td>{product.category_name}</td>
                           <td>R$ {Number(product.price).toFixed(2)}</td>
@@ -615,26 +624,27 @@ export function Estoque() {
               <input type="text" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="Ex: Maçã Fuji" />
             </div>
 
-            <div className="form-group">
-              <label>Categoria *</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select style={{ flex: 1 }} value={newProduct.category_id} onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}>
-                  <option value="">Selecione...</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button className="btn-action" onClick={() => setShowCategoryModal(true)}>+</button>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Fornecedor</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select style={{ flex: 1 }} value={newProduct.supplier_id} onChange={(e) => setNewProduct({ ...newProduct, supplier_id: e.target.value })}>
-                  <option value="">Selecione...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                <button className="btn-action" onClick={() => setShowSupplierModal(true)}>+</button>
-              </div>
+            <div className="form-row">
+                <div className="form-group">
+                    <label>Categoria *</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <select style={{ flex: 1 }} value={newProduct.category_id} onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}>
+                        <option value="">Selecione...</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <button className="btn-action" onClick={() => setShowCategoryModal(true)}>+</button>
+                    </div>
+                </div>
+                <div className="form-group">
+                    <label>Fornecedor</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <select style={{ flex: 1 }} value={newProduct.supplier_id} onChange={(e) => setNewProduct({ ...newProduct, supplier_id: e.target.value })}>
+                        <option value="">Selecione...</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <button className="btn-action" onClick={() => setShowSupplierModal(true)}>+</button>
+                    </div>
+                </div>
             </div>
 
             <div className="form-group">
@@ -651,9 +661,35 @@ export function Estoque() {
 
             <div className="form-row">
               <div className="form-group">
-                <label>Preço por {newProduct.unit_type === 'kg' ? 'kg' : 'unidade'} *</label>
-                <input type="number" step="0.01" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })} placeholder="0,00" />
+                <label>Preço de Custo (Pago) *</label>
+                <input type="number" step="0.01" value={newProduct.avg_cost} onChange={(e) => setNewProduct({ ...newProduct, avg_cost: e.target.value })} placeholder="0,00" />
               </div>
+              <div className="form-group">
+                <label>Margem Alvo (%)</label>
+                <input type="number" value={newProduct.product_profit_margin} onChange={(e) => setNewProduct({ ...newProduct, product_profit_margin: e.target.value })} placeholder="Ex: 30" />
+              </div>
+            </div>
+
+            <div className="form-group" style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>Preço Sugerido:</span>
+                    <strong style={{ fontSize: '18px', color: '#1e293b' }}>R$ {suggestedPrice(newProduct.avg_cost, newProduct.product_profit_margin).toFixed(2)}</strong>
+                </div>
+                <button 
+                    className="btn-action" 
+                    style={{ width: '100%', marginTop: '8px', fontSize: '12px' }}
+                    onClick={() => setNewProduct({ ...newProduct, price: suggestedPrice(newProduct.avg_cost, newProduct.product_profit_margin).toFixed(2) })}
+                >
+                    Usar preço sugerido
+                </button>
+            </div>
+
+            <div className="form-group">
+              <label>Preço de Venda Final *</label>
+              <input type="number" step="0.01" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })} placeholder="0,00" />
+            </div>
+
+            <div className="form-row">
               <div className="form-group">
                 <label>Estoque Inicial *</label>
                 <input type="number" step={newProduct.unit_type === 'kg' ? '0.001' : '1'} value={newProduct.current_stock} onChange={(e) => setNewProduct({ ...newProduct, current_stock: e.target.value })} placeholder="Ex: 50" />
