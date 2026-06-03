@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { calculateWeightedAverageCost, calculateSuggestedPrice, calculateCurrentMarginPercent, calculateProfitPerUnit, calculateTotalProfitInStock, determineMarginStatus, calculateMarginDifference } = require("../helpers/pricing-helpers");
+const { calculateWeightedAverageCost, calculateSuggestedPrice, calculateCurrentMarginPercent, calculateProfitPerUnit, calculateTotalProfitInStock, determineMarginStatus, calculateMarginDifference } = require("./helpers/pricing-helpers");
 
 const jwt = require("jsonwebtoken");
 const { body, validationResult } = require("express-validator");
