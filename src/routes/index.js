@@ -66,21 +66,10 @@ router.get("/products", authenticateToken, (req, res) => {
   `, [], (err, rows) => res.json(rows));
 });
 
-// Ajuste rápido de preço individual
 router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), (req, res) => {
     const { price } = req.body;
     db.run("UPDATE products SET price = ? WHERE id = ?", [price, req.params.id], (err) => {
         if (err) return res.status(500).json({ message: "Erro ao atualizar preço." });
-        res.json({ status: "ok" });
-    });
-});
-
-// Reajuste em massa por categoria
-router.post("/products/bulk-reprice", authenticateToken, requireRole("manager"), (req, res) => {
-    const { category_id, percentage } = req.body;
-    const factor = 1 + (percentage / 100);
-    db.run("UPDATE products SET price = ROUND(price * ?, 2) WHERE category_id = ?", [factor, category_id], (err) => {
-        if (err) return res.status(500).json({ message: "Erro ao realizar reajuste em massa." });
         res.json({ status: "ok" });
     });
 });
@@ -134,7 +123,17 @@ router.post("/stock/loss", authenticateToken, (req, res) => {
     }, (err) => res.json({ status: "ok" }));
 });
 
-// --- VENDAS ---
+// --- VENDAS E CANCELAMENTO ---
+router.get("/sales/recent", authenticateToken, (req, res) => {
+    db.all(`
+        SELECT s.*, p.name as product_name, c.name as customer_name 
+        FROM sales s 
+        JOIN products p ON s.product_id = p.id 
+        LEFT JOIN customers c ON s.customer_id = c.id
+        ORDER BY s.created_at DESC LIMIT 50
+    `, [], (err, rows) => res.json(rows));
+});
+
 router.post("/sales", authenticateToken, (req, res) => {
   const { items, payment_method, customer_id } = req.body;
   runWithTransaction((tx, finish) => {
@@ -143,7 +142,7 @@ router.post("/sales", authenticateToken, (req, res) => {
         const item = items[idx];
         tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
             const total = p.price * item.quantity;
-            tx.run("INSERT INTO sales (product_id, quantity, total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?)", 
+            tx.run("INSERT INTO sales (product_id, quantity, total, payment_method, sold_by, customer_id, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')", 
                 [item.product_id, item.quantity, total, payment_method, req.user.id, customer_id]);
             let remaining = item.quantity;
             tx.all("SELECT * FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [item.product_id], (errB, batches) => {
@@ -163,6 +162,27 @@ router.post("/sales", authenticateToken, (req, res) => {
     };
     processItem(0);
   }, (err) => res.json({ status: "ok" }));
+});
+
+router.post("/sales/:id/cancel", authenticateToken, requireRole("manager"), (req, res) => {
+    runWithTransaction((tx, finish) => {
+        tx.get("SELECT * FROM sales WHERE id = ? AND status = 'completed'", [req.params.id], (err, sale) => {
+            if (!sale) return finish({ status: 404, message: "Venda não encontrada ou já cancelada." });
+            
+            // 1. Estornar Estoque (Devolver ao lote mais recente ou criar lote de estorno)
+            tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [sale.quantity, sale.product_id]);
+            tx.run("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost, notes) SELECT id, ?, ?, avg_cost, 'Estorno de venda cancelada' FROM products WHERE id = ?", [sale.quantity, sale.quantity, sale.product_id]);
+            
+            // 2. Estornar Fiado se necessário
+            if (sale.payment_method === 'fiado' && sale.customer_id) {
+                tx.run("UPDATE customers SET current_debt = current_debt - ? WHERE id = ?", [sale.total, sale.customer_id]);
+            }
+            
+            // 3. Marcar como cancelada
+            tx.run("UPDATE sales SET status = 'cancelled' WHERE id = ?", [req.params.id]);
+            finish(null);
+        });
+    }, (err) => err ? res.status(err.status || 500).json({ message: err.message }) : res.json({ status: "ok" }));
 });
 
 router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT * FROM categories", [], (err, rows) => res.json(rows)); });
