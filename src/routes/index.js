@@ -460,6 +460,48 @@ router.put("/products/:id/margin", authenticateToken, requireSupervisor, (req, r
   );
 });
 
+
+// --- DESCONTOS ---
+router.get("/discounts", authenticateToken, (req, res) => {
+  db.all("SELECT * FROM discounts ORDER BY created_at DESC", [], (err, rows) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar descontos." });
+    res.json(rows);
+  });
+});
+
+router.post("/discounts", authenticateToken, requireManager, (req, res) => {
+  const { name, type, value, start_date, end_date, product_id, category_id, min_purchase_amount, is_active } = req.body;
+  db.run(
+    "INSERT INTO discounts (name, type, value, start_date, end_date, product_id, category_id, min_purchase_amount, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [name, type, value, start_date, end_date, product_id, category_id, min_purchase_amount, is_active ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ message: "Erro ao criar desconto." });
+      res.status(201).json({ id: this.lastID });
+    }
+  );
+});
+
+router.delete("/discounts/:id", authenticateToken, requireManager, (req, res) => {
+  db.run("DELETE FROM discounts WHERE id = ?", [req.params.id], (err) => {
+    if (err) return res.status(500).json({ message: "Erro ao excluir desconto." });
+    res.json({ status: "ok" });
+  });
+});
+
+
+// --- LOGS DE AUDITORIA ---
+router.get("/logs", authenticateToken, requireAdmin, (req, res) => {
+  const { limit = 100, offset = 0 } = req.query;
+  db.all(
+    "SELECT l.*, u.name as user_name FROM audit_logs l LEFT JOIN users u ON l.performed_by = u.id ORDER BY l.created_at DESC LIMIT ? OFFSET ?",
+    [limit, offset],
+    (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erro ao buscar logs." });
+      res.json(rows);
+    }
+  );
+});
+
 // --- CONFIGURAÇÕES E USUÁRIOS ---
 
 router.get("/settings", authenticateToken, requireAdmin, (req, res) => {
