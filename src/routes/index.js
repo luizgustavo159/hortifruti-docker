@@ -1,18 +1,8 @@
 const express = require("express");
-const crypto = require("crypto");
-const bcrypt = require("bcryptjs");
-const { calculateWeightedAverageCost } = require("../helpers/pricing-helpers");
-
 const jwt = require("jsonwebtoken");
 const db = require("../../db");
 const config = require("../../config");
-const { 
-  generateAccessToken, 
-  generateRefreshToken, 
-  refreshTokenMiddleware,
-  logoutMiddleware,
-  checkBlacklist
-} = require("../middleware/tokenManagement");
+const { isTokenBlacklisted } = require("../middleware/tokenManagement");
 
 const router = express.Router();
 const authRouter = require("./auth");
@@ -30,8 +20,6 @@ const authenticateToken = (req, res, next) => {
   return jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ message: "Token inválido." });
     
-    // Aplicar checkBlacklist manualmente aqui ou como middleware antes
-    const { isTokenBlacklisted } = require("../middleware/tokenManagement");
     if (await isTokenBlacklisted(token)) {
       return res.status(401).json({ message: "Sessão encerrada." });
     }
@@ -67,16 +55,27 @@ router.post("/customers", authenticateToken, requireRole("supervisor"), (req, re
     });
 });
 
-// --- PRODUTOS E PRECIFICAÇÃO ---
+// --- PRODUTOS ---
 router.get("/products", authenticateToken, (req, res) => {
   db.all(`
-    SELECT p.*, c.name AS category_name, s.name AS supplier_name, c.target_margin as category_margin,
-    (SELECT MIN(received_at) FROM product_batches WHERE product_id = p.id AND current_quantity > 0) as oldest_batch
+    SELECT p.*, c.name AS category_name, s.name AS supplier_name, c.target_margin as category_margin
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     ORDER BY p.name
   `, [], (err, rows) => res.json(rows));
+});
+
+router.post("/products", authenticateToken, requireRole("supervisor"), (req, res) => {
+  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost } = req.body;
+  db.get(
+    "INSERT INTO products (name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+    [name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost || 0],
+    (err, row) => {
+      if (err) return res.status(400).json({ message: "Erro ao criar produto." });
+      res.status(201).json(row);
+    }
+  );
 });
 
 router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), (req, res) => {
@@ -87,56 +86,124 @@ router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), 
     });
 });
 
-// --- ESTOQUE (LOTES FIFO) ---
+// --- ESTOQUE ---
 router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req, res) => {
-  const { product_id, delta, reason, unit_cost, supplier_id } = req.body;
-  
+  const { product_id, delta, reason } = req.body;
   runWithTransaction((tx, finish) => {
-    tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, p) => {
-        if (!p) return finish({ status: 404, message: "Produto não encontrado." });
-
-        if (delta > 0) {
-            tx.get("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost, supplier_id) VALUES (?, ?, ?, ?, ?) RETURNING id", 
-                [product_id, delta, delta, unit_cost || p.avg_cost, supplier_id], (errB, batch) => {
-                const newAvgCost = calculateWeightedAverageCost(p.current_stock, p.avg_cost, delta, unit_cost || p.avg_cost);
-                tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ?, last_cost = ? WHERE id = ?", [delta, newAvgCost, unit_cost || p.avg_cost, product_id]);
-                finish(null);
-            });
-        } else {
-            let remaining = Math.abs(delta);
-            tx.all("SELECT * FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
-                for (const b of batches) {
-                    if (remaining <= 0) break;
-                    const deduct = Math.min(b.current_quantity, remaining);
-                    tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [deduct, b.id]);
-                    remaining -= deduct;
-                }
-                tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id]);
-                finish(null);
-            });
-        }
+    tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id], (err) => {
+      if (err) return finish(err);
+      tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+        [product_id, delta > 0 ? 'inbound' : 'outbound', delta, reason, req.user.id], (errM) => {
+          finish(errM);
+        });
     });
-  }, (err) => err ? res.status(err.status || 500).json({ message: err.message }) : res.json({ status: "ok" }));
+  }, (err) => err ? res.status(500).json({ message: "Erro ao ajustar estoque." }) : res.json({ status: "ok" }));
 });
 
 router.post("/stock/loss", authenticateToken, (req, res) => {
     const { product_id, quantity, reason } = req.body;
     runWithTransaction((tx, finish) => {
-        let remaining = quantity;
-        tx.all("SELECT * FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (err, batches) => {
-            for (const b of batches) {
-                if (remaining <= 0) break;
-                const deduct = Math.min(b.current_quantity, remaining);
-                tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [deduct, b.id]);
-                remaining -= deduct;
-            }
-            tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [quantity, product_id]);
-            finish(null);
-        });
-    }, (err) => res.json({ status: "ok" }));
+      tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [quantity, product_id], (err) => {
+        if (err) return finish(err);
+        tx.run("INSERT INTO stock_losses (product_id, quantity, reason) VALUES (?, ?, ?)",
+          [product_id, quantity, reason], (errL) => {
+            finish(errL);
+          });
+      });
+    }, (err) => err ? res.status(500).json({ message: "Erro ao registrar perda." }) : res.json({ status: "ok" }));
 });
 
-// --- VENDAS E CANCELAMENTO ---
+// --- DESCONTOS ---
+router.get("/discounts", authenticateToken, (req, res) => {
+  db.all("SELECT * FROM discounts ORDER BY priority DESC, created_at DESC", [], (err, rows) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar descontos." });
+    res.json(rows);
+  });
+});
+
+router.post("/discounts", authenticateToken, requireRole("manager"), (req, res) => {
+  const { name, type, value, description, target_type, target_value, min_quantity, buy_quantity, get_quantity, starts_at, ends_at, starts_time, ends_time, days_of_week, stacking_rule, priority, active } = req.body;
+  db.get(`
+    INSERT INTO discounts (name, type, value, description, target_type, target_value, min_quantity, buy_quantity, get_quantity, starts_at, ends_at, starts_time, ends_time, days_of_week, stacking_rule, priority, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+  `, [name, type, value, description, target_type, target_value, min_quantity, buy_quantity, get_quantity, starts_at, ends_at, starts_time, ends_time, days_of_week, stacking_rule, priority, active], 
+  (err, row) => {
+    if (err) return res.status(400).json({ message: "Erro ao criar desconto." });
+    res.status(201).json(row);
+  });
+});
+
+router.put("/discounts/:id", authenticateToken, requireRole("manager"), (req, res) => {
+  const { name, type, value, description, target_type, target_value, min_quantity, buy_quantity, get_quantity, starts_at, ends_at, starts_time, ends_time, days_of_week, stacking_rule, priority, active } = req.body;
+  db.run(`
+    UPDATE discounts SET name=?, type=?, value=?, description=?, target_type=?, target_value=?, min_quantity=?, buy_quantity=?, get_quantity=?, starts_at=?, ends_at=?, starts_time=?, ends_time=?, days_of_week=?, stacking_rule=?, priority=?, active=?
+    WHERE id = ?
+  `, [name, type, value, description, target_type, target_value, min_quantity, buy_quantity, get_quantity, starts_at, ends_at, starts_time, ends_time, days_of_week, stacking_rule, priority, active, req.params.id], 
+  (err) => {
+    if (err) return res.status(400).json({ message: "Erro ao atualizar desconto." });
+    res.json({ status: "ok" });
+  });
+});
+
+router.delete("/discounts/:id", authenticateToken, requireRole("manager"), (req, res) => {
+  db.run("DELETE FROM discounts WHERE id = ?", [req.params.id], (err) => {
+    if (err) return res.status(500).json({ message: "Erro ao excluir desconto." });
+    res.json({ status: "ok" });
+  });
+});
+
+// --- CAIXA (POS) ---
+router.get("/pos/cash-session/current", authenticateToken, (req, res) => {
+  db.get("SELECT * FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL", [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar sessão de caixa." });
+    res.json(row || null);
+  });
+});
+
+router.post("/pos/cash-session/open", authenticateToken, (req, res) => {
+  const { opening_amount, notes } = req.body;
+  db.get("INSERT INTO cash_sessions (operator_id, opening_amount, notes) VALUES (?, ?, ?) RETURNING *",
+    [req.user.id, opening_amount, notes], (err, row) => {
+      if (err) return res.status(400).json({ message: "Erro ao abrir caixa." });
+      res.status(201).json(row);
+    });
+});
+
+router.post("/pos/cash-session/close", authenticateToken, (req, res) => {
+  const { closing_amount, notes } = req.body;
+  db.run("UPDATE cash_sessions SET closed_at = CURRENT_TIMESTAMP, closing_amount = ?, notes = ? WHERE operator_id = ? AND closed_at IS NULL",
+    [closing_amount, notes, req.user.id], (err) => {
+      if (err) return res.status(400).json({ message: "Erro ao fechar caixa." });
+      res.json({ status: "ok" });
+    });
+});
+
+router.get("/pos/cash-session/movement", authenticateToken, (req, res) => {
+  db.all(`
+    SELECT m.*, u.name as performed_by_name 
+    FROM cash_movements m
+    JOIN cash_sessions s ON m.session_id = s.id
+    JOIN users u ON m.performed_by = u.id
+    WHERE s.operator_id = ? AND s.closed_at IS NULL
+    ORDER BY m.created_at DESC
+  `, [req.user.id], (err, rows) => {
+    res.json(rows);
+  });
+});
+
+router.post("/pos/cash-session/movement", authenticateToken, (req, res) => {
+  const { type, amount, reason } = req.body;
+  db.get("SELECT id FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL", [req.user.id], (err, session) => {
+    if (!session) return res.status(400).json({ message: "Nenhum caixa aberto." });
+    db.run("INSERT INTO cash_movements (session_id, type, amount, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+      [session.id, type, amount, reason, req.user.id], (errM) => {
+        if (errM) return res.status(400).json({ message: "Erro ao registrar movimento." });
+        res.json({ status: "ok" });
+      });
+  });
+});
+
+// --- VENDAS ---
 router.get("/sales/recent", authenticateToken, (req, res) => {
     db.all(`
         SELECT s.*, p.name as product_name, c.name as customer_name 
@@ -154,52 +221,64 @@ router.post("/sales", authenticateToken, (req, res) => {
         if (idx >= items.length) return finish(null);
         const item = items[idx];
         tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
+            if (!p) return finish(new Error("Produto não encontrado"));
             const total = p.price * item.quantity;
-            tx.run("INSERT INTO sales (product_id, quantity, total, payment_method, sold_by, customer_id, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')", 
-                [item.product_id, item.quantity, total, payment_method, req.user.id, customer_id]);
-            let remaining = item.quantity;
-            tx.all("SELECT * FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [item.product_id], (errB, batches) => {
-                for (const b of batches) {
-                    if (remaining <= 0) break;
-                    const deduct = Math.min(b.current_quantity, remaining);
-                    tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [deduct, b.id]);
-                    remaining -= deduct;
-                }
-                tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id]);
-                if (payment_method === 'fiado' && customer_id) {
-                    tx.run("UPDATE customers SET current_debt = current_debt + ? WHERE id = ?", [total, customer_id]);
-                }
-                processItem(idx + 1);
-            });
+            tx.run("INSERT INTO sales (product_id, quantity, total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?)", 
+                [item.product_id, item.quantity, total, payment_method, req.user.id, customer_id], (errS) => {
+                  if (errS) return finish(errS);
+                  tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id], (errU) => {
+                    if (errU) return finish(errU);
+                    processItem(idx + 1);
+                  });
+                });
         });
     };
     processItem(0);
+  }, (err) => err ? res.status(500).json({ message: "Erro ao processar venda." }) : res.json({ status: "ok" }));
+});
+
+// --- CATEGORIAS E FORNECEDORES ---
+router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT * FROM categories", [], (err, rows) => res.json(rows)); });
+router.get("/suppliers", authenticateToken, (req, res) => { db.all("SELECT * FROM suppliers", [], (err, rows) => res.json(rows)); });
+
+// --- USUÁRIOS ---
+router.get("/users", authenticateToken, requireRole("admin"), (req, res) => {
+  db.all("SELECT id, name, email, role, is_active, phone, permissions, created_at FROM users WHERE deleted_at IS NULL", [], (err, rows) => {
+    if (err) return res.status(500).json({ message: "Erro ao buscar usuários." });
+    res.json(rows);
+  });
+});
+
+// --- CONFIGURAÇÕES ---
+router.get("/settings", authenticateToken, (req, res) => {
+  db.all("SELECT * FROM settings", [], (err, rows) => {
+    const settings = {};
+    rows.forEach(r => settings[r.key] = r.value);
+    res.json(settings);
+  });
+});
+
+router.put("/settings", authenticateToken, requireRole("admin"), (req, res) => {
+  const settings = req.body;
+  runWithTransaction((tx, finish) => {
+    Object.keys(settings).forEach(key => {
+      tx.run("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value", [key, settings[key]]);
+    });
+    finish(null);
   }, (err) => res.json({ status: "ok" }));
 });
 
-router.post("/sales/:id/cancel", authenticateToken, requireRole("manager"), (req, res) => {
-    runWithTransaction((tx, finish) => {
-        tx.get("SELECT * FROM sales WHERE id = ? AND status = 'completed'", [req.params.id], (err, sale) => {
-            if (!sale) return finish({ status: 404, message: "Venda não encontrada ou já cancelada." });
-            
-            // 1. Estornar Estoque (Devolver ao lote mais recente ou criar lote de estorno)
-            tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [sale.quantity, sale.product_id]);
-            tx.run("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost, notes) SELECT id, ?, ?, avg_cost, 'Estorno de venda cancelada' FROM products WHERE id = ?", [sale.quantity, sale.quantity, sale.product_id]);
-            
-            // 2. Estornar Fiado se necessário
-            if (sale.payment_method === 'fiado' && sale.customer_id) {
-                tx.run("UPDATE customers SET current_debt = current_debt - ? WHERE id = ?", [sale.total, sale.customer_id]);
-            }
-            
-            // 3. Marcar como cancelada
-            tx.run("UPDATE sales SET status = 'cancelled' WHERE id = ?", [req.params.id]);
-            finish(null);
-        });
-    }, (err) => err ? res.status(err.status || 500).json({ message: err.message }) : res.json({ status: "ok" }));
+// --- RELATÓRIOS (PLACEHOLDERS) ---
+router.get("/reports/summary", authenticateToken, (req, res) => {
+  res.json({ total_sales: 0, total_losses: 0, real_profit: 0, low_stock: [] });
 });
+router.get("/reports/by-operator", authenticateToken, (req, res) => { res.json([]); });
+router.get("/reports/by-category", authenticateToken, (req, res) => { res.json([]); });
+router.get("/reports/hourly-sales", authenticateToken, (req, res) => { res.json([]); });
 
-router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT * FROM categories", [], (err, rows) => res.json(rows)); });
-router.get("/suppliers", authenticateToken, (req, res) => { db.all("SELECT * FROM suppliers", [], (err, rows) => res.json(rows)); });
-router.get("/pos/cash-session/current", authenticateToken, (req, res) => { db.get("SELECT * FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL", [req.user.id], (err, row) => res.json(row)); });
+// --- APROVAÇÕES ---
+router.post("/approvals", authenticateToken, (req, res) => {
+  res.json({ token: "dummy-token" });
+});
 
 module.exports = { router };
