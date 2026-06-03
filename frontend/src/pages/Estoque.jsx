@@ -6,8 +6,6 @@ import "./Estoque.css";
 export function Estoque() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [restockSuggestions, setRestockSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -18,53 +16,39 @@ export function Estoque() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const [newProduct, setNewProduct] = useState({
-    name: "",
-    category_id: "",
-    supplier_id: "",
-    price: "",
-    avg_cost: "",
-    product_profit_margin: "30",
-    current_stock: "",
-    min_stock: "",
-    unit_type: "un"
+    name: "", category_id: "", price: "", avg_cost: "", product_profit_margin: "30", current_stock: "", min_stock: "", unit_type: "un"
   });
 
-  const [movement, setMovement] = useState({
-    type: "loss",
-    quantity: "",
-    reason: "Quebra Visual",
-    unit_cost: "",
-  });
+  const [movement, setMovement] = useState({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [productsData, categoriesData, suppliersData, suggestionsData] =
-        await Promise.all([
-          apiFetch("/products"),
-          apiFetch("/categories"),
-          apiFetch("/suppliers"),
-          apiFetch("/stock/restock-suggestions"),
-        ]);
+      const [productsData, categoriesData] = await Promise.all([
+        apiFetch("/products"),
+        apiFetch("/categories")
+      ]);
       setProducts(productsData || []);
       setCategories(categoriesData || []);
-      setSuppliers(suppliersData || []);
-      setRestockSuggestions(suggestionsData || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const calculateStockAge = (lastInbound) => {
-    if (!lastInbound) return "Novo";
-    const diff = Math.floor((new Date() - new Date(lastInbound)) / (1000 * 60 * 60 * 24));
-    if (diff === 0) return "Hoje";
-    if (diff === 1) return "Ontem";
-    return `${diff} dias`;
+  const handleQuickPriceUpdate = async (product) => {
+    const targetMargin = product.category_margin || 30;
+    const suggestedPrice = product.avg_cost / (1 - (targetMargin / 100));
+    
+    try {
+      await apiFetch(`/products/${product.id}/price`, {
+        method: "PUT",
+        body: JSON.stringify({ price: suggestedPrice.toFixed(2) })
+      });
+      setSuccessMessage(`Preço de ${product.name} atualizado!`);
+      loadData();
+      setTimeout(() => setSuccessMessage(""), 2000);
+    } catch (err) { setError(err.message); }
   };
 
   const handleStockMovement = async () => {
@@ -79,75 +63,76 @@ export function Estoque() {
         unit_cost: movement.type === "inbound" ? parseFloat(movement.unit_cost || 0) : 0
       };
       await apiFetch(endpoint, { method: "POST", body: JSON.stringify(body) });
-      setSuccessMessage("Registrado com sucesso!");
+      setSuccessMessage("Movimentação registrada!");
       setShowMovementModal(false);
       loadData();
     } catch (err) { setError(err.message); }
   };
 
   return (
-    <PageShell title="Estoque" subtitle="Gestão de Produtos e Perdas">
-      <div className="estoque-tabs">
-        <button className={activeTab === "inventory" ? "active" : ""} onClick={() => setActiveTab("inventory")}>Inventário</button>
-        <button className={activeTab === "alerts" ? "active" : ""} onClick={() => setActiveTab("alerts")}>
-          Reposição {restockSuggestions.length > 0 && <span className="badge">{restockSuggestions.length}</span>}
-        </button>
+    <PageShell title="Estoque" subtitle="Gestão de Produtos e Preços">
+      {successMessage && <div className="toast success">{successMessage}</div>}
+      
+      <div className="inventory-header">
+        <input type="search" placeholder="Buscar produto..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <button className="btn-primary" onClick={() => setShowNewProductModal(true)}>+ Novo Produto</button>
       </div>
 
-      {activeTab === "inventory" && (
-        <div className="tab-content">
-          <div className="inventory-header">
-            <input type="search" placeholder="Buscar produto..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-            <button className="btn-primary" onClick={() => setShowNewProductModal(true)}>+ Novo Produto</button>
-          </div>
-          
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Produto</th>
-                <th>Estoque</th>
-                <th>Preço</th>
-                <th>Idade</th>
-                <th>Ações</th>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th>Estoque</th>
+            <th>Preço Atual</th>
+            <th>Margem</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => {
+            const currentMargin = p.price > 0 ? ((p.price - p.avg_cost) / p.price * 100) : 0;
+            const targetMargin = p.category_margin || 30;
+            const isLowMargin = currentMargin < targetMargin;
+            const suggestedPrice = p.avg_cost / (1 - (targetMargin / 100));
+
+            return (
+              <tr key={p.id}>
+                <td><strong>{p.name}</strong></td>
+                <td>{p.current_stock} {p.unit_type}</td>
+                <td>R$ {p.price.toFixed(2)}</td>
+                <td>
+                  <span className={isLowMargin ? "text-danger" : "text-success"}>
+                    {currentMargin.toFixed(1)}%
+                  </span>
+                  {isLowMargin && (
+                    <button 
+                      className="btn-quick-price" 
+                      title={`Sugerido: R$ ${suggestedPrice.toFixed(2)}`}
+                      onClick={() => handleQuickPriceUpdate(p)}
+                    >
+                      ⚡ Corrigir
+                    </button>
+                  )}
+                </td>
+                <td>
+                  <button className="btn-small" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
+                  <button className="btn-small btn-danger" onClick={() => { setSelectedProduct(p); setMovement({type: "loss", quantity: "", reason: "Quebra Visual", unit_cost: ""}); setShowMovementModal(true); }}>Perda</button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                <tr key={p.id}>
-                  <td><strong>{p.name}</strong></td>
-                  <td className={p.current_stock <= p.min_stock ? "text-danger" : ""}>{p.current_stock} {p.unit_type}</td>
-                  <td>R$ {p.price.toFixed(2)}</td>
-                  <td><span className={`age-tag ${parseInt(calculateStockAge(p.last_inbound)) > 3 ? 'old' : 'fresh'}`}>{calculateStockAge(p.last_inbound)}</span></td>
-                  <td>
-                    <button className="btn-small" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
-                    <button className="btn-small btn-danger" onClick={() => { setSelectedProduct(p); setMovement({type: "loss", quantity: "", reason: "Quebra Visual", unit_cost: ""}); setShowMovementModal(true); }}>Perda</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            );
+          })}
+        </tbody>
+      </table>
 
       {showMovementModal && selectedProduct && (
         <div className="modal-overlay">
           <div className="modal">
-            <h3>{movement.type === 'loss' ? '🍎 Registrar Perda' : '📦 Registrar Entrada'}</h3>
-            <p>Produto: <strong>{selectedProduct.name}</strong></p>
-            <div className="form-group">
-                <label>Quantidade ({selectedProduct.unit_type})</label>
-                <input type="number" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} autoFocus />
-            </div>
+            <h3>{movement.type === 'inbound' ? '📦 Entrada' : '🍎 Perda'} - {selectedProduct.name}</h3>
+            <input type="number" placeholder="Quantidade" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} />
             {movement.type === 'inbound' && (
-                <div className="form-group">
-                    <label>Custo Unitário (R$)</label>
-                    <input type="number" value={movement.unit_cost} onChange={e => setMovement({...movement, unit_cost: e.target.value})} />
-                </div>
+                <input type="number" placeholder="Custo Unitário (R$)" value={movement.unit_cost} onChange={e => setMovement({...movement, unit_cost: e.target.value})} />
             )}
-            <div className="form-group">
-                <label>Motivo</label>
-                <input value={movement.reason} onChange={e => setMovement({...movement, reason: e.target.value})} />
-            </div>
+            <input placeholder="Motivo" value={movement.reason} onChange={e => setMovement({...movement, reason: e.target.value})} />
             <div className="modal-actions">
                 <button className="btn-primary" onClick={handleStockMovement}>Confirmar</button>
                 <button onClick={() => setShowMovementModal(false)}>Cancelar</button>

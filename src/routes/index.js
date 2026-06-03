@@ -41,11 +41,7 @@ const runWithTransaction = (work, callback) => {
   db.withTransaction((tx, finish) => { work(tx, finish); }, callback);
 };
 
-const logAudit = ({ action, details, performedBy, type = "system" }) => {
-  db.run("INSERT INTO audit_logs (action, details, performed_by, type) VALUES (?, ?, ?, ?)", [action, JSON.stringify(details), performedBy, type]);
-};
-
-// --- CLIENTES (FIADO) ---
+// --- CLIENTES ---
 router.get("/customers", authenticateToken, (req, res) => {
     db.all("SELECT * FROM customers ORDER BY name", [], (err, rows) => res.json(rows));
 });
@@ -58,16 +54,35 @@ router.post("/customers", authenticateToken, requireRole("supervisor"), (req, re
     });
 });
 
-// --- PRODUTOS ---
+// --- PRODUTOS E PRECIFICAÇÃO ---
 router.get("/products", authenticateToken, (req, res) => {
   db.all(`
-    SELECT p.*, c.name AS category_name, s.name AS supplier_name,
+    SELECT p.*, c.name AS category_name, s.name AS supplier_name, c.target_margin as category_margin,
     (SELECT MIN(received_at) FROM product_batches WHERE product_id = p.id AND current_quantity > 0) as oldest_batch
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     ORDER BY p.name
   `, [], (err, rows) => res.json(rows));
+});
+
+// Ajuste rápido de preço individual
+router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), (req, res) => {
+    const { price } = req.body;
+    db.run("UPDATE products SET price = ? WHERE id = ?", [price, req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Erro ao atualizar preço." });
+        res.json({ status: "ok" });
+    });
+});
+
+// Reajuste em massa por categoria
+router.post("/products/bulk-reprice", authenticateToken, requireRole("manager"), (req, res) => {
+    const { category_id, percentage } = req.body;
+    const factor = 1 + (percentage / 100);
+    db.run("UPDATE products SET price = ROUND(price * ?, 2) WHERE category_id = ?", [factor, category_id], (err) => {
+        if (err) return res.status(500).json({ message: "Erro ao realizar reajuste em massa." });
+        res.json({ status: "ok" });
+    });
 });
 
 // --- ESTOQUE (LOTES FIFO) ---
@@ -78,26 +93,23 @@ router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req,
     tx.get("SELECT * FROM products WHERE id = ?", [product_id], (err, p) => {
         if (!p) return finish({ status: 404, message: "Produto não encontrado." });
 
-        if (delta > 0) { // Entrada de Lote
+        if (delta > 0) {
             tx.get("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost, supplier_id) VALUES (?, ?, ?, ?, ?) RETURNING id", 
                 [product_id, delta, delta, unit_cost || p.avg_cost, supplier_id], (errB, batch) => {
-                
                 const newAvgCost = calculateWeightedAverageCost(p.current_stock, p.avg_cost, delta, unit_cost || p.avg_cost);
                 tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ?, last_cost = ? WHERE id = ?", [delta, newAvgCost, unit_cost || p.avg_cost, product_id]);
-                tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, batch_id) VALUES (?, 'inbound', ?, ?, ?, ?)", [product_id, delta, reason, req.user.id, batch.id]);
                 finish(null);
             });
-        } else { // Saída/Ajuste (FIFO)
-            let remainingToDeduct = Math.abs(delta);
+        } else {
+            let remaining = Math.abs(delta);
             tx.all("SELECT * FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
                 for (const b of batches) {
-                    if (remainingToDeduct <= 0) break;
-                    const deduct = Math.min(b.current_quantity, remainingToDeduct);
+                    if (remaining <= 0) break;
+                    const deduct = Math.min(b.current_quantity, remaining);
                     tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [deduct, b.id]);
-                    remainingToDeduct -= deduct;
+                    remaining -= deduct;
                 }
                 tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id]);
-                tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, 'adjust', ?, ?, ?)", [product_id, delta, reason, req.user.id]);
                 finish(null);
             });
         }
@@ -114,7 +126,6 @@ router.post("/stock/loss", authenticateToken, (req, res) => {
                 if (remaining <= 0) break;
                 const deduct = Math.min(b.current_quantity, remaining);
                 tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [deduct, b.id]);
-                tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by, batch_id) VALUES (?, 'loss', ?, ?, ?, ?)", [product_id, -deduct, reason, req.user.id, b.id]);
                 remaining -= deduct;
             }
             tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [quantity, product_id]);
@@ -123,21 +134,17 @@ router.post("/stock/loss", authenticateToken, (req, res) => {
     }, (err) => res.json({ status: "ok" }));
 });
 
-// --- VENDAS (BAIXA FIFO) ---
+// --- VENDAS ---
 router.post("/sales", authenticateToken, (req, res) => {
-  const { items, payment_method, customer_id, amount_received } = req.body;
-  
+  const { items, payment_method, customer_id } = req.body;
   runWithTransaction((tx, finish) => {
     const processItem = (idx) => {
         if (idx >= items.length) return finish(null);
         const item = items[idx];
-        
         tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
             const total = p.price * item.quantity;
             tx.run("INSERT INTO sales (product_id, quantity, total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?)", 
                 [item.product_id, item.quantity, total, payment_method, req.user.id, customer_id]);
-            
-            // Baixa FIFO nos lotes
             let remaining = item.quantity;
             tx.all("SELECT * FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [item.product_id], (errB, batches) => {
                 for (const b of batches) {
@@ -147,7 +154,6 @@ router.post("/sales", authenticateToken, (req, res) => {
                     remaining -= deduct;
                 }
                 tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id]);
-                
                 if (payment_method === 'fiado' && customer_id) {
                     tx.run("UPDATE customers SET current_debt = current_debt + ? WHERE id = ?", [total, customer_id]);
                 }
@@ -159,7 +165,6 @@ router.post("/sales", authenticateToken, (req, res) => {
   }, (err) => res.json({ status: "ok" }));
 });
 
-// --- CATEGORIAS, FORNECEDORES, ETC (OMITIDOS PARA BREVIDADE) ---
 router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT * FROM categories", [], (err, rows) => res.json(rows)); });
 router.get("/suppliers", authenticateToken, (req, res) => { db.all("SELECT * FROM suppliers", [], (err, rows) => res.json(rows)); });
 router.get("/pos/cash-session/current", authenticateToken, (req, res) => { db.get("SELECT * FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL", [req.user.id], (err, row) => res.json(row)); });
