@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useScale } from '../hooks/useScale';
+import { RelogioGlobal } from '../components/RelogioGlobal';
 import './CaixaFocusMode.css';
 
 export function CaixaFocusMode() {
@@ -569,6 +570,9 @@ export function CaixaFocusMode() {
             >
               {processingPayment ? 'Processando...' : 'Finalizar (F10)'}
             </button>
+          </div>
+          <div className="focus-relogio-container">
+            <RelogioGlobal />
           </div>
         </div>
       </div>

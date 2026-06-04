@@ -9,6 +9,31 @@
   align-items: center;
   gap: 4px;
 
+  /* Quando dentro do Modo Foco, o container pai vai gerenciar o posicionamento */
+}
+
+/* Ajuste específico para quando o relógio está no Modo Foco */
+.focus-relogio-container .relogio-global {
+  position: static;
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 12px;
+  width: 100%;
+  justify-content: flex-end;
+  font-size: 12px;
+}
+
+.focus-relogio-container .relogio-data {
+  color: #94a3b8;
+}
+
+.focus-relogio-container .relogio-hora {
+  color: #4ade80;
+}
+
   /* Glassmorphism effect para alinhar com o design moderno */
   background-color: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(8px);
