@@ -53,6 +53,82 @@ export function Estoque() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ==================== DICIONÁRIO CARICATO DE FRUTAS/VERDURAS ====================
+  const emojiDictionary = {
+    // Frutas vermelhas
+    maçã: "🍎", maca: "🍎", apple: "🍎",
+    morango: "🍓", strawberry: "🍓",
+    cereja: "🍒", cherry: "🍒",
+    melancia: "🍉", watermelon: "🍉",
+    tomate: "🍅", tomato: "🍅",
+    
+    // Frutas amarelas/laranjas
+    banana: "🍌", banana: "🍌",
+    laranja: "🍊", orange: "🍊",
+    limão: "🍋", lemon: "🍋",
+    abacaxi: "🍍", pineapple: "🍍",
+    manga: "🥭", mango: "🥭",
+    
+    // Frutas roxas/azuis
+    uva: "🍇", grape: "🍇",
+    amora: "🫐", blueberry: "🫐",
+    
+    // Verduras
+    brócolis: "🥦", brocolis: "🥦", broccoli: "🥦",
+    cenoura: "🥕", carrot: "🥕",
+    milho: "🌽", corn: "🌽",
+    alface: "🥬", lettuce: "🥬",
+    repolho: "🥬", cabbage: "🥬",
+    espinafre: "🥬", spinach: "🥬",
+    abóbora: "🎃", pumpkin: "🎃", squash: "🎃",
+    batata: "🥔", potato: "🥔",
+    cebola: "🧅", onion: "🧅",
+    alho: "🧄", garlic: "🧄",
+    pimentão: "🫑", pepper: "🫑", bell_pepper: "🫑",
+    pimenta: "🌶️", chili: "🌶️",
+    pepino: "🥒", cucumber: "🥒",
+    abacate: "🥑", avocado: "🥑",
+    cogumelo: "🍄", mushroom: "🍄",
+    feijão: "🫘", beans: "🫘",
+    
+    // Frutas secas/sementes
+    amendoim: "🥜", peanut: "🥜",
+    coco: "🥥", coconut: "🥥",
+    noz: "🌰", walnut: "🌰", nut: "🌰",
+  };
+
+  // ==================== FUNÇÕES DE GERAÇÃO DE IMAGEM CARICATA ====================
+  // Gera SVG caricato com emoji e nome do produto
+  const generateCaricatureImage = (productName) => {
+    if (!productName || productName.length < 2) return "";
+    
+    const nameLower = productName.toLowerCase();
+    let emoji = "🥬"; // padrão: verdura genérica
+    
+    // Busca correspondência no dicionário (verifica cada palavra)
+    for (const [key, value] of Object.entries(emojiDictionary)) {
+      if (nameLower.includes(key)) {
+        emoji = value;
+        break;
+      }
+    }
+    
+    // Gera SVG com emoji grande e nome do produto
+    const svg = `
+      <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+        <rect width="400" height="400" fill="#f0f8ff" rx="10"/>
+        <circle cx="200" cy="150" r="80" fill="#e8f5e9" stroke="#4CAF50" stroke-width="3"/>
+        <text x="200" y="180" font-size="120" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
+        <text x="200" y="280" font-size="28" font-weight="bold" text-anchor="middle" fill="#333" font-family="Arial">${productName}</text>
+        <text x="200" y="320" font-size="14" text-anchor="middle" fill="#999" font-family="Arial">Imagem Caricata</text>
+      </svg>
+    `;
+    
+    // Converte SVG para Data URL
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    return URL.createObjectURL(blob);
+  };
+
   // ==================== FUNÇÕES DE CÁLCULO ====================
   // Calcula preço sugerido baseado em MARGEM SOBRE CUSTO (ex: custo 10 + 30% = 13)
   const calculateSuggestedPrice = (cost, margin) => {
@@ -79,14 +155,44 @@ export function Estoque() {
     return 30; // Margem padrão fixa
   };
 
-
-  // Busca imagem ilustrativa automática baseada no nome
-  const fetchProductImage = (name) => {
-    if (!name || name.length < 3) return;
-    // Usando LoremFlickr para imagens aleatórias de comida/hortifruti baseadas no termo
-    const imageUrl = `https://loremflickr.com/400/400/${encodeURIComponent(name)}?lock=${Date.now()}`;
-    setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
+  // ==================== FUNÇÕES DE UPLOAD DE IMAGEM ====================
+  // Upload de imagem do PC (converte para base64)
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Validar tamanho (máx 500KB para não estourar limite JSON)
+    if (file.size > 500 * 1024) {
+      setError("Imagem muito grande. Máximo 500KB.");
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result;
+      if (typeof base64 === 'string') {
+        setNewProduct(prev => ({ ...prev, image_url: base64 }));
+        setSuccessMessage("Imagem carregada com sucesso!");
+      }
+    };
+    reader.onerror = () => {
+      setError("Erro ao ler arquivo de imagem.");
+    };
+    reader.readAsDataURL(file);
   };
+
+  // Gera imagem caricata automática
+  const handleGenerateCaricature = () => {
+    if (!newProduct.name || newProduct.name.length < 2) {
+      setError("Digite o nome do produto primeiro (mínimo 2 caracteres)");
+      return;
+    }
+    
+    const imageUrl = generateCaricatureImage(newProduct.name);
+    setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
+    setSuccessMessage(`Imagem caricata gerada para "${newProduct.name}"!`);
+  };
+
   // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
   // Gera um código EAN-13 válido com dígito verificador
   const generateEAN13 = () => {
@@ -112,7 +218,6 @@ export function Estoque() {
     const checkDigit = (10 - (sum % 10)) % 10;
     return parseInt(ean[12]) === checkDigit;
   };
-
 
   // Gera SVG de código de barras EAN-13
   const generateBarcodeImage = (ean) => {
@@ -459,7 +564,7 @@ export function Estoque() {
                           </div>
                         </td>
                         <td>
-                          <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30"}); setShowNewProductModal(true); }}>Editar</button>
+                          <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30", image_url: p.image_url || ""}); setShowNewProductModal(true); }}>Editar</button>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
                         </td>
                       </tr>
@@ -541,15 +646,30 @@ export function Estoque() {
                 {newProduct.image_url ? (
                   <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '2px solid #ddd' }}>
                     <img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <button type="button" onClick={() => fetchProductImage(newProduct.name)} style={{ position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', fontSize: '10px', padding: '4px', cursor: 'pointer' }}>Trocar Foto</button>
+                    <div style={{ position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.7)', color: 'white', display: 'flex', gap: '4px', fontSize: '10px', padding: '4px' }}>
+                      <button type="button" onClick={handleGenerateCaricature} style={{ flex: 1, background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '2px', padding: '4px' }}>🎨 Gerar</button>
+                      <label style={{ flex: 1, background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '2px', padding: '4px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        📁 Upload
+                        <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                      </label>
+                    </div>
                   </div>
                 ) : (
-                  <div style={{ width: '120px', height: '120px', borderRadius: '8px', border: '2px dashed #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '12px', textAlign: 'center' }}>Digite o nome para gerar foto</div>
+                  <div style={{ width: '120px', height: '120px', borderRadius: '8px', border: '2px dashed #ccc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '12px', textAlign: 'center', gap: '8px' }}>
+                    <div>Digite o nome para gerar</div>
+                    <div style={{ display: 'flex', gap: '4px', fontSize: '10px' }}>
+                      <button type="button" onClick={handleGenerateCaricature} style={{ background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '2px', padding: '4px 8px', fontSize: '10px' }}>🎨 Gerar</button>
+                      <label style={{ background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '2px', padding: '4px 8px', fontSize: '10px' }}>
+                        📁 Upload
+                        <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                      </label>
+                    </div>
+                  </div>
                 )}
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Nome do Produto</label>
-                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => { const val = e.target.value; setNewProduct({...newProduct, name: val}); if(val.length > 3) fetchProductImage(val); }} className="input" />
+                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => { const val = e.target.value; setNewProduct({...newProduct, name: val}); }} className="input" />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Código de Barras (EAN-13)</label>
