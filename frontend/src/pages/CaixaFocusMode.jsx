@@ -181,30 +181,38 @@ export function CaixaFocusMode() {
 
   const calculateItemDiscount = (item) => {
     if (!item.discount_id) return 0;
-    const discount = discounts.find((d) => d.id === item.discount_id);
-    if (!discount) return 0;
-    const itemTotal = item.price * item.quantity;
-    const quantity = item.quantity;
-    let discountAmount = 0;
-    if (discount.type === 'percent') {
-      discountAmount = itemTotal * (Number(discount.value) / 100);
-    } else if (discount.type === 'fixed') {
-      discountAmount = Number(discount.value);
-    } else if (discount.type === 'buy_x_get_y') {
-      const buyQty = Number(discount.buy_quantity);
-      const getQty = Number(discount.get_quantity);
-      if (buyQty > 0 && quantity >= buyQty) discountAmount = Number(item.price) * getQty;
-    } else if (discount.type === 'fixed_bundle') {
-      const bundleQty = Number(discount.buy_quantity);
-      const bundlePrice = Number(discount.value);
-      if (bundleQty > 0 && bundlePrice >= 0) {
-        const bundles = Math.floor(quantity / bundleQty);
-        const remainder = quantity % bundleQty;
-        discountAmount = itemTotal - (bundles * bundlePrice + remainder * Number(item.price));
-      }
+    const d = discounts.find((d) => d.id === item.discount_id);
+    if (!d || !d.active) return 0;
+
+    const now = new Date();
+    if (d.starts_at && new Date(d.starts_at) > now) return 0;
+    if (d.ends_at && new Date(d.ends_at) < now) return 0;
+
+    const subtotal = item.price * item.quantity;
+
+    switch (d.type) {
+      case "percent":
+        return subtotal * (Number(d.value) / 100);
+      case "fixed":
+        return Number(d.value);
+      case "buy_x_get_y":
+        if (item.quantity >= d.buy_quantity && d.buy_quantity > 0) {
+          const sets = Math.floor(item.quantity / d.buy_quantity);
+          const freeItemsPerSet = d.buy_quantity - d.get_quantity;
+          return sets * freeItemsPerSet * item.price;
+        }
+        return 0;
+      case "fixed_bundle":
+        if (item.quantity >= d.min_quantity && d.min_quantity > 0) {
+          const bundles = Math.floor(item.quantity / d.min_quantity);
+          const normalPriceForBundles = bundles * d.min_quantity * item.price;
+          const bundlePrice = bundles * Number(d.value);
+          return normalPriceForBundles - bundlePrice;
+        }
+        return 0;
+      default:
+        return 0;
     }
-    if (discount.min_quantity && quantity < Number(discount.min_quantity)) discountAmount = 0;
-    return Math.max(discountAmount, 0);
   };
 
   const calculateTotal = () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
