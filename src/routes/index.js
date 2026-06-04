@@ -677,7 +677,7 @@ router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
                 string_agg(p.name::text, ', ') as items
             FROM sales s
             JOIN products p ON s.product_id = p.id
-            WHERE s.customer_id = ?
+            WHERE s.customer_id = ?::integer
             GROUP BY s.id, s.final_total, s.created_at, s.payment_method
             
             UNION ALL
@@ -689,7 +689,7 @@ router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
                 cp.payment_method, 
                 'Pagamento de Dívida'::text as items
             FROM customer_payments cp
-            WHERE cp.customer_id = ?
+            WHERE cp.customer_id = ?::integer
         )
         SELECT * FROM combined_history ORDER BY created_at DESC
     `, [customerId, customerId], (err, rows) => {

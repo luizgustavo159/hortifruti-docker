@@ -81,10 +81,20 @@ const clientWrapper = {
 
 async function connectRedis() {
   if (client && !isRedisAvailable) {
+    // Evitar múltiplas tentativas de conexão simultâneas se o socket já estiver aberto
+    if (client.isOpen) {
+      isRedisAvailable = true;
+      return;
+    }
     try {
       await client.connect();
     } catch (err) {
-      logger.error({ err: err.message }, 'Falha na inicialização do Redis');
+      // Se o erro for "Socket already opened", podemos considerar como disponível
+      if (err.message.includes('Socket already opened')) {
+        isRedisAvailable = true;
+      } else {
+        logger.error({ err: err.message }, 'Falha na inicialização do Redis');
+      }
     }
   }
 }

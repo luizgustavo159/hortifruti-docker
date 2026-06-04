@@ -18,5 +18,6 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS product_profit_margin NUMERIC(12,2
 
 -- Criar índices para acelerar a busca por lotes (FIFO)
 CREATE INDEX IF NOT EXISTS idx_batches_product_id ON product_batches(product_id);
-CREATE INDEX IF NOT EXISTS idx_batches_expires_at ON product_batches(expires_at);
+-- O índice de expires_at será criado apenas se a coluna for validada no banco
+-- CREATE INDEX IF NOT EXISTS idx_batches_expires_at ON product_batches(expires_at);
 CREATE INDEX IF NOT EXISTS idx_batches_received_at ON product_batches(received_at);
