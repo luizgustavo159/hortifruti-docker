@@ -46,6 +46,7 @@
 
 .resumo-card .valor-input {
   width: 100%;
+  box-sizing: border-box; /* Garante que o padding não aumente a largura total */
   padding: 12px;
   border: 2px solid var(--border-color);
   border-radius: 8px;
@@ -221,6 +222,7 @@
 
 .notas-section textarea {
   width: 100%;
+  box-sizing: border-box; /* Garante que o padding não aumente a largura total */
   padding: 12px;
   border: 2px solid var(--border-color);
   border-radius: 8px;
