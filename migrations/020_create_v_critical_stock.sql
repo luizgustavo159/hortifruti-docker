@@ -1,4 +1,8 @@
-CREATE OR REPLACE VIEW v_critical_stock AS
+-- No PostgreSQL, CREATE OR REPLACE VIEW não permite remover colunas de uma view existente.
+-- É necessário remover a view anterior antes de recriá-la com a nova estrutura.
+DROP VIEW IF EXISTS v_critical_stock;
+
+CREATE VIEW v_critical_stock AS
 SELECT 
     id, 
     name, 
