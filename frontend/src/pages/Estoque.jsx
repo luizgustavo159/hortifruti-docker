@@ -55,26 +55,28 @@ export function Estoque() {
 
   // ==================== MOTOR DE BUSCA SEMÂNTICA REFINADO ====================
   const getEmojiForProduct = (name) => {
-    const text = name.toLowerCase().trim();
-    if (text.includes("maçã") || text.includes("maca") || text === "apple") return "🍎";
-    if (text.includes("banana")) return "🍌";
-    if (text.includes("uva")) return "🍇";
+    if (!name) return "📦";
+    
+    // Normalizar texto: minúsculas e remover acentos para busca
+    const normalize = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const text = normalize(name);
 
     const library = {
-      "morango|strawberry": "🍓", "cereja|cherry": "🍒", "melancia|watermelon": "🍉", 
-      "tomate|tomato": "🍅", "laranja|orange": "🍊", "limão|lemon": "🍋", "abacaxi|pineapple": "🍍",
-      "manga|mango": "🥭", "pêssego|peach": "🍑", "pera|pear": "🍐", "melão|melon": "🍈", 
+      "maca|apple": "🍎", "banana": "🍌", "uva|grape": "🍇", "morango|strawberry": "🍓", 
+      "cereja|cherry": "🍒", "melancia|watermelon": "🍉", "tomate|tomato": "🍅", 
+      "laranja|orange": "🍊", "limao|lemon": "🍋", "abacaxi|pineapple": "🍍",
+      "manga|mango": "🥭", "pessego|peach": "🍑", "pera|pear": "🍐", "melao|melon": "🍈", 
       "amora|blueberry|mirtilo": "🫐", "coco|coconut": "🥥", "abacate|avocado": "🥑",
-      "kiwi": "🥝", "papaya|mamão": "🥭", "graviola|jaca|fruta": "🌳",
-      "cenoura|carrot": "🥕", "milho|corn": "🌽", "brócolis|broccoli": "🥦",
+      "kiwi": "🥝", "papaya|mamao": "🥭", "graviola|jaca|fruta": "🌳",
+      "cenoura|carrot": "🥕", "milho|corn": "🌽", "brocolis": "🥦",
       "batata|potato": "🥔", "cebola|onion": "🧅", "alho|garlic": "🧄", "alface|repolho|folha|verde": "🥬",
-      "pimentão|pepper": "🫑", "pimenta|chili": "🌶️", "berinjela|eggplant": "🍆", "pepino|cucumber": "🥒",
-      "abóbora|pumpkin": "🎃", "cogumelo|mushroom": "🍄", "feijão|bean": "🫘", "batata doce": "🍠",
-      "ovo|egg": "🥚", "mel|honey": "🍯", "leite|milk": "🥛", "pão|bread": "🍞", "queijo|cheese": "🧀",
-      "carne|frango|steak": "🥩", "peixe|fish": "🐟", "camarão|shrimp": "🍤",
-      "doce|pudim|sobremesa|bolo": "🍮", "suco|bebida|refrigerante": "🥤", "água|water": "💧",
-      "café|coffee": "☕", "chá|tea": "🍵", "cerveja|beer": "🍺", "vinho|wine": "🍷",
-      "arroz|grão": "🌾", "macarrão|massa": "🍝", "pizza": "🍕", "hambúrguer": "🍔",
+      "pimentao|pepper": "🫑", "pimenta|chili": "🌶️", "berinjela|eggplant": "🍆", "pepino|cucumber": "🥒",
+      "abobora|pumpkin": "🎃", "cogumelo|mushroom": "🍄", "feijao|bean": "🫘", "batata doce": "🍠",
+      "ovo|egg": "🥚", "mel|honey": "🍯", "leite|milk": "🥛", "pao|bread": "🍞", "queijo|cheese": "🧀",
+      "carne|frango|steak": "🥩", "peixe|fish": "🐟", "camarao|shrimp": "🍤",
+      "doce|pudim|sobremesa|bolo": "🍮", "suco|bebida|refrigerante": "🥤", "agua|water": "💧",
+      "cafe|coffee": "☕", "cha|tea": "🍵", "cerveja|beer": "🍺", "vinho|wine": "🍷",
+      "arroz|grao": "🌾", "macarrao|massa": "🍝", "pizza": "🍕", "hamburguer": "🍔",
     };
 
     for (const [key, emoji] of Object.entries(library)) {
@@ -84,7 +86,7 @@ export function Estoque() {
 
     if (text.includes("suco") || text.includes("vitamina")) return "🥤";
     if (text.includes("doce") || text.includes("sobremesa")) return "🍰";
-    if (text.includes("verde") || text.includes("orgânico")) return "🌿";
+    if (text.includes("verde") || text.includes("organico")) return "🌿";
     return "📦";
   };
 
