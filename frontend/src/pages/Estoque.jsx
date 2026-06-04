@@ -53,19 +53,23 @@ export function Estoque() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ==================== FUNÇÕES DE CÁLCULO ====================
+  // Calcula preço sugerido baseado em MARGEM SOBRE CUSTO (ex: custo 10 + 30% = 13)
   const calculateSuggestedPrice = (cost, margin) => {
     if (!cost || parseFloat(cost) <= 0 || !margin || parseFloat(margin) < 0) return 0;
     const costNum = parseFloat(cost);
     const marginNum = parseFloat(margin);
-    const suggested = costNum / (1 - marginNum / 100);
+    // Fórmula: Preço = Custo * (1 + Margem%/100)
+    const suggested = costNum * (1 + marginNum / 100);
     return Math.round(suggested * 100) / 100;
   };
 
+  // Calcula margem atual baseado em MARGEM SOBRE CUSTO
   const calculateCurrentMargin = (price, cost) => {
     if (!price || !cost || parseFloat(price) <= 0 || parseFloat(cost) <= 0) return 0;
     const priceNum = parseFloat(price);
     const costNum = parseFloat(cost);
-    const margin = ((priceNum - costNum) / priceNum) * 100;
+    // Fórmula: Margem% = ((Preço - Custo) / Custo) * 100
+    const margin = ((priceNum - costNum) / costNum) * 100;
     return Math.round(margin * 100) / 100;
   };
 
@@ -465,7 +469,7 @@ export function Estoque() {
                       if (newQty > 0 && newCost > 0) {
                         const newAvgCost = (currentStock * currentCost + newQty * newCost) / (currentStock + newQty);
                         const targetMargin = selectedProduct.product_profit_margin || selectedProduct.category_margin || 30;
-                        const suggestedPrice = newAvgCost / (1 - targetMargin / 100);
+                        const suggestedPrice = newAvgCost * (1 + targetMargin / 100);
                         return (
                           <>
                             <small>R$ {newAvgCost.toFixed(2)}</small><br/>
