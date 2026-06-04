@@ -53,7 +53,7 @@ export function Estoque() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ==================== DICIONÁRIO CARICATO DE FRUTAS/VERDURAS ====================
+  // ==================== DICIONÁRIO CARICATO EXPANDIDO ====================
   const emojiDictionary = {
     "maçã": "🍎", "maca": "🍎", "apple": "🍎",
     "banana": "🍌",
@@ -93,13 +93,15 @@ export function Estoque() {
     "noz": "🌰", "walnut": "🌰", "nut": "🌰",
     "mel": "🍯", "honey": "🍯",
     "ovo": "🥚", "egg": "🥚",
+    "graviola": "🌳", "pudim": "🍮", "doce": "🍬", "suco": "🥤"
   };
 
   const generateCaricatureImage = (productName) => {
     if (!productName || productName.trim().length < 2) return "";
     const nameLower = productName.toLowerCase().trim();
     
-    let emoji = "🥬";
+    // FALLBACK PARA ÍCONE DE DÚVIDA SE NÃO ACHAR
+    let emoji = "📦"; 
     const sortedKeys = Object.keys(emojiDictionary).sort((a, b) => b.length - a.length);
     for (const key of sortedKeys) {
       if (nameLower.includes(key)) {
@@ -278,7 +280,6 @@ export function Estoque() {
         )}
       </div>
 
-      {/* Modal Produto - REMOVIDO FUNDO BRANCO DA ÁREA DE IMAGEM */}
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '650px' }}>
@@ -286,7 +287,6 @@ export function Estoque() {
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              {/* ÁREA DE IMAGEM: SEM FUNDO BRANCO, INTEGRADA NO GRID */}
               <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
                 <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
@@ -370,7 +370,6 @@ export function Estoque() {
         </div>
       )}
 
-      {/* Outros modais */}
       {showCategoryModal && (
         <div className="modal-overlay">
           <div className="modal">
