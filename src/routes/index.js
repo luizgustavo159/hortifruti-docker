@@ -72,14 +72,14 @@ router.get("/products", authenticateToken, (req, res) => {
       c.target_margin as category_margin,
       COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) as target_margin,
       CASE 
-        WHEN p.avg_cost > 0 AND p.price > 0 THEN ROUND(((p.price - p.avg_cost) / p.avg_cost) * 100, 2)
+        WHEN p.avg_cost > 0 AND p.price > 0 THEN ROUND(((p.price - p.avg_cost) / p.price) * 100, 2)
         ELSE 0
       END as current_margin_percent,
       CASE 
         WHEN p.avg_cost > 0 AND p.price > 0 THEN
           CASE 
-            WHEN ROUND(((p.price - p.avg_cost) / p.avg_cost) * 100, 2) < COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) THEN 'low_margin'
-            WHEN ROUND(((p.price - p.avg_cost) / p.avg_cost) * 100, 2) > (COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) + 10) THEN 'high_margin'
+            WHEN ROUND(((p.price - p.avg_cost) / p.price) * 100, 2) < COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) THEN 'low_margin'
+            WHEN ROUND(((p.price - p.avg_cost) / p.price) * 100, 2) > (COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) + 10) THEN 'high_margin'
             ELSE 'ok'
           END
         ELSE 'no_cost'
