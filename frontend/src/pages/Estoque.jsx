@@ -175,23 +175,19 @@ export function Estoque() {
 
   const normalizeProductName = (name) => {
     if (!name) return "";
-    const corrections = {
-      "maca": "MAÇÃ", "limao": "LIMÃO TAHITI", "limao siciliano": "LIMÃO SICILIANO", "mamao": "MAMÃO PAPAYA", "melancia": "MELANCIA",
-      "pera": "PÊRA", "pessego": "PÊSSEGO", "maracuja": "MARACUJÁ", "goiaba": "GOIABA",
-      "uva": "UVA", "banana": "BANANA NANICA", "banana prata": "BANANA PRATA", "morango": "MORANGO", "abacaxi": "ABACAXI",
-      "manga": "MANGA PALMER", "laranja": "LARANJA PERA", "mexerica": "MEXERICA", "tangerina": "TANGERINA",
-      "caqui": "CAQUI", "kiwi": "KIWI", "coco": "COCO", "abacate": "ABACATE",
-      "melao": "MELÃO AMARELO", "ameixa": "AMEIXA", "cereja": "CEREJA", "framboesa": "FRAMBOESA",
-      "amora": "AMORA", "jabuticaba": "JABUTICABA", "carambola": "CARAMBOLA", "pitaya": "PITAYA",
-      "batata": "BATATA MONALISA", "batata doce": "BATATA DOCE", "cebola": "CEBOLA BRANCA", "alho": "ALHO ROXO", "tomate": "TOMATE ITALIANO",
-      "cenoura": "CENOURA", "pimentao": "PIMENTÃO VERDE", "berinjela": "BERINJELA", "abobora": "ABÓBORA CABOTIÁ",
-      "chuchu": "CHUCHU", "quiabo": "QUIABO", "vagem": "VAGEM", "jilo": "JILÓ",
-      "alface": "ALFACE CRESPA", "couve": "COUVE MANTEIGA", "repolho": "REPOLHO BRANCO", "espinafre": "ESPINAFRE",
-      "rucula": "RÚCULA", "agriao": "AGRIÃO", "brocolis": "BRÓCOLIS", "couve-flor": "COUVE-FLOR",
-      "salsa": "SALSA", "coentro": "COENTRO", "cebolinha": "CEBOLINHA", "manjericao": "MANJERICÃO"
+    
+    // Dicionário de termos básicos para acentuação correta
+    const accents = {
+      "maca": "MAÇÃ", "limao": "LIMÃO", "mamao": "MAMÃO", "pera": "PÊRA", "pessego": "PÊSSEGO",
+      "maracuja": "MARACUJÁ", "abobora": "ABÓBORA", "pimentao": "PIMENTÃO", "jilo": "JILÓ",
+      "agriao": "AGRIÃO", "rucula": "RÚCULA", "brocolis": "BRÓCOLIS", "manjericao": "MANJERICÃO",
+      "melao": "MELÃO", "acai": "AÇAÍ", "carvo": "CARVÃO", "pao": "PÃO", "grao": "GRÃO"
     };
-    const lower = name.toLowerCase().trim();
-    return corrections[lower] || name.toUpperCase().trim();
+
+    const words = name.toLowerCase().trim().split(/\s+/);
+    const normalizedWords = words.map(word => accents[word] || word.toUpperCase());
+    
+    return normalizedWords.join(" ");
   };
 
   const handleSaveProduct = async () => {
