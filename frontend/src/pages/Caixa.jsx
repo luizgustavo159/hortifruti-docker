@@ -1,34 +1,60 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
+import { ApprovalModal } from "../components/ApprovalModal";
+import { useScale } from "../hooks/useScale";
 import "./Caixa.css";
 
 export function Caixa() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [processingPayment, setProcessingPayment] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [caixaAberto, setCaixaAberto] = useState(false);
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [discounts, setDiscounts] = useState([]);
+  const [manualDiscount, setManualDiscount] = useState("");
+  const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
+  const [tempApprovalToken, setTempApprovalToken] = useState(null);
+  const [amountReceived, setAmountReceived] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
+  // Estado do Caixa
+  const [caixaAberto, setCaixaAberto] = useState(false);
+  const [showAberturaModal, setShowAberturaModal] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [openingAmount, setOpeningAmount] = useState("");
+  const [openingNotes, setOpeningNotes] = useState("");
+
+  // Balança
+  const scale = useScale();
+  const [scaleModalProduct, setScaleModalProduct] = useState(null);
+  const [manualWeight, setManualWeight] = useState("");
+
+  // Carregar dados
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
-      const [prods, custs, currentCaixa] = await Promise.all([
+      const currentCaixa = await apiFetch("/pos/cash-session/current");
+      setCaixaAberto(!!currentCaixa);
+
+      const [prods, disc, custs] = await Promise.all([
         apiFetch("/products"),
-        apiFetch("/customers"),
-        apiFetch("/pos/cash-session/current")
+        apiFetch("/discounts"),
+        apiFetch("/customers")
       ]);
       setProducts(Array.isArray(prods) ? prods : []);
+      setDiscounts(Array.isArray(disc) ? disc : []);
       setCustomers(Array.isArray(custs) ? custs : []);
-      setCaixaAberto(!!currentCaixa);
-    } catch (err) { 
-      setError("Erro ao carregar dados: " + err.message); 
+    } catch (err) {
+      setError("Falha ao carregar dados: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -38,202 +64,278 @@ export function Caixa() {
     loadData();
   }, [loadData]);
 
-  const addToCart = (product) => {
+  // Lógica de Código de Barras (Leitor)
+  useEffect(() => {
+    let barcode = "";
+    const handleKeyDown = (e) => {
+      if (e.key === "Enter") {
+        if (barcode.length > 3) {
+          const product = products.find(p => p.sku === barcode || p.barcode === barcode);
+          if (product) addToCart(product);
+          barcode = "";
+        }
+      } else if (e.key !== "Shift") {
+        barcode += e.key;
+      }
+      // Timeout para limpar barcode se demorar muito (evita inputs manuais)
+      setTimeout(() => { barcode = ""; }, 100);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [products]);
+
+  const isKgProduct = (product) => product?.unit_type === "kg";
+
+  const findAutoDiscount = useCallback((product) => {
+    return discounts.find((d) => {
+      if (!d.active) return false;
+      if (d.target_type === "all") return true;
+      if (d.target_type === "product") {
+        try {
+          const ids = JSON.parse(d.target_value || "[]");
+          return ids.includes(product.id);
+        } catch { return false; }
+      }
+      if (d.target_type === "category") return String(d.target_value) === String(product.category_id);
+      return false;
+    });
+  }, [discounts]);
+
+  const addToCart = useCallback((product) => {
     if (!caixaAberto) {
-      setError("Abra o caixa antes de iniciar uma venda.");
+      setError("O caixa está fechado.");
       return;
     }
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === product.id);
+    if (isKgProduct(product)) {
+      setScaleModalProduct(product);
+      setManualWeight(scale.weight ? String(scale.weight) : "");
+      return;
+    }
+
+    const autoDiscount = findAutoDiscount(product);
+    setCartItems((prev) => {
+      const existing = prev.find((item) => item.id === product.id);
       if (existing) {
-        return prev.map(item => 
-          item.id === product.id ? {...item, quantity: item.quantity + 1} : item
+        return prev.map((item) =>
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prev, {...product, quantity: 1}];
+      return [...prev, { ...product, quantity: 1, discount_id: autoDiscount?.id || null }];
     });
-    setError("");
-  };
+  }, [caixaAberto, scale.weight, findAutoDiscount]);
 
-  const removeFromCart = (productId) => {
-    setCartItems(prev => prev.filter(item => item.id !== productId));
-  };
+  const confirmWeightAndAdd = useCallback(() => {
+    if (!scaleModalProduct) return;
+    const weightValue = parseFloat((scale.connected && scale.weight !== null ? scale.weight : manualWeight)?.toString().replace(",", "."));
+    if (isNaN(weightValue) || weightValue <= 0) {
+      setError("Informe um peso válido.");
+      return;
+    }
 
-  const updateQuantity = (productId, delta) => {
-    setCartItems(prev => prev.map(item => {
-      if (item.id === productId) {
-        const newQty = Math.max(0.1, item.quantity + delta);
-        return {...item, quantity: newQty};
+    const autoDiscount = findAutoDiscount(scaleModalProduct);
+    setCartItems((prev) => {
+      const existing = prev.find((item) => item.id === scaleModalProduct.id);
+      if (existing) {
+        return prev.map((item) =>
+          item.id === scaleModalProduct.id ? { ...item, quantity: parseFloat((item.quantity + weightValue).toFixed(3)) } : item
+        );
       }
-      return item;
-    }).filter(item => item.quantity > 0));
+      return [...prev, { ...scaleModalProduct, quantity: parseFloat(weightValue.toFixed(3)), discount_id: autoDiscount?.id || null }];
+    });
+    setScaleModalProduct(null);
+    setManualWeight("");
+  }, [scaleModalProduct, scale.connected, scale.weight, manualWeight, findAutoDiscount]);
+
+  const updateQuantity = (productId, quantity) => {
+    const product = products.find(p => p.id === productId);
+    const isKg = isKgProduct(product);
+    const parsed = isKg ? parseFloat(quantity) : parseInt(quantity);
+    if (isNaN(parsed) || parsed <= 0) {
+      setCartItems(prev => prev.filter(item => item.id !== productId));
+      return;
+    }
+    setCartItems(prev => prev.map(item => 
+      item.id === productId ? { ...item, quantity: isKg ? parseFloat(parsed.toFixed(3)) : parsed } : item
+    ));
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
-  const finalTotal = subtotal;
+  const calculateTotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  const calculateDiscountForItem = (item) => {
+    if (!item.discount_id) return 0;
+    const d = discounts.find(disc => disc.id === item.discount_id);
+    if (!d) return 0;
+    if (d.type === "percent") return (item.price * item.quantity) * (Number(d.value) / 100);
+    if (d.type === "fixed") return Number(d.value);
+    return 0;
+  };
+
+  const subtotal = calculateTotal();
+  const totalDiscount = cartItems.reduce((sum, item) => sum + calculateDiscountForItem(item), 0);
+  const finalTotal = Math.max(subtotal - totalDiscount - (parseFloat(manualDiscount) || 0), 0);
+
+  const handleOpenCaixaRequest = (e) => {
+    e.preventDefault();
+    if (!openingAmount || isNaN(openingAmount)) { setError("Informe um valor válido."); return; }
+    setShowApprovalModal(true);
+  };
+
+  const handleAberturaAprovada = async (token) => {
+    try {
+      await apiFetch("/pos/cash-session/open", {
+        method: "POST",
+        body: JSON.stringify({ opening_amount: parseFloat(openingAmount), notes: openingNotes, approval_token: token }),
+      });
+      setCaixaAberto(true);
+      setShowAberturaModal(false);
+      setShowApprovalModal(false);
+      setSuccessMessage("Caixa aberto!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) { setError(err.message); }
+  };
 
   const handleCheckout = async () => {
-    if (cartItems.length === 0) return;
-    if (paymentMethod === 'fiado' && !selectedCustomer) {
-        setError("Selecione um cliente para vender no fiado.");
-        return;
-    }
-
+    if (!caixaAberto || cartItems.length === 0) return;
     setProcessingPayment(true);
-    setError("");
     try {
-      await apiFetch("/sales", {
+      const response = await apiFetch("/sales", {
         method: "POST",
         body: JSON.stringify({
-          items: cartItems.map(item => ({ 
-            product_id: item.id, 
-            quantity: item.quantity 
-          })),
+          items: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, discount_id: item.discount_id })),
           payment_method: paymentMethod,
-          customer_id: selectedCustomer?.id || null
+          customer_id: selectedCustomer?.id || null,
+          manual_discount: parseFloat(manualDiscount) || 0,
+          approval_token: tempApprovalToken
         }),
       });
-      setSuccessMessage("Venda finalizada com sucesso!");
+      
+      // Lógica de Impressão Térmica (Simulada via Window Print ou API)
+      if (window.confirm("Venda realizada! Deseja imprimir o cupom?")) {
+          console.log("Enviando para impressora térmica...");
+          // window.print(); // Ou chamada para serviço de impressão local
+      }
+
+      setSuccessMessage("Venda finalizada!");
       setCartItems([]);
-      setSelectedCustomer(null);
-      loadData(); // Atualiza estoque
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) { 
-      setError(err.message); 
-    } finally {
-      setProcessingPayment(false);
-    }
+      setManualDiscount("");
+      setTempApprovalToken(null);
+      loadData();
+      setTimeout(() => setSuccessMessage(""), 5000);
+    } catch (err) { setError(err.message); }
+    finally { setProcessingPayment(false); }
   };
 
   return (
-    <PageShell title="Frente de Caixa" subtitle="Ponto de Venda - Registre vendas em tempo real">
+    <PageShell 
+      title="Frente de Caixa" 
+      subtitle="Ponto de Venda Profissional"
+      actions={
+        <div className="pos-actions">
+          <button className={`btn-scale ${scale.connected ? "connected" : ""}`} onClick={scale.connected ? scale.disconnect : scale.connect}>
+            ⚖️ {scale.connected ? `Balança: ${scale.weight || "0.000"} kg` : "Conectar Balança"}
+          </button>
+          <button className="btn-movimentacao" onClick={() => navigate("/caixa/fechamento")}>💰 Fechar Caixa</button>
+          <button className="btn-focus-mode" onClick={() => navigate("/caixa/focus")}>🎯 Modo Foco</button>
+        </div>
+      }
+    >
+      {showAberturaModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Abertura de Caixa</h3>
+            <input type="number" value={openingAmount} onChange={e => setOpeningAmount(e.target.value)} placeholder="Valor Inicial R$" className="input" autoFocus />
+            <textarea value={openingNotes} onChange={e => setOpeningNotes(e.target.value)} placeholder="Observações" className="input" />
+            <div style={{display:'flex', gap:'8px', marginTop:'16px'}}>
+                <button onClick={handleOpenCaixaRequest} className="btn-finalize" style={{flex:1}}>Solicitar Abertura</button>
+                <button onClick={() => setShowAberturaModal(false)} className="button button-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showApprovalModal && (
+        <ApprovalModal action="open_cash_session" onApproved={handleAberturaAprovada} onCancel={() => setShowApprovalModal(false)} />
+      )}
+
+      {scaleModalProduct && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>⚖️ Pesagem: {scaleModalProduct.name}</h3>
+            <div className="weight-display">
+                {scale.connected ? `${(scale.weight || 0).toFixed(3)} kg` : (
+                    <input type="number" value={manualWeight} onChange={e => setManualWeight(e.target.value)} placeholder="0.000" className="weight-input" autoFocus />
+                )}
+            </div>
+            <div style={{display:'flex', gap:'8px', marginTop:'16px'}}>
+                <button onClick={confirmWeightAndAdd} className="btn-finalize" style={{flex:1}}>Confirmar</button>
+                <button onClick={() => setScaleModalProduct(null)} className="button button-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="pos-container">
-        {/* Lado Esquerdo: Produtos */}
         <div className="pos-products">
           <div className="search-section">
-            <input 
-              type="search" 
-              placeholder="Bipe ou busque o produto..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)} 
-              className="search-input" 
-            />
+            <input type="text" placeholder="Busque ou Bipe o Código..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
+            {!caixaAberto && <button onClick={() => setShowAberturaModal(true)} className="btn-open-caixa">🔓 Abrir Caixa</button>}
           </div>
-          
+
           <div className="products-grid">
-            {loading ? (
-              <div className="loading">Carregando produtos...</div>
-            ) : products.filter(p => 
-              p.name.toLowerCase().includes(searchTerm.toLowerCase())
-            ).length === 0 ? (
-              <div className="no-products">Nenhum produto encontrado.</div>
-            ) : (
-              products.filter(p => 
-                p.name.toLowerCase().includes(searchTerm.toLowerCase())
-              ).map(p => (
-                <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
-                  <div className="product-info">
-                    <h4>{p.name}</h4>
-                    <p className="product-category">{p.category_name || 'Hortifruti'}</p>
-                    <p className={`product-stock ${Number(p.current_stock) <= Number(p.min_stock) ? 'critical' : ''}`}>
-                      Estoque: {p.current_stock} {p.unit_type}
-                    </p>
-                    <p className="product-price">R$ {Number(p.price).toFixed(2)}</p>
-                  </div>
-                  <button className="btn-add-cart">Adicionar</button>
+            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku === searchTerm).map(p => (
+              <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
+                <div className="product-info">
+                  <h4>{p.name} {isKgProduct(p) && "⚖️"}</h4>
+                  <p className="product-price">R$ {Number(p.price).toFixed(2)}</p>
+                  <p className="product-stock">Estoque: {p.current_stock}</p>
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Lado Direito: Carrinho */}
         <div className="pos-cart">
-          <h3>🛒 Carrinho de Vendas</h3>
-          
-          {!caixaAberto && <div className="error-message" style={{background: '#fef2f2', color: '#dc2626'}}>⚠️ CAIXA FECHADO</div>}
-          {successMessage && <div className="success-message">{successMessage}</div>}
+          <h3>🛒 Carrinho</h3>
           {error && <div className="error-message">{error}</div>}
+          {successMessage && <div className="success-message">{successMessage}</div>}
 
-          <div className="customer-section" style={{ marginBottom: '16px', background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '10px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', display: 'block', marginBottom: '4px', color: 'var(--text-secondary)' }}>CLIENTE / CADERNETA</label>
-            <select 
-              className="input"
-              style={{ width: '100%', background: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
-              value={selectedCustomer?.id || ""} 
-              onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))}
-            >
-                <option value="">Consumidor Final</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} (Débito: R$ {Number(c.current_debt || 0).toFixed(2)})
-                  </option>
-                ))}
+          <div className="customer-select">
+            <select value={selectedCustomer?.id || ""} onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))}>
+              <option value="">Consumidor Final</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
           <div className="cart-items">
-            {cartItems.length === 0 ? (
-              <div className="cart-empty">Carrinho vazio</div>
-            ) : (
-              cartItems.map(item => (
-                <div key={item.id} className="cart-item">
-                  <div className="item-details">
-                    <h5>{item.name}</h5>
-                    <span className="item-price">R$ {(Number(item.price) * item.quantity).toFixed(2)}</span>
-                  </div>
-                  <div className="item-quantity">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}>-</button>
-                      <input 
-                        type="number" 
-                        value={item.quantity} 
-                        readOnly
-                        style={{ width: '50px', textAlign: 'center' }}
-                      />
-                      <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}>+</button>
-                    </div>
-                    <button className="cart-item-remove" onClick={() => removeFromCart(item.id)}>Remover</button>
-                  </div>
+            {cartItems.map(item => (
+              <div key={item.id} className="cart-item">
+                <div className="item-info">
+                  <span>{item.name}</span>
+                  <small>R$ {item.price.toFixed(2)} x {item.quantity}</small>
                 </div>
-              ))
-            )}
+                <div className="item-qty-controls">
+                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
+                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
+                </div>
+                <span className="item-subtotal">R$ {(item.price * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
           </div>
 
-          <div className="cart-summary" style={{ marginTop: 'auto' }}>
-            <div className="summary-row">
-              <span>Subtotal</span>
-              <span>R$ {subtotal.toFixed(2)}</span>
-            </div>
-            <div className="summary-row total">
-              <span>TOTAL A PAGAR</span>
-              <span className="value">R$ {finalTotal.toFixed(2)}</span>
-            </div>
+          <div className="cart-summary">
+            <div className="summary-line"><span>Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
+            <div className="summary-line total"><span>TOTAL</span><span>R$ {finalTotal.toFixed(2)}</span></div>
           </div>
 
-          <div className="payment-section" style={{ marginTop: '16px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent-info)' }}>FORMA DE PAGAMENTO</label>
-            <select 
-              className="payment-select"
-              value={paymentMethod} 
-              onChange={e => setPaymentMethod(e.target.value)}
-              style={{ marginTop: '4px' }}
-            >
-                <option value="cash">💵 Dinheiro</option>
-                <option value="pix">📱 PIX</option>
-                <option value="card">💳 Cartão</option>
-                <option value="fiado">📓 Fiado (Caderneta)</option>
+          <div className="cart-footer">
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="payment-select">
+              <option value="cash">Dinheiro</option>
+              <option value="pix">PIX</option>
+              <option value="card">Cartão</option>
+              <option value="fiado">Fiado</option>
             </select>
-          </div>
-
-          <div className="cart-actions" style={{ marginTop: '16px' }}>
-            <button 
-              className="btn-finalize" 
-              onClick={handleCheckout} 
-              disabled={processingPayment || cartItems.length === 0 || !caixaAberto}
-              style={{ height: '56px', fontSize: '16px' }}
-            >
-                {processingPayment ? "PROCESSANDO..." : "FINALIZAR VENDA"}
+            <button className="btn-finalize" onClick={handleCheckout} disabled={processingPayment || cartItems.length === 0 || !caixaAberto}>
+              {processingPayment ? "PROCESSANDO..." : "FINALIZAR (F10)"}
             </button>
           </div>
         </div>
