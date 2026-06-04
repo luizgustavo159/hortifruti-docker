@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const db = require("../../db");
 const config = require("../../config");
 const { isTokenBlacklisted } = require("../middleware/tokenManagement");
+const { productSchema, productUpdateSchema, validate } = require("../validators/schemas");
 
 const router = express.Router();
 const authRouter = require("./auth");
@@ -92,13 +93,17 @@ router.get("/products", authenticateToken, (req, res) => {
   `, [], (err, rows) => res.json(rows || []));
 });
 
-router.post("/products", authenticateToken, requireRole("supervisor"), (req, res) => {
-  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin, image_url } = req.body;
+router.post("/products", authenticateToken, requireRole("supervisor"), validate(productSchema), (req, res) => {
+  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin, image_url } = req.validated;
   db.get(
     "INSERT INTO products (name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, product_profit_margin, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
-    [name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost || 0, profit_margin || null, image_url || null],
+    [name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin, image_url],
     (err, row) => {
-      if (err) return res.status(400).json({ message: "Erro ao criar produto: " + err.message });
+      if (err) {
+        createAuditLog("ERRO_CRIAR_PRODUTO", { error: err.message, payload: req.body }, req.user.id, 'error', 'high');
+        return res.status(400).json({ message: "Erro ao criar produto: " + err.message });
+      }
+      createAuditLog("PRODUTO_CRIADO", { product_id: row.id, name: row.name }, req.user.id, 'info', 'low');
       res.status(201).json(row);
     }
   );
@@ -114,14 +119,18 @@ router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), 
     });
 });
 
-router.put("/products/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
-    const { name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin, image_url } = req.body;
+router.put("/products/:id", authenticateToken, requireRole("supervisor"), validate(productUpdateSchema), (req, res) => {
+    const { name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin, image_url } = req.validated;
     db.run(
         "UPDATE products SET name=?, sku=?, unit_type=?, price=?, category_id=?, supplier_id=?, min_stock=?, current_stock=?, avg_cost=?, product_profit_margin=?, image_url=? WHERE id=?",
-        [name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost || 0, profit_margin || null, image_url || null, req.params.id],
+        [name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin, image_url, req.params.id],
         (err) => {
-            if (err) return res.status(500).json({ message: "Erro ao atualizar produto: " + err.message });
+            if (err) {
+                createAuditLog("ERRO_ATUALIZAR_PRODUTO", { product_id: req.params.id, error: err.message, payload: req.body }, req.user.id, 'error', 'high');
+                return res.status(500).json({ message: "Erro ao atualizar produto: " + err.message });
+            }
             db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (errGet, product) => {
+                createAuditLog("PRODUTO_ATUALIZADO", { product_id: req.params.id, name: product?.name }, req.user.id, 'info', 'low');
                 res.json(product || { status: "ok" });
             });
         }

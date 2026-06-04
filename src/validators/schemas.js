@@ -24,15 +24,16 @@ const refreshTokenSchema = z.object({
 // ============ PRODUCT SCHEMAS ============
 const productSchema = z.object({
   name: z.string().min(1, 'Nome do produto é obrigatório').max(100),
-  description: z.string().optional().default(''),
-  price: z.number().positive('Preço deve ser positivo'),
-  cost: z.number().positive('Custo deve ser positivo').optional(),
-  category_id: z.number().positive('Categoria é obrigatória'),
-  current_stock: z.number().int().min(0, 'Estoque não pode ser negativo'),
-  min_stock: z.number().int().min(0, 'Estoque mínimo não pode ser negativo').default(10),
-  barcode: z.string().optional(),
-  expiry_date: z.string().datetime().optional(),
-  unit: z.enum(['kg', 'un', 'l', 'g', 'ml']).default('un'),
+  sku: z.string().min(1, 'SKU é obrigatório'),
+  unit_type: z.string().default('un'),
+  price: z.coerce.number().min(0, 'Preço não pode ser negativo'),
+  category_id: z.preprocess((val) => (val === "" ? null : val), z.coerce.number().positive().nullable()),
+  supplier_id: z.preprocess((val) => (val === "" ? null : val), z.coerce.number().positive().nullable()),
+  min_stock: z.coerce.number().min(0).default(0),
+  current_stock: z.coerce.number().min(0).default(0),
+  avg_cost: z.coerce.number().min(0).default(0),
+  profit_margin: z.preprocess((val) => (val === "" ? null : val), z.coerce.number().nullable()),
+  image_url: z.string().nullable().optional(),
 });
 
 const productUpdateSchema = productSchema.partial();

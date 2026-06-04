@@ -11,6 +11,13 @@ const {
 } = require("../middleware/tokenManagement");
 const { loginSchema, validate } = require("../validators/schemas");
 
+const createAuditLog = (action, details, performed_by, type = 'info', level = 'low') => {
+  db.run("INSERT INTO audit_logs (action, details, performed_by, type, level) VALUES (?, ?, ?, ?, ?)",
+    [action, JSON.stringify(details), performed_by, type, level], (err) => {
+      if (err) console.error("Erro ao gravar log de auditoria:", err);
+    });
+};
+
 const router = express.Router();
 const { JWT_SECRET } = config;
 
@@ -25,17 +32,19 @@ router.post("/login", validate(loginSchema), async (req, res) => {
     db.get("SELECT * FROM users WHERE email = ? AND is_active = 1 AND deleted_at IS NULL", [email], async (err, user) => {
       if (err) {
         console.error("Erro ao buscar usuário:", err);
+        createAuditLog("ERRO_LOGIN_DB", { error: err.message, email }, null, 'error', 'high');
         return res.status(500).json({ message: "Erro interno do servidor." });
       }
 
       if (!user) {
+        createAuditLog("LOGIN_FALHA_USUARIO_INEXISTENTE", { email }, null, 'warning', 'medium');
         return res.status(401).json({ message: "Credenciais inválidas." });
       }
 
       const isMatch = await bcrypt.compare(password, user.password_hash);
       if (!isMatch) {
-        // Registrar tentativa falha (opcional, para segurança futura)
         db.run("INSERT INTO login_attempts (email, ip) VALUES (?, ?)", [email, req.ip]);
+        createAuditLog("LOGIN_FALHA_SENHA_INCORRETA", { email, user_id: user.id }, user.id, 'warning', 'medium');
         return res.status(401).json({ message: "Credenciais inválidas." });
       }
 

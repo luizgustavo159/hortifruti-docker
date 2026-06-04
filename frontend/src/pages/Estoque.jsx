@@ -178,7 +178,7 @@ export function Estoque() {
       if (selectedProduct) { await apiFetch(`/products/${selectedProduct.id}`, { method: "PUT", body: JSON.stringify(newProduct) }); }
       else { await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) }); }
       setShowNewProductModal(false); setSelectedProduct(null);
-      setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30", image_url: "" });
+      setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "0", profit_margin: "30", image_url: "" });
       loadData();
     } catch (err) { setError(err.message); }
   };
