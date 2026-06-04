@@ -263,7 +263,62 @@ router.post("/sales", authenticateToken, (req, res) => {
 
 // --- CATEGORIAS E FORNECEDORES ---
 router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT * FROM categories", [], (err, rows) => res.json(rows)); });
+router.post("/categories", authenticateToken, requireRole("supervisor"), (req, res) => {
+    const { name, description, margin_target } = req.body;
+    db.get("INSERT INTO categories (name, description, target_margin) VALUES (?, ?, ?) RETURNING id", [name, description, margin_target], (err, row) => {
+        if (err) return res.status(400).json({ message: "Erro ao criar categoria." });
+        res.status(201).json(row);
+    });
+});
+router.put("/categories/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
+    const { name, description, margin_target } = req.body;
+    db.run("UPDATE categories SET name=?, description=?, target_margin=? WHERE id=?", [name, description, margin_target, req.params.id], (err) => {
+        if (err) return res.status(400).json({ message: "Erro ao atualizar categoria." });
+        res.json({ status: "ok" });
+    });
+});
+router.delete("/categories/:id", authenticateToken, requireRole("manager"), (req, res) => {
+    db.run("DELETE FROM categories WHERE id=?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Erro ao excluir categoria." });
+        res.json({ status: "ok" });
+    });
+});
+
 router.get("/suppliers", authenticateToken, (req, res) => { db.all("SELECT * FROM suppliers", [], (err, rows) => res.json(rows)); });
+router.post("/suppliers", authenticateToken, requireRole("supervisor"), (req, res) => {
+    const { name, contact, phone, email } = req.body;
+    db.get("INSERT INTO suppliers (name, contact, phone, email) VALUES (?, ?, ?, ?) RETURNING id", [name, contact, phone, email], (err, row) => {
+        if (err) return res.status(400).json({ message: "Erro ao criar fornecedor." });
+        res.status(201).json(row);
+    });
+});
+router.put("/suppliers/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
+    const { name, contact, phone, email } = req.body;
+    db.run("UPDATE suppliers SET name=?, contact=?, phone=?, email=? WHERE id=?", [name, contact, phone, email, req.params.id], (err) => {
+        if (err) return res.status(400).json({ message: "Erro ao atualizar fornecedor." });
+        res.json({ status: "ok" });
+    });
+});
+router.delete("/suppliers/:id", authenticateToken, requireRole("manager"), (req, res) => {
+    db.run("DELETE FROM suppliers WHERE id=?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Erro ao excluir fornecedor." });
+        res.json({ status: "ok" });
+    });
+});
+
+// --- REPOSIÇÃO ---
+router.get("/stock/restock-suggestions", authenticateToken, (req, res) => {
+    db.all(`
+        SELECT p.*, c.name as category_name, s.name as supplier_name 
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.id
+        LEFT JOIN suppliers s ON p.supplier_id = s.id
+        WHERE p.current_stock <= p.min_stock
+    `, [], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao buscar sugestões." });
+        res.json(rows);
+    });
+});
 
 // --- USUÁRIOS ---
 router.get("/users", authenticateToken, (req, res) => {
