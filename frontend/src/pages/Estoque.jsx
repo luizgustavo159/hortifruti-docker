@@ -274,11 +274,25 @@ export function Estoque() {
     let currentCategory = "";
 
     for (const p of itemsToExport) {
-      if (p.category_name !== currentCategory) {
-        if (y + 20 > 280) { doc.addPage(); y = 20; }
-        else if (currentCategory !== "") { y += 10; x = margin; }
-        
-        currentCategory = p.category_name || "SEM CATEGORIA";
+      const categoryName = p.category_name || "SEM CATEGORIA";
+      
+      // Troca de categoria
+      if (categoryName !== currentCategory) {
+        // Se não for a primeira categoria e não estivermos no início de uma linha, pula para a próxima
+        if (currentCategory !== "" && x !== margin) {
+          x = margin;
+          y += cardHeight + 5;
+        }
+
+        // Verifica espaço para o título da categoria
+        if (y + 20 > 280) {
+          doc.addPage();
+          y = 20;
+        } else if (currentCategory !== "") {
+          y += 5; // Espaço extra entre categorias
+        }
+
+        currentCategory = categoryName;
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(50);
@@ -287,21 +301,25 @@ export function Estoque() {
         x = margin;
       }
 
+      // Verifica espaço para o card
       if (y + cardHeight > 280) {
         doc.addPage();
         y = 20;
+        // Repete o título da categoria na nova página
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
+        doc.setTextColor(50);
         doc.text(currentCategory.toUpperCase(), margin, y);
         y += 8;
+        x = margin;
       }
 
-      // Card Background
+      // Renderiza o Card
       doc.setDrawColor(230);
       doc.setFillColor(252, 252, 252);
       doc.roundedRect(x, y, cardWidth, cardHeight, 3, 3, 'FD');
 
-      // Product Image (Emoji or Image)
+      // Imagem do Produto
       if (p.image_url && p.image_url.startsWith('data:image')) {
         try {
           doc.addImage(p.image_url, 'JPEG', x + 5, y + 5, 20, 20);
@@ -314,26 +332,21 @@ export function Estoque() {
         doc.text("📦", x + 10, y + 15);
       }
 
-      // Product Name
+      // Nome do Produto
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0);
       const nameLines = doc.splitTextToSize(p.name, cardWidth - 35);
       doc.text(nameLines, x + 30, y + 10);
 
-      // Price
+      // Preço
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(16, 185, 129);
       doc.text(`R$ ${Number(p.price).toFixed(2)} / ${p.unit_type}`, x + 30, y + 18);
 
-      // Barcode
-      const canvas = document.createElement("canvas");
+      // Código de Barras
       const barcodeValue = p.sku || p.barcode || `GS${p.id.toString().padStart(6, '0')}`;
-      
-      // Usar uma abordagem simples para o código de barras no PDF
-      // Como não podemos renderizar o componente React direto, vamos apenas escrever o texto do código de barras
-      // e um placeholder visual, ou tentar converter o Barcode para imagem se possível.
       doc.setFontSize(8);
       doc.setTextColor(150);
       doc.text("CÓDIGO DE BARRAS:", x + 5, y + 35);
@@ -342,7 +355,7 @@ export function Estoque() {
       doc.setTextColor(0);
       doc.text(barcodeValue, x + 5, y + 45);
       
-      // Linhas que simulam código de barras para estética
+      // Estética do Código de Barras
       doc.setDrawColor(0);
       for(let i=0; i<30; i++) {
         const lineX = x + 5 + (i * 1.2);
@@ -351,8 +364,10 @@ export function Estoque() {
         doc.line(lineX, y + 48, lineX, y + 60);
       }
 
-      x += cardWidth + margin;
-      if (x + cardWidth > pageWidth) {
+      // Avança X ou Y
+      if (x === margin) {
+        x += cardWidth + margin;
+      } else {
         x = margin;
         y += cardHeight + 5;
       }
