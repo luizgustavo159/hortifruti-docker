@@ -170,10 +170,19 @@
   white-space: nowrap;
 }
 
+/* Definindo larguras fixas para as colunas para evitar desalinhamento */
+.logs-table th:nth-child(1), .logs-table td:nth-child(1) { width: 15%; } /* Data/Hora */
+.logs-table th:nth-child(2), .logs-table td:nth-child(2) { width: 15%; } /* Ação */
+.logs-table th:nth-child(3), .logs-table td:nth-child(3) { width: 10%; text-align: center; } /* Nível */
+.logs-table th:nth-child(4), .logs-table td:nth-child(4) { width: 15%; } /* Usuário */
+.logs-table th:nth-child(5), .logs-table td:nth-child(5) { width: 35%; } /* Descrição */
+.logs-table th:nth-child(6), .logs-table td:nth-child(6) { width: 10%; text-align: center; } /* Ações */
+
 .logs-table td {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-secondary);
+  vertical-align: middle;
 }
 
 .logs-table tbody tr {
@@ -215,6 +224,9 @@
   gap: 8px;
   font-weight: 500;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-icon {
@@ -244,6 +256,8 @@
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .details-cell {
