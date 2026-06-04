@@ -159,6 +159,7 @@
   border-bottom: 2px solid var(--border-color);
   position: sticky;
   top: 0;
+  z-index: 10;
 }
 
 .logs-table th {
@@ -183,20 +184,21 @@
   background: var(--bg-tertiary);
 }
 
+/* Usar box-shadow em vez de border-left para não desalinharem as colunas com o cabeçalho */
 .logs-table tbody tr.level-error {
-  border-left: 3px solid var(--accent-danger);
+  box-shadow: inset 4px 0 0 0 var(--accent-danger);
 }
 
 .logs-table tbody tr.level-warning {
-  border-left: 3px solid var(--accent-warning);
+  box-shadow: inset 4px 0 0 0 var(--accent-warning);
 }
 
 .logs-table tbody tr.level-critical {
-  border-left: 3px solid #9c27b0;
+  box-shadow: inset 4px 0 0 0 #9c27b0;
 }
 
 .logs-table tbody tr.level-info {
-  border-left: 3px solid var(--accent-secondary);
+  box-shadow: inset 4px 0 0 0 var(--accent-secondary);
 }
 
 /* Células */
