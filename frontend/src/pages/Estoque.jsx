@@ -84,16 +84,15 @@ export function Estoque() {
   // Busca imagem ilustrativa automática baseada no nome
   const fetchProductImage = (name) => {
     if (!name || name.length < 3) return;
-    // Usando Unsplash Source para imagens aleatórias de comida/hortifruti baseadas no termo
-    const imageUrl = `https://source.unsplash.com/featured/400x400/?fruit,vegetable,${encodeURIComponent(name)}`;
+    // Usando LoremFlickr para imagens aleatórias de comida/hortifruti baseadas no termo
+    const imageUrl = `https://loremflickr.com/400/400/${encodeURIComponent(name)}?lock=${Date.now()}`;
     setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
   };
   // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
   // Gera um código EAN-13 válido com dígito verificador
   const generateEAN13 = () => {
-    const timestamp = Date.now().toString().slice(-9); // Últimos 9 dígitos do timestamp
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3 dígitos aleatórios
-    const base = '2' + timestamp + random; // Começa com 2 (produto nacional)
+    // Gera exatamente 12 dígitos aleatórios (deixando o 13º para o dígito verificador)
+    const base = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join('');
     
     // Calcula dígito verificador EAN-13
     let sum = 0;
