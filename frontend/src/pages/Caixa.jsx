@@ -4,6 +4,7 @@ import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import { ApprovalModal } from "../components/ApprovalModal";
 import { useScale } from "../hooks/useScale";
+import { SalesHistoryModal } from "../components/SalesHistoryModal";
 import "./Caixa.css";
 
 // Função para obter emoji baseada no nome do produto (Normalizada)
@@ -76,6 +77,7 @@ export function Caixa() {
   const [tempApprovalToken, setTempApprovalToken] = useState(null);
   const [amountReceived, setAmountReceived] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showSalesHistory, setShowSalesHistory] = useState(false);
 
   // Estado do Caixa
   const [caixaAberto, setCaixaAberto] = useState(false);
@@ -295,6 +297,7 @@ export function Caixa() {
             ⚖️ {scale.connected ? `Balança: ${scale.weight || "0.000"} kg` : "Conectar Balança"}
           </button>
           <button className="btn-movimentacao" onClick={() => navigate("/caixa/fechamento")}>💰 Fechar Caixa</button>
+          <button className="btn-sales-history" onClick={() => setShowSalesHistory(true)}>📋 Vendas</button>
           <button className="btn-focus-mode" onClick={() => navigate("/caixa/focus")}>🎯 Modo Foco</button>
         </div>
       }
@@ -332,6 +335,10 @@ export function Caixa() {
             </div>
           </div>
         </div>
+      )}
+
+      {showSalesHistory && (
+        <SalesHistoryModal onClose={() => setShowSalesHistory(false)} />
       )}
 
       <div className="pos-container">

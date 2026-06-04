@@ -283,6 +283,11 @@
   color: white;
 }
 
+.btn-sales-history {
+  background: #f59e0b; /* Laranja para destacar o histórico */
+  color: white;
+}
+
 .btn-focus-mode {
   background: #8b5cf6;
   color: white;
