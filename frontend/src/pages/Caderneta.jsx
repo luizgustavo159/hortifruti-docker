@@ -83,7 +83,7 @@ export function Caderneta() {
         <div className="customers-list">
           <div className="list-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0 }}>Clientes com Débito</h3>
-            <button className="btn-new-customer" onClick={() => setShowCustomerModal(true)} style={{ padding: '5px 10px', fontSize: '12px' }}>+ Novo Cliente</button>
+            <button className="btn-new-customer" onClick={() => setShowCustomerModal(true)}>+ Novo Cliente</button>
           </div>
           {loading ? <p>Carregando...</p> : (
             <div className="customer-cards">
@@ -160,9 +160,9 @@ export function Caderneta() {
 
       {showPaymentModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Registrar Pagamento</h3>
-            <p>Cliente: {selectedCustomer.name}</p>
+          <div className="modal">
+            <h2>Registrar Pagamento</h2>
+            <p style={{ margin: '0 0 16px 0', color: 'var(--text-secondary)' }}>Cliente: <strong>{selectedCustomer.name}</strong></p>
             <form onSubmit={handlePayment}>
               <div className="form-group">
                 <label>Valor do Pagamento (R$)</label>
@@ -188,7 +188,7 @@ export function Caderneta() {
                 </select>
               </div>
               <div className="modal-actions">
-                <button type="submit" className="btn-finalize">Confirmar Pagamento</button>
+                <button type="submit" className="button btn-primary">Confirmar Pagamento</button>
                 <button type="button" className="button button-secondary" onClick={() => setShowPaymentModal(false)}>Cancelar</button>
               </div>
             </form>
@@ -198,8 +198,8 @@ export function Caderneta() {
 
       {showCustomerModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Novo Cliente na Caderneta</h3>
+          <div className="modal">
+            <h2>Novo Cliente na Caderneta</h2>
             <form onSubmit={handleCreateCustomer}>
               <div className="form-group">
                 <label>Nome do Cliente</label>
@@ -242,7 +242,7 @@ export function Caderneta() {
                 />
               </div>
               <div className="modal-actions">
-                <button type="submit" className="btn-finalize">Cadastrar Cliente</button>
+                <button type="submit" className="button btn-primary">Cadastrar Cliente</button>
                 <button type="button" className="button button-secondary" onClick={() => setShowCustomerModal(false)}>Cancelar</button>
               </div>
             </form>

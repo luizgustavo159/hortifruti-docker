@@ -50,18 +50,6 @@ const createAuditLog = (action, details, performed_by, type = 'info', level = 'l
     });
 };
 
-// --- CLIENTES ---
-router.get("/customers", authenticateToken, (req, res) => {
-    db.all("SELECT * FROM customers ORDER BY name", [], (err, rows) => res.json(rows));
-});
-
-router.post("/customers", authenticateToken, requireRole("supervisor"), (req, res) => {
-    const { name, phone, credit_limit } = req.body;
-    db.get("INSERT INTO customers (name, phone, credit_limit) VALUES (?, ?, ?) RETURNING id", [name, phone, credit_limit], (err, row) => {
-        if (err) return res.status(400).json({ message: "Erro ao criar cliente." });
-        res.status(201).json(row);
-    });
-});
 
 // --- PRODUTOS ---
 router.get("/products", authenticateToken, (req, res) => {

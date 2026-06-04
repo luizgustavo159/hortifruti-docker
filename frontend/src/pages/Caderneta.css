@@ -13,6 +13,23 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 100%;
+}
+
+.btn-new-customer {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px !important;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-new-customer:hover {
+  filter: brightness(0.9);
+  transform: translateY(-1px);
 }
 
 .customer-cards {
@@ -178,8 +195,3 @@
   font-style: italic;
 }
 
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-}
