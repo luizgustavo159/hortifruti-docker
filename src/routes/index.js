@@ -493,7 +493,7 @@ router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, 
     `, [...isoRange, ...isoRange], (err, row) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar resumo: " + err.message });
         
-        db.all("SELECT id, name, current_stock, min_stock FROM products WHERE current_stock <= min_stock", [], (errStock, lowStock) => {
+        db.all("SELECT * FROM v_critical_stock", [], (errStock, lowStock) => {
             res.json({
                 ...row,
                 low_stock: lowStock || [],
