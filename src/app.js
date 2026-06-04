@@ -20,6 +20,8 @@ app.use(helmet({
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const logger = pino({
   level: LOG_LEVEL,
   transport: {
@@ -29,11 +31,12 @@ const logger = pino({
         options: { destination: path.join(__dirname, "..", "logs", "app.log"), mkdir: true },
         level: LOG_LEVEL
       },
-      {
+      // Em produção, evitamos o pino-pretty para não causar erro se não estiver no bundle
+      ...(!isProduction ? [{
         target: 'pino-pretty',
         options: { colorize: true },
         level: LOG_LEVEL
-      }
+      }] : [])
     ]
   }
 });
