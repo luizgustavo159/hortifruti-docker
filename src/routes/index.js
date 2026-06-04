@@ -301,48 +301,63 @@ router.post("/sales", authenticateToken, (req, res) => {
   const manualDiscountAmount = parseFloat(manual_discount) || 0;
 
   runWithTransaction((tx, finish) => {
-    const processItem = (idx) => {
-      if (idx >= items.length) return finish(null);
-      const item = items[idx];
-      tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
-        if (!p) return finish(new Error(`Produto ID ${item.product_id} não encontrado`));
-
-        // --- TRAVA DE ESTOQUE NEGATIVO ---
-        if (Number(p.current_stock) < Number(item.quantity)) {
-          return finish(new Error(`Estoque insuficiente para ${p.name}. Disponível: ${p.current_stock}`));
-        }
-
-        const subtotal = p.price * item.quantity;
-        // Distribuir o desconto manual proporcionalmente ou aplicar ao total da venda se a tabela suportar
-        // Como a tabela 'sales' tem discount_amount e final_total por item (ou por registro de venda), 
-        // vamos calcular o proporcional do desconto manual para este item se houver múltiplos itens, 
-        // ou simplesmente aplicar se for um por um.
-        
-        // No esquema atual, cada item é uma linha na tabela sales.
-        // Calculamos o desconto proporcional para este item baseado no peso dele no total da venda.
-        const totalVendaBruto = items.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0); // Note: assumindo que o frontend envia o price ou buscando do banco
-        // Para simplificar e garantir precisão, vamos usar o preço do banco.
-        
-        // Melhor abordagem: O desconto manual é aplicado ao TOTAL da venda no frontend.
-        // Aqui no backend, como cada item vira uma linha, vamos ratear o desconto.
-        const totalGeralBruto = items.reduce((acc, it) => acc + (it.price * it.quantity), 0);
-        const itemProportionalDiscount = totalGeralBruto > 0 ? (subtotal / totalGeralBruto) * manualDiscountAmount : 0;
-        const finalTotal = subtotal - itemProportionalDiscount;
-
-        tx.run(
-          "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id],
-          (errS) => {
-            if (errS) return finish(errS);
-            tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id], (errU) => {
-              if (errU) return finish(errU);
-              processItem(idx + 1);
-            });
+    // --- VALIDAÇÃO DE FIADO ---
+    const validateFiado = (callback) => {
+      if (payment_method === "Fiado") {
+        if (!customer_id) return finish(new Error("Cliente não informado para pagamento em Fiado."));
+        tx.get("SELECT credit_limit, current_debt FROM customers WHERE id = ?", [customer_id], (err, customer) => {
+          if (err || !customer) return finish(new Error("Cliente não encontrado para validação de fiado."));
+          
+          const totalGeralBruto = items.reduce((acc, it) => acc + (it.price * it.quantity), 0);
+          const totalComDesconto = totalGeralBruto - manualDiscountAmount;
+          
+          if (customer.current_debt + totalComDesconto > customer.credit_limit) {
+            return finish(new Error(`Limite de crédito excedido. Limite: R$ ${customer.credit_limit}. Dívida atual: R$ ${customer.current_debt}.`));
           }
-        );
-      });
+          
+          // Atualizar dívida do cliente
+          tx.run("UPDATE customers SET current_debt = current_debt + ? WHERE id = ?", [totalComDesconto, customer_id], (errU) => {
+            if (errU) return finish(errU);
+            callback();
+          });
+        });
+      } else {
+        callback();
+      }
     };
-    processItem(0);
+
+    validateFiado(() => {
+      const processItem = (idx) => {
+        if (idx >= items.length) return finish(null);
+        const item = items[idx];
+        tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
+          if (!p) return finish(new Error(`Produto ID ${item.product_id} não encontrado`));
+
+          // --- TRAVA DE ESTOQUE NEGATIVO ---
+          if (Number(p.current_stock) < Number(item.quantity)) {
+            return finish(new Error(`Estoque insuficiente para ${p.name}. Disponível: ${p.current_stock}`));
+          }
+
+          const subtotal = p.price * item.quantity;
+          const totalGeralBruto = items.reduce((acc, it) => acc + (it.price * it.quantity), 0);
+          const itemProportionalDiscount = totalGeralBruto > 0 ? (subtotal / totalGeralBruto) * manualDiscountAmount : 0;
+          const finalTotal = subtotal - itemProportionalDiscount;
+
+          tx.run(
+            "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id],
+            (errS) => {
+              if (errS) return finish(errS);
+              tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id], (errU) => {
+                if (errU) return finish(errU);
+                processItem(idx + 1);
+              });
+            }
+          );
+        });
+      };
+      processItem(0);
+    });
   }, (err) => err ? res.status(400).json({ message: err.message }) : res.json({ status: "ok" }));
 });
 
