@@ -105,25 +105,17 @@ export function Estoque() {
   };
 
   // ==================== FUNÇÕES DE GERAÇÃO DE IMAGEM CARICATA ====================
-  // Gera SVG caricato com emoji e nome do produto
   const generateCaricatureImage = (productName) => {
     if (!productName || productName.trim().length < 2) return "";
-    
     const nameLower = productName.toLowerCase().trim();
-    let emoji = "🥬"; // padrão: verdura genérica
-    
-    // Busca correspondência no dicionário (verifica cada palavra e partes da palavra)
-    // Ordenar chaves por tamanho (maior primeiro) para evitar falsos positivos curtos
+    let emoji = "🥬";
     const sortedKeys = Object.keys(emojiDictionary).sort((a, b) => b.length - a.length);
-    
     for (const key of sortedKeys) {
       if (nameLower.includes(key)) {
         emoji = emojiDictionary[key];
         break;
       }
     }
-    
-    // Gera SVG com emoji grande e nome do produto
     const svg = `
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
         <rect width="400" height="400" fill="#f0f8ff" rx="10"/>
@@ -133,21 +125,16 @@ export function Estoque() {
         <rect x="100" y="330" width="200" height="2" fill="#4CAF50"/>
       </svg>
     `;
-    
-    // Converte SVG para Data URL via Canvas
     return new Promise((resolve) => {
       const img = new Image();
       const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(svgBlob);
-      
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        canvas.width = 400;
-        canvas.height = 400;
+        canvas.width = 400; canvas.height = 400;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0);
         URL.revokeObjectURL(url);
-        // Salva como JPEG com 80% de qualidade
         resolve(canvas.toDataURL("image/jpeg", 0.8));
       };
       img.src = url;
@@ -178,23 +165,10 @@ export function Estoque() {
       img.src = base64Str;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height *= maxWidth / width;
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width *= maxHeight / height;
-            height = maxHeight;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
+        let width = img.width; let height = img.height;
+        if (width > height) { if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; } }
+        else { if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; } }
+        canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', 0.7));
@@ -205,38 +179,33 @@ export function Estoque() {
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result;
       if (typeof base64 === 'string') {
         const compressed = await compressImage(base64);
         setNewProduct(prev => ({ ...prev, image_url: compressed }));
-        setSuccessMessage("Imagem carregada e otimizada!");
+        setSuccessMessage("Imagem carregada!");
       }
     };
-    reader.onerror = () => setError("Erro ao ler arquivo de imagem.");
     reader.readAsDataURL(file);
   };
 
   const handleGenerateCaricature = async () => {
     if (!newProduct.name || newProduct.name.trim().length < 2) {
-      setError("Digite o nome do produto primeiro (mínimo 2 caracteres)");
+      setError("Digite o nome do produto primeiro");
       return;
     }
-    
     const imageUrl = await generateCaricatureImage(newProduct.name);
     setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
-    setSuccessMessage(`Imagem caricata gerada para "${newProduct.name}"!`);
+    setSuccessMessage(`Imagem gerada para "${newProduct.name}"!`);
   };
 
   // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
   const generateEAN13 = () => {
     const base = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join('');
     let sum = 0;
-    for (let i = 0; i < 12; i++) {
-      sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
-    }
+    for (let i = 0; i < 12; i++) { sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3); }
     const checkDigit = (10 - (sum % 10)) % 10;
     return base + checkDigit;
   };
@@ -244,152 +213,19 @@ export function Estoque() {
   const isValidEAN13 = (ean) => {
     if (!ean || !/^\d{13}$/.test(ean)) return false;
     let sum = 0;
-    for (let i = 0; i < 12; i++) {
-      sum += parseInt(ean[i]) * (i % 2 === 0 ? 1 : 3);
-    }
+    for (let i = 0; i < 12; i++) { sum += parseInt(ean[i]) * (i % 2 === 0 ? 1 : 3); }
     const checkDigit = (10 - (sum % 10)) % 10;
     return parseInt(ean[12]) === checkDigit;
   };
 
-  const toggleProductSelection = (productId) => {
-    const newSelected = new Set(selectedProducts);
-    if (newSelected.has(productId)) {
-      newSelected.delete(productId);
-    } else {
-      newSelected.add(productId);
-    }
-    setSelectedProducts(newSelected);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedProducts.size === products.length) {
-      setSelectedProducts(new Set());
-    } else {
-      setSelectedProducts(new Set(products.map(p => p.id)));
-    }
-  };
-
-  const exportLabelsAsPDF = async () => {
-    if (selectedProducts.size === 0) {
-      setError("Selecione pelo menos um produto para exportar");
-      return;
-    }
-
-    const productsToExport = products.filter(p => selectedProducts.has(p.id));
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    let yPosition = 10;
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const cardHeight = 80;
-    const cardWidth = 90;
-    let xPosition = 10;
-
-    for (let i = 0; i < productsToExport.length; i++) {
-      const product = productsToExport[i];
-      if (yPosition + cardHeight > pageHeight - 10) {
-        doc.addPage();
-        yPosition = 10;
-        xPosition = 10;
-      }
-      doc.setDrawColor(200);
-      doc.rect(xPosition, yPosition, cardWidth, cardHeight);
-      if (product.image_url) {
-        try { doc.addImage(product.image_url, 'JPEG', xPosition + 2, yPosition + 2, 25, 25); } catch (e) {}
-      }
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'bold');
-      const nameLines = doc.splitTextToSize(product.name, cardWidth - 35);
-      doc.text(nameLines, xPosition + 30, yPosition + 5);
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Cat: ${product.category_name || 'N/A'}`, xPosition + 30, yPosition + 20);
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'bold');
-      doc.text(`R$ ${Number(product.price || 0).toFixed(2)}`, xPosition + 30, yPosition + 27);
-      doc.setFontSize(7);
-      doc.setFont(undefined, 'normal');
-      doc.text(`EAN: ${product.sku}`, xPosition + 2, yPosition + 72);
-      xPosition += cardWidth + 5;
-      if (xPosition + cardWidth > 210) {
-        xPosition = 10;
-        yPosition += cardHeight + 5;
-      }
-    }
-    doc.save('etiquetas-produtos.pdf');
-    setSuccessMessage(`PDF gerado com sucesso!`);
-  };
-
-  const handleGenerateBarcode = () => {
-    const newBarcode = generateEAN13();
-    setNewProduct({...newProduct, sku: newBarcode});
-    setSuccessMessage(`Código de barras gerado: ${newBarcode}`);
-  };
-
-  const handleBarcodeBlur = () => {
-    if (newProduct.sku && !isValidEAN13(newProduct.sku)) {
-      setError(`Código de barras inválido. Deve ser um EAN-13 válido.`);
-    }
-  };
-
-  const generateInsights = () => {
-    const insights = [];
-    products.forEach(p => {
-      const price = Number(p.price || 0);
-      const cost = Number(p.avg_cost || 0);
-      const margin = price > 0 ? ((price - cost) / price * 100) : 0;
-      const target = 30;
-      if (margin < target && price > 0) {
-        insights.push({
-          type: "warning",
-          title: `Margem Baixa: ${p.name}`,
-          text: `A margem atual é de ${margin.toFixed(1)}%, mas o alvo é ${target}%.`,
-          action: () => handleQuickPriceUpdate(p)
-        });
-      }
-      if (Number(p.current_stock) > Number(p.min_stock) * 5 && Number(p.current_stock) > 0) {
-        insights.push({
-          type: "info",
-          title: `Estoque Elevado: ${p.name}`,
-          text: `Você tem ${p.current_stock} ${p.unit_type} em estoque. R$ ${(Number(p.current_stock) * cost).toFixed(2)} imobilizados.`,
-        });
-      }
-    });
-    if (restockSuggestions.length > 0) {
-      insights.push({ type: "danger", title: "Atenção ao Suprimento", text: `${restockSuggestions.length} itens abaixo do estoque mínimo.`, tab: "restock" });
-    }
-    return insights;
-  };
-
-  const insights = generateInsights();
-
   const handleSaveProduct = async () => {
     try {
-      if (selectedProduct) {
-        await apiFetch(`/products/${selectedProduct.id}`, { method: "PUT", body: JSON.stringify(newProduct) });
-        setSuccessMessage("Produto atualizado!");
-      } else {
-        await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) });
-        setSuccessMessage("Produto cadastrado!");
-      }
-      setShowNewProductModal(false);
-      setSelectedProduct(null);
+      if (selectedProduct) { await apiFetch(`/products/${selectedProduct.id}`, { method: "PUT", body: JSON.stringify(newProduct) }); }
+      else { await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) }); }
+      setShowNewProductModal(false); setSelectedProduct(null);
       setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30", image_url: "" });
       loadData();
     } catch (err) { setError(err.message); }
-  };
-
-  const handleQuickPriceUpdate = async (product) => {
-    const targetMargin = 30;
-    const avgCost = Number(product.avg_cost || 0);
-    const suggestedPrice = avgCost / (1 - (targetMargin / 100));
-    if (window.confirm(`Atualizar preço de ${product.name} para R$ ${suggestedPrice.toFixed(2)}?`)) {
-      try {
-        await apiFetch(`/products/${product.id}/price`, { method: "PUT", body: JSON.stringify({ price: suggestedPrice.toFixed(2) }) });
-        setSuccessMessage("Preço atualizado!");
-        loadData();
-      } catch (err) { setError(err.message); }
-    }
   };
 
   const handleStockMovement = async () => {
@@ -398,8 +234,7 @@ export function Estoque() {
       const delta = movement.type === "inbound" ? qty : -qty;
       await apiFetch("/stock/adjust", { method: "POST", body: JSON.stringify({ product_id: selectedProduct.id, delta, reason: movement.reason, unit_cost: movement.type === "inbound" ? movement.unit_cost : 0 }) });
       setSuccessMessage("Movimentação registrada!");
-      setShowMovementModal(false);
-      loadData();
+      setShowMovementModal(false); loadData();
     } catch (err) { setError(err.message); }
   };
 
@@ -408,11 +243,8 @@ export function Estoque() {
       const method = selectedCategory ? "PUT" : "POST";
       const url = selectedCategory ? `/categories/${selectedCategory.id}` : "/categories";
       await apiFetch(url, { method, body: JSON.stringify(newCategory) });
-      setSuccessMessage("Categoria salva!");
-      setShowCategoryModal(false);
-      setNewCategory({ name: "", description: "" });
-      setSelectedCategory(null);
-      loadData();
+      setSuccessMessage("Categoria salva!"); setShowCategoryModal(false);
+      setNewCategory({ name: "", description: "" }); setSelectedCategory(null); loadData();
     } catch (err) { setError(err.message); }
   };
 
@@ -421,51 +253,24 @@ export function Estoque() {
       const method = selectedSupplier ? "PUT" : "POST";
       const url = selectedSupplier ? `/suppliers/${selectedSupplier.id}` : "/suppliers";
       await apiFetch(url, { method, body: JSON.stringify(newSupplier) });
-      setSuccessMessage("Fornecedor salvo!");
-      setShowSupplierModal(false);
-      setNewSupplier({ name: "", contact: "", phone: "", email: "" });
-      setSelectedSupplier(null);
-      loadData();
+      setSuccessMessage("Fornecedor salvo!"); setShowSupplierModal(false);
+      setNewSupplier({ name: "", contact: "", phone: "", email: "" }); setSelectedSupplier(null); loadData();
     } catch (err) { setError(err.message); }
   };
 
   const handleDeleteCategory = async (id) => {
     if (!window.confirm("Excluir categoria?")) return;
-    try {
-      await apiFetch(`/categories/${id}`, { method: "DELETE" });
-      setSuccessMessage("Categoria excluída!");
-      loadData();
-    } catch (err) { setError(err.message); }
+    try { await apiFetch(`/categories/${id}`, { method: "DELETE" }); loadData(); } catch (err) { setError(err.message); }
   };
 
   const handleDeleteSupplier = async (id) => {
     if (!window.confirm("Excluir fornecedor?")) return;
-    try {
-      await apiFetch(`/suppliers/${id}`, { method: "DELETE" });
-      setSuccessMessage("Fornecedor excluído!");
-      loadData();
-    } catch (err) { setError(err.message); }
+    try { await apiFetch(`/suppliers/${id}`, { method: "DELETE" }); loadData(); } catch (err) { setError(err.message); }
   };
 
   return (
-    <PageShell title="Consultoria de Estoque" subtitle="Insights para sua Tomada de Decisão">
+    <PageShell title="Consultoria de Estoque" subtitle="Gerencie seu hortifruti com inteligência">
       <div className="stock-container">
-        {/* Insights */}
-        {insights.length > 0 && (
-          <div className="insights-panel">
-            <h3 className="insights-title">💡 Dicas de Atenção</h3>
-            <div className="insights-list">
-              {insights.slice(0, 3).map((insight, idx) => (
-                <div key={idx} className={`insight-card ${insight.type}`}>
-                  <div className="insight-content"><strong>{insight.title}</strong><p>{insight.text}</p></div>
-                  {insight.action && <button className="btn-insight-action" onClick={insight.action}>Resolver</button>}
-                  {insight.tab && <button className="btn-insight-action" onClick={() => setActiveTab(insight.tab)}>Ver Itens</button>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="card-grid">
           <div className="card"><h3>Itens Críticos</h3><strong className="value-large critical">{restockSuggestions.length}</strong></div>
           <div className="card"><h3>Valor em Estoque</h3><strong className="value-large">R$ {products.reduce((acc, p) => acc + (p.current_stock * (p.avg_cost || 0)), 0).toFixed(2)}</strong></div>
@@ -477,7 +282,6 @@ export function Estoque() {
 
         <div className="tabs">
           <button className={`tab ${activeTab === "inventory" ? "active" : ""}`} onClick={() => setActiveTab("inventory")}>Inventário</button>
-          <button className={`tab ${activeTab === "restock" ? "active" : ""}`} onClick={() => setActiveTab("restock")}>Reposições</button>
           <button className={`tab ${activeTab === "categories" ? "active" : ""}`} onClick={() => setActiveTab("categories")}>Categorias</button>
           <button className={`tab ${activeTab === "suppliers" ? "active" : ""}`} onClick={() => setActiveTab("suppliers")}>Fornecedores</button>
         </div>
@@ -490,20 +294,16 @@ export function Estoque() {
             </div>
             <div className="table-wrapper">
               <table className="table">
-                <thead><tr><th><input type="checkbox" checked={selectedProducts.size === products.length} onChange={toggleSelectAll} /></th><th>Produto</th><th>Estoque</th><th>Custo Médio</th><th>Preço</th><th>Margem</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Produto</th><th>Estoque</th><th>Custo</th><th>Preço</th><th>Margem</th><th>Ações</th></tr></thead>
                 <tbody>
                   {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => {
-                    const price = Number(p.price || 0);
-                    const cost = Number(p.avg_cost || 0);
+                    const price = Number(p.price || 0); const cost = Number(p.avg_cost || 0);
                     const margin = price > 0 && cost > 0 ? ((price - cost) / cost * 100) : 0;
-                    const marginStatus = p.margin_status || 'ok';
-                    const marginStatusColor = marginStatus === 'low_margin' ? '#f44336' : marginStatus === 'high_margin' ? '#ff9800' : '#4CAF50';
                     return (
-                      <tr key={p.id} style={{ borderLeft: `4px solid ${marginStatusColor}`, backgroundColor: selectedProducts.has(p.id) ? "#e3f2fd" : "transparent" }}>
-                        <td><input type="checkbox" checked={selectedProducts.has(p.id)} onChange={() => toggleProductSelection(p.id)} /></td>
+                      <tr key={p.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #eee', backgroundColor: '#f9f9f9' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #eee' }}>
                               <img src={p.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random`} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             </div>
                             <div><strong>{p.name}</strong><br/><small>{p.category_name}</small></div>
@@ -512,7 +312,7 @@ export function Estoque() {
                         <td><span className={Number(p.current_stock) <= Number(p.min_stock) ? "status critical" : "status_ok"}>{p.current_stock} {p.unit_type}</span></td>
                         <td>R$ {cost.toFixed(2)}</td>
                         <td>R$ {price.toFixed(2)}</td>
-                        <td><span className={marginStatus === 'low_margin' ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
+                        <td><span className={margin < 30 ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
                         <td>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30", image_url: p.image_url || ""}); setShowNewProductModal(true); }}>Editar</button>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
@@ -529,75 +329,52 @@ export function Estoque() {
         {/* Categorias e Fornecedores simplificados */}
         {activeTab === "categories" && (
           <div className="tab-content">
-            <div className="inventory-header">
-              <input type="text" placeholder="Buscar categoria..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
-              <button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: ""}); setShowCategoryModal(true); }}>+ Nova Categoria</button>
-            </div>
-            <div className="table-wrapper">
-              <table className="table">
-                <thead><tr><th>Nome</th><th>Descrição</th><th>Ações</th></tr></thead>
-                <tbody>
-                  {categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                    <tr key={c.id}><td><strong>{c.name}</strong></td><td>{c.description}</td><td>
-                      <button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button>
-                      <button className="btn-action danger" onClick={() => handleDeleteCategory(c.id)}>Excluir</button>
-                    </td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: ""}); setShowCategoryModal(true); }}>+ Nova Categoria</button></div>
+            <table className="table">
+              <thead><tr><th>Nome</th><th>Descrição</th><th>Ações</th></tr></thead>
+              <tbody>{categories.map(c => (<tr key={c.id}><td>{c.name}</td><td>{c.description}</td><td><button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button></td></tr>))}</tbody>
+            </table>
           </div>
         )}
 
         {activeTab === "suppliers" && (
           <div className="tab-content">
-            <div className="inventory-header">
-              <input type="text" placeholder="Buscar fornecedor..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
-              <button className="btn-primary" onClick={() => { setSelectedSupplier(null); setNewSupplier({name: "", contact: "", phone: "", email: ""}); setShowSupplierModal(true); }}>+ Novo Fornecedor</button>
-            </div>
-            <div className="table-wrapper">
-              <table className="table">
-                <thead><tr><th>Nome</th><th>Contato</th><th>Telefone</th><th>Ações</th></tr></thead>
-                <tbody>
-                  {suppliers.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map(s => (
-                    <tr key={s.id}><td><strong>{s.name}</strong></td><td>{s.contact}</td><td>{s.phone}</td><td>
-                      <button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button>
-                      <button className="btn-action danger" onClick={() => handleDeleteSupplier(s.id)}>Excluir</button>
-                    </td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedSupplier(null); setNewSupplier({name: "", contact: "", phone: "", email: ""}); setShowSupplierModal(true); }}>+ Novo Fornecedor</button></div>
+            <table className="table">
+              <thead><tr><th>Nome</th><th>Contato</th><th>Ações</th></tr></thead>
+              <tbody>{suppliers.map(s => (<tr key={s.id}><td>{s.name}</td><td>{s.contact}</td><td><button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button></td></tr>))}</tbody>
+            </table>
           </div>
         )}
       </div>
 
-      {/* Modal Produto - CORREÇÃO DE LAYOUT DE IMAGEM E BOTÕES */}
+      {/* Modal Produto - LAYOUT COM BOTÕES AO LADO DA IMAGEM */}
       {showNewProductModal && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: '600px' }}>
+          <div className="modal" style={{ maxWidth: '650px' }}>
             <h2>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
-            <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            
+            <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              {/* ÁREA DE IMAGEM CORRIGIDA */}
-              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '15px', gap: '10px' }}>
-                <div style={{ width: '150px', height: '150px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #e0e0e0', backgroundColor: '#f9f9f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {/* ÁREA DE IMAGEM E BOTÕES LADO A LADO */}
+              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee' }}>
+                <div style={{ width: '120px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '2px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
                     <img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ textAlign: 'center', color: '#999', fontSize: '12px', padding: '10px' }}>Sem imagem</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc', fontSize: '12px' }}>Sem Foto</div>
                   )}
                 </div>
                 
-                {/* BOTÕES EMBAIXO DA IMAGEM - SEM SOBREPOSIÇÃO */}
-                <div style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ padding: '8px 16px', background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🎨 Gerar Caricata
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                  <button type="button" onClick={handleGenerateCaricature} style={{ padding: '10px 15px', background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s' }}>
+                    🎨 Gerar Imagem Caricata
                   </button>
-                  <label style={{ padding: '8px 16px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    📁 Upload do PC
+                  <label style={{ padding: '10px 15px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s' }}>
+                    📁 Carregar Foto do PC
                     <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                   </label>
+                  <small style={{ color: '#666', fontSize: '11px' }}>Dica: Digite o nome do produto para gerar uma caricatura automática.</small>
                 </div>
               </div>
 
@@ -609,15 +386,15 @@ export function Estoque() {
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Código de Barras (EAN-13)</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input placeholder="Código EAN-13" value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} onBlur={handleBarcodeBlur} className="input" style={{ flex: 1 }} />
+                  <input placeholder="Código EAN-13" value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} />
                   <button type="button" onClick={handleGenerateBarcode} style={{ padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>📱 Gerar</button>
                 </div>
               </div>
 
               <div className="form-group">
-                <label>Tipo de Unidade</label>
+                <label>Unidade</label>
                 <select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input">
-                  <option value="un">Unidade (un)</option><option value="kg">Quilo (kg)</option><option value="g">Grama (g)</option><option value="cx">Caixa (cx)</option>
+                  <option value="un">Unidade</option><option value="kg">Quilo</option><option value="cx">Caixa</option>
                 </select>
               </div>
               <div className="form-group">
@@ -627,7 +404,7 @@ export function Estoque() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Custo Médio (R$)</label>
+                <label>Custo (R$)</label>
                 <input type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
               </div>
               <div className="form-group">
@@ -638,20 +415,21 @@ export function Estoque() {
                 <label>Preço de Venda (R$)</label>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} />
-                  <div style={{ padding: '8px', backgroundColor: '#f0f8ff', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '12px' }}>
+                  <div style={{ padding: '8px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '12px' }}>
                     Sugestão: <strong>R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}</strong>
                   </div>
                 </div>
               </div>
               <div className="form-group">
-                <label>Estoque Atual</label>
+                <label>Estoque</label>
                 <input type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" />
               </div>
               <div className="form-group">
-                <label>Estoque Mínimo</label>
+                <label>Mínimo</label>
                 <input type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" />
               </div>
             </div>
+            
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
               <button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1 }}>Salvar Produto</button>
               <button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
@@ -660,13 +438,13 @@ export function Estoque() {
         </div>
       )}
 
-      {/* Outros modais simplificados */}
+      {/* Outros modais */}
       {showMovementModal && (
         <div className="modal-overlay">
           <div className="modal">
             <h2>Movimentação: {selectedProduct.name}</h2>
             <input type="number" placeholder="Quantidade" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} className="input" />
-            <div className="modal-actions">
+            <div className="modal-actions" style={{ marginTop: '15px' }}>
               <button onClick={handleStockMovement} className="btn-primary">Confirmar</button>
               <button onClick={() => setShowMovementModal(false)} className="btn-secondary">Cancelar</button>
             </div>
@@ -679,8 +457,7 @@ export function Estoque() {
           <div className="modal">
             <h2>Categoria</h2>
             <input placeholder="Nome" value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} className="input" style={{ marginBottom: '10px' }} />
-            <input placeholder="Descrição" value={newCategory.description} onChange={e => setNewCategory({...newCategory, description: e.target.value})} className="input" />
-            <div className="modal-actions" style={{ marginTop: '15px' }}>
+            <div className="modal-actions">
               <button onClick={handleSaveCategory} className="btn-primary">Salvar</button>
               <button onClick={() => setShowCategoryModal(false)} className="btn-secondary">Cancelar</button>
             </div>
