@@ -9,7 +9,9 @@ export function Caderneta() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [paymentData, setPaymentData] = useState({ amount: "", method: "cash" });
+  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", credit_limit: 100 });
 
   const loadCaderneta = async () => {
     setLoading(true);
@@ -53,6 +55,24 @@ export function Caderneta() {
     }
   };
 
+  const handleCreateCustomer = async (e) => {
+    e.preventDefault();
+    try {
+      await apiFetch("/customers", {
+        method: "POST",
+        body: JSON.stringify({
+          ...newCustomer,
+          name: newCustomer.name.toUpperCase()
+        })
+      });
+      setShowCustomerModal(false);
+      setNewCustomer({ name: "", phone: "", credit_limit: 100 });
+      loadCaderneta();
+    } catch (err) {
+      alert("Erro ao cadastrar cliente: " + err.message);
+    }
+  };
+
   useEffect(() => {
     loadCaderneta();
   }, []);
@@ -61,7 +81,10 @@ export function Caderneta() {
     <PageShell title="Caderneta de Fiado" subtitle="Gerenciamento de débitos e pagamentos de clientes">
       <div className="caderneta-container">
         <div className="customers-list">
-          <h3>Clientes com Débito</h3>
+          <div className="list-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Clientes com Débito</h3>
+            <button className="btn-new-customer" onClick={() => setShowCustomerModal(true)} style={{ padding: '5px 10px', fontSize: '12px' }}>+ Novo Cliente</button>
+          </div>
           {loading ? <p>Carregando...</p> : (
             <div className="customer-cards">
               {customers.map(c => (
@@ -166,6 +189,51 @@ export function Caderneta() {
               <div className="modal-actions">
                 <button type="submit" className="btn-finalize">Confirmar Pagamento</button>
                 <button type="button" className="button button-secondary" onClick={() => setShowPaymentModal(false)}>Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showCustomerModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Novo Cliente na Caderneta</h3>
+            <form onSubmit={handleCreateCustomer}>
+              <div className="form-group">
+                <label>Nome do Cliente</label>
+                <input 
+                  type="text" 
+                  value={newCustomer.name} 
+                  onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}
+                  placeholder="NOME COMPLETO"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label>Telefone</label>
+                <input 
+                  type="text" 
+                  value={newCustomer.phone} 
+                  onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div className="form-group">
+                <label>Limite de Crédito (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={newCustomer.credit_limit} 
+                  onChange={e => setNewCustomer({...newCustomer, credit_limit: e.target.value})}
+                  placeholder="100,00"
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="submit" className="btn-finalize">Cadastrar Cliente</button>
+                <button type="button" className="button button-secondary" onClick={() => setShowCustomerModal(false)}>Cancelar</button>
               </div>
             </form>
           </div>
