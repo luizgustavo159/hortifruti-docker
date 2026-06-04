@@ -58,12 +58,30 @@ router.post("/customers", authenticateToken, requireRole("supervisor"), (req, re
 // --- PRODUTOS ---
 router.get("/products", authenticateToken, (req, res) => {
   db.all(`
-    SELECT p.*, c.name AS category_name, s.name AS supplier_name, c.target_margin as category_margin
+    SELECT 
+      p.*,
+      c.name AS category_name, 
+      s.name AS supplier_name, 
+      c.target_margin as category_margin,
+      COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) as target_margin,
+      CASE 
+        WHEN p.avg_cost > 0 AND p.price > 0 THEN ROUND(((p.price - p.avg_cost) / p.avg_cost) * 100, 2)
+        ELSE 0
+      END as current_margin_percent,
+      CASE 
+        WHEN p.avg_cost > 0 AND p.price > 0 THEN
+          CASE 
+            WHEN ROUND(((p.price - p.avg_cost) / p.avg_cost) * 100, 2) < COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) THEN 'low_margin'
+            WHEN ROUND(((p.price - p.avg_cost) / p.avg_cost) * 100, 2) > (COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) + 10) THEN 'high_margin'
+            ELSE 'ok'
+          END
+        ELSE 'no_cost'
+      END as margin_status
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     ORDER BY p.name
-  `, [], (err, rows) => res.json(rows));
+  `, [], (err, rows) => res.json(rows || []));
 });
 
 router.post("/products", authenticateToken, requireRole("supervisor"), (req, res) => {

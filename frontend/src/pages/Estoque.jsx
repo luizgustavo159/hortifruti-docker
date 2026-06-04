@@ -280,15 +280,22 @@ export function Estoque() {
                   {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => {
                     const price = Number(p.price || 0);
                     const cost = Number(p.avg_cost || 0);
-                    const margin = price > 0 ? ((price - cost) / price * 100) : 0;
-                    const isLow = margin < (p.category_margin || 30);
+                    const margin = price > 0 && cost > 0 ? ((price - cost) / cost * 100) : 0;
+                    const marginStatus = p.margin_status || 'ok';
+                    const marginStatusLabel = marginStatus === 'low_margin' ? '⚠️ Baixa' : marginStatus === 'high_margin' ? '📈 Alta' : '✓ OK';
+                    const marginStatusColor = marginStatus === 'low_margin' ? '#f44336' : marginStatus === 'high_margin' ? '#ff9800' : '#4CAF50';
                     return (
-                      <tr key={p.id}>
+                      <tr key={p.id} style={{ borderLeft: `4px solid ${marginStatusColor}` }}>
                         <td><strong>{p.name}</strong><br/><small>{p.category_name}</small></td>
                         <td><span className={Number(p.current_stock) <= Number(p.min_stock) ? "status critical" : "status ok"}>{p.current_stock} {p.unit_type}</span></td>
                         <td>R$ {cost.toFixed(2)}</td>
                         <td>R$ {price.toFixed(2)}</td>
-                        <td><span className={isLow ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span className={marginStatus === 'low_margin' ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span>
+                            <span style={{ fontSize: '11px', color: marginStatusColor, fontWeight: 'bold' }}>{marginStatusLabel}</span>
+                          </div>
+                        </td>
                         <td>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30"}); setShowNewProductModal(true); }}>Editar</button>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
