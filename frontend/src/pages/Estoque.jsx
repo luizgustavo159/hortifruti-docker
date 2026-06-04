@@ -196,6 +196,46 @@ export function Estoque() {
     } catch (err) { setError(err.message); }
   };
 
+  const handleStockMovement = async () => {
+    try {
+      const qty = parseFloat(movement.quantity);
+      const delta = movement.type === "inbound" ? qty : -qty;
+      await apiFetch("/stock/adjust", { method: "POST", body: JSON.stringify({ product_id: selectedProduct.id, delta, reason: movement.reason, unit_cost: movement.type === "inbound" ? movement.unit_cost : 0 }) });
+      setSuccessMessage("Movimentação registrada!");
+      setShowMovementModal(false); loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleSaveCategory = async () => {
+    try {
+      const method = selectedCategory ? "PUT" : "POST";
+      const url = selectedCategory ? `/categories/${selectedCategory.id}` : "/categories";
+      await apiFetch(url, { method, body: JSON.stringify(newCategory) });
+      setSuccessMessage("Categoria salva!"); setShowCategoryModal(false);
+      setNewCategory({ name: "", description: "" }); setSelectedCategory(null); loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleSaveSupplier = async () => {
+    try {
+      const method = selectedSupplier ? "PUT" : "POST";
+      const url = selectedSupplier ? `/suppliers/${selectedSupplier.id}` : "/suppliers";
+      await apiFetch(url, { method, body: JSON.stringify(newSupplier) });
+      setSuccessMessage("Fornecedor salvo!"); setShowSupplierModal(false);
+      setNewSupplier({ name: "", contact: "", phone: "", email: "" }); setSelectedSupplier(null); loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm("Excluir categoria?")) return;
+    try { await apiFetch(`/categories/${id}`, { method: "DELETE" }); loadData(); } catch (err) { setError(err.message); }
+  };
+
+  const handleDeleteSupplier = async (id) => {
+    if (!window.confirm("Excluir fornecedor?")) return;
+    try { await apiFetch(`/suppliers/${id}`, { method: "DELETE" }); loadData(); } catch (err) { setError(err.message); }
+  };
+
   return (
     <PageShell title="Consultoria de Estoque" subtitle="Gerencie seu hortifruti com inteligência">
       <div className="stock-container">
@@ -243,6 +283,7 @@ export function Estoque() {
                         <td><span className={margin < 30 ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
                         <td>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30", image_url: p.image_url || ""}); setShowNewProductModal(true); }}>Editar</button>
+                          <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
                         </td>
                       </tr>
                     );
@@ -274,7 +315,7 @@ export function Estoque() {
         )}
       </div>
 
-      {/* Modal Produto - PADRONIZAÇÃO DE TAMANHOS */}
+      {/* Modal Produto - UNIDADES SIMPLIFICADAS */}
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '650px' }}>
@@ -282,7 +323,6 @@ export function Estoque() {
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              {/* ÁREA DE IMAGEM E BOTÕES PADRONIZADOS */}
               <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee' }}>
                 <div style={{ width: '120px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '2px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
@@ -293,10 +333,10 @@ export function Estoque() {
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '45px', background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: '0.2s' }}>
+                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '45px', background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     🎨 Gerar Caricata
                   </button>
-                  <label style={{ height: '45px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: '0.2s' }}>
+                  <label style={{ height: '45px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     📁 Upload do PC
                     <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                   </label>
@@ -317,9 +357,11 @@ export function Estoque() {
               </div>
 
               <div className="form-group">
-                <label>Unidade</label>
+                <label>Unidade de Medida</label>
                 <select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input">
-                  <option value="un">Unidade</option><option value="kg">Quilo</option><option value="cx">Caixa</option>
+                  <option value="un">Unidade (un)</option>
+                  <option value="kg">Quilo (kg)</option>
+                  <option value="cx">Caixa (cx)</option>
                 </select>
               </div>
               <div className="form-group">
@@ -345,6 +387,14 @@ export function Estoque() {
                   </div>
                 </div>
               </div>
+              <div className="form-group">
+                <label>Estoque</label>
+                <input type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" />
+              </div>
+              <div className="form-group">
+                <label>Mínimo</label>
+                <input type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" />
+              </div>
             </div>
             
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
@@ -355,7 +405,20 @@ export function Estoque() {
         </div>
       )}
 
-      {/* Outros modais simplificados */}
+      {/* Outros modais */}
+      {showMovementModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Movimentação: {selectedProduct.name}</h2>
+            <input type="number" placeholder="Quantidade" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} className="input" />
+            <div className="modal-actions" style={{ marginTop: '15px' }}>
+              <button onClick={handleStockMovement} className="btn-primary">Confirmar</button>
+              <button onClick={() => setShowMovementModal(false)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCategoryModal && (
         <div className="modal-overlay">
           <div className="modal">
