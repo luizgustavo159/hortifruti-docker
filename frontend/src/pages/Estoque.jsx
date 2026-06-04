@@ -56,8 +56,6 @@ export function Estoque() {
   // ==================== MOTOR DE BUSCA SEMÂNTICA REFINADO ====================
   const getEmojiForProduct = (name) => {
     const text = name.toLowerCase().trim();
-    
-    // PRIORIDADE ABSOLUTA PARA MAÇÃ E TERMOS CRÍTICOS
     if (text.includes("maçã") || text.includes("maca") || text === "apple") return "🍎";
     if (text.includes("banana")) return "🍌";
     if (text.includes("uva")) return "🍇";
@@ -87,14 +85,12 @@ export function Estoque() {
     if (text.includes("suco") || text.includes("vitamina")) return "🥤";
     if (text.includes("doce") || text.includes("sobremesa")) return "🍰";
     if (text.includes("verde") || text.includes("orgânico")) return "🌿";
-    
     return "📦";
   };
 
   const generateCaricatureImage = (productName) => {
     if (!productName || productName.trim().length < 2) return "";
     const emoji = getEmojiForProduct(productName);
-
     const svg = `
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
         <rect width="400" height="400" fill="#ffffff"/>
@@ -187,6 +183,26 @@ export function Estoque() {
     } catch (err) { setError(err.message); }
   };
 
+  const handleSaveCategory = async () => {
+    try {
+      if (selectedCategory) { await apiFetch(`/categories/${selectedCategory.id}`, { method: "PUT", body: JSON.stringify(newCategory) }); }
+      else { await apiFetch("/categories", { method: "POST", body: JSON.stringify(newCategory) }); }
+      setShowCategoryModal(false); setSelectedCategory(null);
+      setNewCategory({ name: "", description: "" });
+      loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleSaveSupplier = async () => {
+    try {
+      if (selectedSupplier) { await apiFetch(`/suppliers/${selectedSupplier.id}`, { method: "PUT", body: JSON.stringify(newSupplier) }); }
+      else { await apiFetch("/suppliers", { method: "POST", body: JSON.stringify(newSupplier) }); }
+      setShowSupplierModal(false); setSelectedSupplier(null);
+      setNewSupplier({ name: "", contact: "", phone: "", email: "" });
+      loadData();
+    } catch (err) { setError(err.message); }
+  };
+
   return (
     <PageShell title="Consultoria de Estoque" subtitle="Gerencie seu hortifruti com inteligência">
       <div className="stock-container">
@@ -243,94 +259,81 @@ export function Estoque() {
             </div>
           </div>
         )}
+
+        {activeTab === "categories" && (
+          <div className="tab-content">
+            <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: ""}); setShowCategoryModal(true); }}>+ Nova Categoria</button></div>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead><tr><th>Nome</th><th>Descrição</th><th>Ações</th></tr></thead>
+                <tbody>{categories.map(c => (<tr key={c.id}><td>{c.name}</td><td>{c.description}</td><td><button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button></td></tr>))}</tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "suppliers" && (
+          <div className="tab-content">
+            <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedSupplier(null); setNewSupplier({name: "", contact: "", phone: "", email: ""}); setShowSupplierModal(true); }}>+ Novo Fornecedor</button></div>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead><tr><th>Nome</th><th>Contato</th><th>Telefone</th><th>Email</th><th>Ações</th></tr></thead>
+                <tbody>{suppliers.map(s => (<tr key={s.id}><td>{s.name}</td><td>{s.contact}</td><td>{s.phone}</td><td>{s.email}</td><td><button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button></td></tr>))}</tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '650px' }}>
             <h2>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
-            
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              
               <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
                 <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
-                  {newProduct.image_url ? (
-                    <img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc', fontSize: '12px' }}>Sem Foto</div>
-                  )}
+                  {newProduct.image_url ? (<img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc', fontSize: '12px' }}>Sem Foto</div>)}
                 </div>
-                
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '160px' }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    🎨 Gerar
-                  </button>
-                  <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    📁 Upload
-                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-                  </label>
+                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>🎨 Gerar</button>
+                  <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📁 Upload<input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} /></label>
                 </div>
               </div>
-
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Nome do Produto</label>
-                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" />
-              </div>
-              
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Código de Barras</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} />
-                  <button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ height: '38px', padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Unidade</label>
-                <select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input">
-                  <option value="un">Unidade (un)</option>
-                  <option value="kg">Quilo (kg)</option>
-                  <option value="cx">Caixa (cx)</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Categoria</label>
-                <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input">
-                  <option value="">Selecione...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Custo (R$)</label>
-                <input type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
-              </div>
-              <div className="form-group">
-                <label>Margem (%)</label>
-                <input type="number" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" />
-              </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Preço de Venda (R$)</label>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} />
-                  <div style={{ padding: '8px 12px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '13px', color: '#2e7d32', fontWeight: 'bold', textAlign: 'center', minWidth: '110px' }}>
-                    <div style={{ fontSize: '9px', textTransform: 'uppercase', opacity: 0.7 }}>Sugerido</div>
-                    R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}
-                  </div>
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Estoque</label>
-                <input type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" />
-              </div>
-              <div className="form-group">
-                <label>Mínimo</label>
-                <input type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" />
-              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Nome do Produto</label><input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" /></div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Código de Barras</label><div style={{ display: 'flex', gap: '8px' }}><input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} /><button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ height: '38px', padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button></div></div>
+              <div className="form-group"><label>Unidade</label><select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input"><option value="un">Unidade (un)</option><option value="kg">Quilo (kg)</option><option value="cx">Caixa (cx)</option></select></div>
+              <div className="form-group"><label>Categoria</label><select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input"><option value="">Selecione...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div className="form-group"><label>Custo (R$)</label><input type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" /></div>
+              <div className="form-group"><label>Margem (%)</label><input type="number" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" /></div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Preço de Venda (R$)</label><div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}><input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} /><div style={{ padding: '8px 12px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '13px', color: '#2e7d32', fontWeight: 'bold', textAlign: 'center', minWidth: '110px' }}><div style={{ fontSize: '9px', textTransform: 'uppercase', opacity: 0.7 }}>Sugerido</div>R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}</div></div></div>
+              <div className="form-group"><label>Estoque</label><input type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" /></div>
+              <div className="form-group"><label>Mínimo</label><input type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" /></div>
             </div>
-            
-            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
-              <button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1 }}>Salvar Produto</button>
-              <button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
-            </div>
+            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}><button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1 }}>Salvar Produto</button><button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button></div>
+          </div>
+        </div>
+      )}
+
+      {showCategoryModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>{selectedCategory ? "Editar Categoria" : "Nova Categoria"}</h2>
+            <div className="form-group"><label>Nome</label><input value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} className="input" /></div>
+            <div className="form-group"><label>Descrição</label><input value={newCategory.description} onChange={e => setNewCategory({...newCategory, description: e.target.value})} className="input" /></div>
+            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}><button onClick={handleSaveCategory} className="btn-primary" style={{ flex: 1 }}>Salvar</button><button onClick={() => setShowCategoryModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button></div>
+          </div>
+        </div>
+      )}
+
+      {showSupplierModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>{selectedSupplier ? "Editar Fornecedor" : "Novo Fornecedor"}</h2>
+            <div className="form-group"><label>Nome</label><input value={newSupplier.name} onChange={e => setNewSupplier({...newSupplier, name: e.target.value})} className="input" /></div>
+            <div className="form-group"><label>Contato</label><input value={newSupplier.contact} onChange={e => setNewSupplier({...newSupplier, contact: e.target.value})} className="input" /></div>
+            <div className="form-group"><label>Telefone</label><input value={newSupplier.phone} onChange={e => setNewSupplier({...newSupplier, phone: e.target.value})} className="input" /></div>
+            <div className="form-group"><label>Email</label><input value={newSupplier.email} onChange={e => setNewSupplier({...newSupplier, email: e.target.value})} className="input" /></div>
+            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}><button onClick={handleSaveSupplier} className="btn-primary" style={{ flex: 1 }}>Salvar</button><button onClick={() => setShowSupplierModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button></div>
           </div>
         </div>
       )}
