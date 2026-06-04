@@ -53,62 +53,54 @@ export function Estoque() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ==================== DICIONÁRIO CARICATO EXPANDIDO ====================
-  const emojiDictionary = {
-    "maçã": "🍎", "maca": "🍎", "apple": "🍎",
-    "banana": "🍌",
-    "morango": "🍓", "strawberry": "🍓",
-    "cereja": "🍒", "cherry": "🍒",
-    "melancia": "🍉", "watermelon": "🍉",
-    "tomate": "🍅", "tomato": "🍅",
-    "laranja": "🍊", "orange": "🍊",
-    "limão": "🍋", "lemon": "🍋",
-    "abacaxi": "🍍", "pineapple": "🍍",
-    "manga": "🥭", "mango": "🥭",
-    "melão": "🍈", "melon": "🍈",
-    "pêssego": "🍑", "peach": "🍑",
-    "pera": "🍐", "pear": "🍐",
-    "uva": "🍇", "grape": "🍇",
-    "amora": "🫐", "blueberry": "🫐", "mirtilo": "🫐",
-    "berinjela": "🍆", "eggplant": "🍆",
-    "brócolis": "🥦", "brocolis": "🥦", "broccoli": "🥦",
-    "cenoura": "🥕", "carrot": "🥕",
-    "milho": "🌽", "corn": "🌽",
-    "alface": "🥬", "lettuce": "🥬",
-    "repolho": "🥬", "cabbage": "🥬",
-    "espinafre": "🥬", "spinach": "🥬",
-    "abóbora": "🎃", "pumpkin": "🎃", "squash": "🎃",
-    "batata": "🥔", "potato": "🥔",
-    "cebola": "🧅", "onion": "🧅",
-    "alho": "🧄", "garlic": "🧄",
-    "pimentão": "🫑", "pepper": "🫑", "bell_pepper": "🫑",
-    "pimenta": "🌶️", "chili": "🌶️",
-    "pepino": "🥒", "cucumber": "🥒",
-    "abacate": "🥑", "avocado": "🥑",
-    "cogumelo": "🍄", "mushroom": "🍄",
-    "feijão": "🫘", "beans": "🫘",
-    "batata doce": "🍠", "sweet potato": "🍠",
-    "amendoim": "🥜", "peanut": "🥜",
-    "coco": "🥥", "coconut": "🥥",
-    "noz": "🌰", "walnut": "🌰", "nut": "🌰",
-    "mel": "🍯", "honey": "🍯",
-    "ovo": "🥚", "egg": "🥚",
-    "graviola": "🌳", "pudim": "🍮", "doce": "🍬", "suco": "🥤"
+  // ==================== MOTOR DE BUSCA SEMÂNTICA (IA LIGHT) ====================
+  const getEmojiForProduct = (name) => {
+    const text = name.toLowerCase().trim();
+    
+    // 1. Mapeamento Direto e Categorias (Base de Conhecimento)
+    const library = {
+      // Frutas
+      "maçã|maca|apple": "🍎", "banana": "🍌", "morango|strawberry": "🍓", "uva|grape": "🍇", 
+      "melancia|watermelon": "🍉", "laranja|orange": "🍊", "limão|lemon": "🍋", "abacaxi|pineapple": "🍍",
+      "manga|mango": "🥭", "pêssego|peach": "🍑", "pera|pear": "🍐", "cereja|cherry": "🍒",
+      "melão|melon": "🍈", "amora|blueberry|mirtilo": "🫐", "coco|coconut": "🥥", "abacate|avocado": "🥑",
+      "kiwi": "🥝", "papaya|mamão": "🥭", "graviola|jaca|fruta": "🌳",
+      
+      // Legumes e Verduras
+      "tomate|tomato": "🍅", "cenoura|carrot": "🥕", "milho|corn": "🌽", "brócolis|broccoli": "🥦",
+      "batata|potato": "🥔", "cebola|onion": "🧅", "alho|garlic": "🧄", "alface|repolho|folha|verde": "🥬",
+      "pimentão|pepper": "🫑", "pimenta|chili": "🌶️", "berinjela|eggplant": "🍆", "pepino|cucumber": "🥒",
+      "abóbora|pumpkin": "🎃", "cogumelo|mushroom": "🍄", "feijão|bean": "🫘", "batata doce": "🍠",
+      
+      // Outros / Mercearia
+      "ovo|egg": "🥚", "mel|honey": "🍯", "leite|milk": "🥛", "pão|bread": "🍞", "queijo|cheese": "🧀",
+      "carne|frango|steak": "🥩", "peixe|fish": "🐟", "camarão|shrimp": "🍤",
+      "doce|pudim|sobremesa|bolo": "🍮", "suco|bebida|refrigerante": "🥤", "água|water": "💧",
+      "café|coffee": "☕", "chá|tea": "🍵", "cerveja|beer": "🍺", "vinho|wine": "🍷",
+      "arroz|grão": "🌾", "macarrão|massa": "🍝", "pizza": "🍕", "hambúrguer": "🍔",
+    };
+
+    // 2. Busca por Correspondência de Palavras-Chave
+    for (const [key, emoji] of Object.entries(library)) {
+      const regex = new RegExp(key, "i");
+      if (regex.test(text)) return emoji;
+    }
+
+    // 3. Lógica Semântica Genérica (IA Fallback)
+    if (text.includes("suco") || text.includes("vitamina")) return "🥤";
+    if (text.includes("doce") || text.includes("sobremesa")) return "🍰";
+    if (text.includes("frito") || text.includes("assado")) return "🍳";
+    if (text.includes("verde") || text.includes("orgânico")) return "🌿";
+    if (text.includes("limpeza") || text.includes("detergente")) return "🧼";
+    if (text.includes("higiene") || text.includes("papel")) return "🧻";
+
+    // 4. Fallback Final (Ícone de Produto Genérico)
+    return "📦";
   };
 
   const generateCaricatureImage = (productName) => {
     if (!productName || productName.trim().length < 2) return "";
-    const nameLower = productName.toLowerCase().trim();
-    
-    // FALLBACK PARA ÍCONE DE DÚVIDA SE NÃO ACHAR
-    let emoji = "📦"; 
-    const sortedKeys = Object.keys(emojiDictionary).sort((a, b) => b.length - a.length);
-    for (const key of sortedKeys) {
-      if (nameLower.includes(key)) {
-        emoji = emojiDictionary[key];
-        break;
-      }
-    }
+    const emoji = getEmojiForProduct(productName);
 
     const svg = `
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
@@ -365,19 +357,6 @@ export function Estoque() {
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
               <button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1 }}>Salvar Produto</button>
               <button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCategoryModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Categoria</h2>
-            <input placeholder="Nome" value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} className="input" style={{ marginBottom: '10px' }} />
-            <div className="modal-actions">
-              <button onClick={handleSaveCategory} className="btn-primary">Salvar</button>
-              <button onClick={() => setShowCategoryModal(false)} className="btn-secondary">Cancelar</button>
             </div>
           </div>
         </div>
