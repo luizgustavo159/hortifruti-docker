@@ -1,6 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import Barcode from "react-barcode";
+import { createRoot } from "react-dom/client";
 import "./Estoque.css";
 
 export function Estoque() {
@@ -19,6 +23,7 @@ export function Estoque() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showMovementModal, setShowMovementModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Estados de Edição
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -32,7 +37,9 @@ export function Estoque() {
   const [newCategory, setNewCategory] = useState({ name: "", description: "" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
   const [movement, setMovement] = useState({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
+  const [exportOptions, setExportOptions] = useState({ type: "all", category_id: "", product_id: "" });
   const [selectedProducts, setSelectedProducts] = useState(new Set());
+  const barcodeRef = useRef(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -235,6 +242,129 @@ export function Estoque() {
     } catch (err) { setError(err.message); }
   };
 
+  const handleExportCatalog = async () => {
+    let itemsToExport = [...products];
+
+    if (exportOptions.type === "category" && exportOptions.category_id) {
+      itemsToExport = itemsToExport.filter(p => String(p.category_id) === String(exportOptions.category_id));
+    } else if (exportOptions.type === "product" && exportOptions.product_id) {
+      itemsToExport = itemsToExport.filter(p => String(p.id) === String(exportOptions.product_id));
+    }
+
+    // Organizar por categoria e ordem alfabética
+    itemsToExport.sort((a, b) => {
+      if (a.category_name !== b.category_name) {
+        return (a.category_name || "").localeCompare(b.category_name || "");
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 10;
+    const cardWidth = (pageWidth - (margin * 3)) / 2;
+    const cardHeight = 65;
+    let x = margin;
+    let y = 20;
+
+    doc.setFontSize(18);
+    doc.setTextColor(16, 185, 129);
+    doc.text("Catálogo de Produtos - GreenStore", margin, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Gerado em: ${new Date().toLocaleString()}`, pageWidth - margin, 15, { align: 'right' });
+
+    let currentCategory = "";
+
+    for (const p of itemsToExport) {
+      if (p.category_name !== currentCategory) {
+        if (y + 20 > 280) { doc.addPage(); y = 20; }
+        else if (currentCategory !== "") { y += 10; x = margin; }
+        
+        currentCategory = p.category_name || "SEM CATEGORIA";
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(50);
+        doc.text(currentCategory.toUpperCase(), margin, y);
+        y += 8;
+        x = margin;
+      }
+
+      if (y + cardHeight > 280) {
+        doc.addPage();
+        y = 20;
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(currentCategory.toUpperCase(), margin, y);
+        y += 8;
+      }
+
+      // Card Background
+      doc.setDrawColor(230);
+      doc.setFillColor(252, 252, 252);
+      doc.roundedRect(x, y, cardWidth, cardHeight, 3, 3, 'FD');
+
+      // Product Image (Emoji or Image)
+      if (p.image_url && p.image_url.startsWith('data:image')) {
+        try {
+          doc.addImage(p.image_url, 'JPEG', x + 5, y + 5, 20, 20);
+        } catch (e) {
+          doc.setFontSize(20);
+          doc.text("📦", x + 10, y + 15);
+        }
+      } else {
+        doc.setFontSize(20);
+        doc.text("📦", x + 10, y + 15);
+      }
+
+      // Product Name
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0);
+      const nameLines = doc.splitTextToSize(p.name, cardWidth - 35);
+      doc.text(nameLines, x + 30, y + 10);
+
+      // Price
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(16, 185, 129);
+      doc.text(`R$ ${Number(p.price).toFixed(2)} / ${p.unit_type}`, x + 30, y + 18);
+
+      // Barcode
+      const canvas = document.createElement("canvas");
+      const barcodeValue = p.sku || p.barcode || `GS${p.id.toString().padStart(6, '0')}`;
+      
+      // Usar uma abordagem simples para o código de barras no PDF
+      // Como não podemos renderizar o componente React direto, vamos apenas escrever o texto do código de barras
+      // e um placeholder visual, ou tentar converter o Barcode para imagem se possível.
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text("CÓDIGO DE BARRAS:", x + 5, y + 35);
+      doc.setFont("courier", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.text(barcodeValue, x + 5, y + 45);
+      
+      // Linhas que simulam código de barras para estética
+      doc.setDrawColor(0);
+      for(let i=0; i<30; i++) {
+        const lineX = x + 5 + (i * 1.2);
+        const lineWidth = Math.random() > 0.5 ? 0.5 : 0.2;
+        doc.setLineWidth(lineWidth);
+        doc.line(lineX, y + 48, lineX, y + 60);
+      }
+
+      x += cardWidth + margin;
+      if (x + cardWidth > pageWidth) {
+        x = margin;
+        y += cardHeight + 5;
+      }
+    }
+
+    doc.save(`catalogo_greenstore_${new Date().getTime()}.pdf`);
+    setShowExportModal(false);
+  };
+
   return (
     <PageShell title="Consultoria de Estoque" subtitle="Gerencie seu hortifruti com inteligência">
       <div className="stock-container">
@@ -257,7 +387,10 @@ export function Estoque() {
           <div className="tab-content">
             <div className="inventory-header">
               <input type="text" placeholder="Buscar produto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
-              <button className="btn-primary" onClick={() => setShowNewProductModal(true)}>+ Novo Produto</button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn-secondary" onClick={() => setShowExportModal(true)}>📤 Exportar Catálogo</button>
+                <button className="btn-primary" onClick={() => setShowNewProductModal(true)}>+ Novo Produto</button>
+              </div>
             </div>
             <div className="table-wrapper">
               <table className="table">
@@ -417,6 +550,60 @@ export function Estoque() {
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
               <button onClick={handleSaveMovement} className="btn-primary" style={{ flex: 1, backgroundColor: movement.type === 'loss' ? '#f44336' : '#4CAF50' }}>Confirmar</button>
               <button onClick={() => setShowMovementModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showExportModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '450px' }}>
+            <h2>Exportar Catálogo para Bipar</h2>
+            <p className="modal-subtitle">Gere um PDF com cards organizados por categoria.</p>
+            
+            <div className="form-group">
+              <label>O que deseja exportar?</label>
+              <select 
+                value={exportOptions.type} 
+                onChange={e => setExportOptions({...exportOptions, type: e.target.value})}
+                className="input"
+              >
+                <option value="all">Tudo (Organizado por Categoria)</option>
+                <option value="category">Uma Categoria Específica</option>
+                <option value="product">Um Único Produto</option>
+              </select>
+            </div>
+
+            {exportOptions.type === "category" && (
+              <div className="form-group">
+                <label>Selecione a Categoria</label>
+                <select 
+                  value={exportOptions.category_id} 
+                  onChange={e => setExportOptions({...exportOptions, category_id: e.target.value})}
+                  className="input"
+                >
+                  <option value="">Selecione...</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            {exportOptions.type === "product" && (
+              <div className="form-group">
+                <label>Selecione o Produto</label>
+                <select 
+                  value={exportOptions.product_id} 
+                  onChange={e => setExportOptions({...exportOptions, product_id: e.target.value})}
+                  className="input"
+                >
+                  <option value="">Selecione...</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+              <button onClick={handleExportCatalog} className="btn-primary" style={{ flex: 1 }}>Gerar PDF</button>
+              <button onClick={() => setShowExportModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
             </div>
           </div>
         </div>
