@@ -6,6 +6,58 @@ import { ApprovalModal } from "../components/ApprovalModal";
 import { useScale } from "../hooks/useScale";
 import "./Caixa.css";
 
+// Função para obter emoji baseada no nome do produto (Normalizada)
+function getEmojiForProduct(name) {
+  if (!name) return "📦";
+  const normalized = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  const emojiMap = {
+    "maca": "🍎",
+    "banana": "🍌",
+    "pera": "🍐",
+    "uva": "🍇",
+    "morango": "🍓",
+    "laranja": "🍊",
+    "limao": "🍋",
+    "abacaxi": "🍍",
+    "melancia": "🍉",
+    "melao": "🍈",
+    "mamao": "🥭",
+    "manga": "🥭",
+    "coco": "🥥",
+    "kiwi": "🥝",
+    "tomate": "🍅",
+    "cenoura": "🥕",
+    "batata": "🥔",
+    "cebola": "🧅",
+    "alho": "🧄",
+    "alface": "🥬",
+    "brocolis": "🥦",
+    "milho": "🌽",
+    "abobora": "🎃",
+    "pimenta": "🌶️",
+    "ovo": "🥚",
+    "leite": "🥛",
+    "queijo": "🧀",
+    "carne": "🥩",
+    "frango": "🍗",
+    "peixe": "🐟",
+    "pao": "🍞",
+    "arroz": "🍚",
+    "feijao": "🫘",
+    "agua": "💧",
+    "suco": "🥤",
+    "refrigerante": "🥤",
+    "cerveja": "🍺",
+    "vinho": "🍷"
+  };
+
+  for (const [key, emoji] of Object.entries(emojiMap)) {
+    if (normalized.includes(key)) return emoji;
+  }
+  return "📦";
+}
+
 export function Caixa() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
@@ -64,35 +116,6 @@ export function Caixa() {
     loadData();
   }, [loadData]);
 
-  // Lógica de Teclado (Leitor e Atalhos)
-  useEffect(() => {
-    let barcode = "";
-    const handleKeyDown = (e) => {
-      // Atalho F10 para finalizar
-      if (e.key === "F10") {
-        e.preventDefault();
-        handleCheckout();
-        return;
-      }
-
-      if (e.key === "Enter") {
-        if (barcode.length > 3) {
-          const product = products.find(p => p.sku === barcode || p.barcode === barcode);
-          if (product) addToCart(product);
-          barcode = "";
-        }
-      } else if (e.key !== "Shift" && e.key.length === 1) {
-        barcode += e.key;
-      }
-      
-      // Limpar barcode se demorar muito
-      const timer = setTimeout(() => { barcode = ""; }, 100);
-      return () => clearTimeout(timer);
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [products, cartItems, paymentMethod, caixaAberto]); // Dependências atualizadas para handleCheckout funcionar via atalho
-
   const isKgProduct = (product) => product?.unit_type === "kg";
 
   const findAutoDiscount = useCallback((product) => {
@@ -118,15 +141,6 @@ export function Caixa() {
     if (isKgProduct(product)) {
       setScaleModalProduct(product);
       setManualWeight(scale.weight ? String(scale.weight) : "");
-      return;
-    }
-
-    // Validação preventiva de estoque
-    const existingInCart = cartItems.find(item => item.id === product.id);
-    const currentQtyInCart = existingInCart ? existingInCart.quantity : 0;
-    if (product.current_stock <= currentQtyInCart) {
-      setError(`Estoque insuficiente para ${product.name}. Disponível: ${product.current_stock}`);
-      setTimeout(() => setError(""), 3000);
       return;
     }
 
@@ -177,17 +191,16 @@ export function Caixa() {
     ));
   };
 
+  const removeFromCart = (productId) => {
+    setCartItems(prev => prev.filter(item => item.id !== productId));
+  };
+
   const calculateTotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
   const calculateDiscountForItem = (item) => {
     if (!item.discount_id) return 0;
     const d = discounts.find(disc => disc.id === item.discount_id);
     if (!d || !d.active) return 0;
-
-    // Verificar validade de data (Timezone simplificado para o navegador)
-    const now = new Date();
-    if (d.starts_at && new Date(d.starts_at) > now) return 0;
-    if (d.ends_at && new Date(d.ends_at) < now) return 0;
 
     const subtotal = item.price * item.quantity;
 
@@ -197,7 +210,6 @@ export function Caixa() {
       case "fixed":
         return Number(d.value);
       case "buy_x_get_y":
-        // Ex: Leve 3 Pague 2. buy_quantity=3, get_quantity=2
         if (item.quantity >= d.buy_quantity && d.buy_quantity > 0) {
           const sets = Math.floor(item.quantity / d.buy_quantity);
           const freeItemsPerSet = d.buy_quantity - d.get_quantity;
@@ -205,7 +217,6 @@ export function Caixa() {
         }
         return 0;
       case "fixed_bundle":
-        // Ex: 3 por R$ 10,00. value=10, min_quantity=3
         if (item.quantity >= d.min_quantity && d.min_quantity > 0) {
           const bundles = Math.floor(item.quantity / d.min_quantity);
           const normalPriceForBundles = bundles * d.min_quantity * item.price;
@@ -246,7 +257,7 @@ export function Caixa() {
     if (!caixaAberto || cartItems.length === 0) return;
     setProcessingPayment(true);
     try {
-      const response = await apiFetch("/sales", {
+      await apiFetch("/sales", {
         method: "POST",
         body: JSON.stringify({
           items: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, discount_id: item.discount_id })),
@@ -257,21 +268,22 @@ export function Caixa() {
         }),
       });
       
-      // Lógica de Impressão Térmica (Simulada via Window Print ou API)
-      if (window.confirm("Venda realizada! Deseja imprimir o cupom?")) {
-          console.log("Enviando para impressora térmica...");
-          // window.print(); // Ou chamada para serviço de impressão local
-      }
-
       setSuccessMessage("Venda finalizada!");
       setCartItems([]);
       setManualDiscount("");
+      setAmountReceived("");
       setTempApprovalToken(null);
       loadData();
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (err) { setError(err.message); }
     finally { setProcessingPayment(false); }
   };
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.sku === searchTerm ||
+    p.barcode === searchTerm
+  );
 
   return (
     <PageShell 
@@ -330,20 +342,21 @@ export function Caixa() {
           </div>
 
           <div className="products-grid">
-            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku === searchTerm).map(p => (
+            {filteredProducts.map(p => (
               <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
-                <div className="product-emoji" style={{ fontSize: '2rem' }}>
+                <div className="product-emoji" style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: '8px' }}>
                   {getEmojiForProduct(p.name)}
                 </div>
                 <div className="product-info">
                   <h4>{p.name}</h4>
-                  <p className="product-price">R$ {Number(p.price).toFixed(2)}</p>
-                  <p className="product-stock" style={{ fontSize: '10px', opacity: 0.8 }}>
-                    Estoque: {p.current_stock} {p.unit_type}
+                  <p className="product-price">R$ {Number(p.price).toFixed(2)}{isKgProduct(p) ? "/kg" : ""}</p>
+                  <p className="product-stock" style={{ fontSize: '11px', opacity: 0.8 }}>
+                    Estoque: {Number(p.current_stock).toFixed(isKgProduct(p) ? 3 : 0)} {p.unit_type}
                   </p>
                 </div>
               </div>
             ))}
+            {filteredProducts.length === 0 && <p className="no-products">Nenhum produto encontrado.</p>}
           </div>
         </div>
 
@@ -353,62 +366,74 @@ export function Caixa() {
           {successMessage && <div className="success-message">{successMessage}</div>}
 
           <div className="customer-select">
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cliente</label>
-            <select value={selectedCustomer?.id || ""} onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))} className="payment-select">
+            <label>Cliente</label>
+            <select value={selectedCustomer?.id || ""} onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))}>
               <option value="">Consumidor Final</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name} (Saldo: R$ {Number(c.balance || 0).toFixed(2)})</option>
+              ))}
             </select>
-          </div>
-
-          <div className="payment-section">
-            <label>Valor Recebido</label>
-            <input 
-              type="number" 
-              value={amountReceived} 
-              onChange={e => setAmountReceived(e.target.value)} 
-              placeholder="R$ 0,00"
-              className="search-input"
-              style={{ padding: '8px 12px' }}
-            />
-            {amountReceived && parseFloat(amountReceived) > finalTotal && (
-              <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--accent-primary)' }}>
-                Troco: R$ {(parseFloat(amountReceived) - finalTotal).toFixed(2)}
-              </div>
-            )}
           </div>
 
           <div className="cart-items">
             {cartItems.map(item => (
               <div key={item.id} className="cart-item">
-                <div className="item-info">
-                  <span>{item.name}</span>
-                  <small>R$ {item.price.toFixed(2)} x {item.quantity}</small>
+                <div className="item-details">
+                  <h5>{item.name}</h5>
+                  <p className="item-price">R$ {(item.price * item.quantity).toFixed(2)}</p>
                 </div>
-                <div className="item-qty-controls">
-                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
-                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
+                <div className="item-quantity">
+                  <button onClick={() => updateQuantity(item.id, item.quantity - (isKgProduct(item) ? 0.1 : 1))}>-</button>
+                  <input type="number" value={item.quantity} onChange={e => updateQuantity(item.id, e.target.value)} />
+                  <button onClick={() => updateQuantity(item.id, item.quantity + (isKgProduct(item) ? 0.1 : 1))}>+</button>
+                  <button className="btn-remove" onClick={() => removeFromCart(item.id)}>🗑️</button>
                 </div>
-                <span className="item-subtotal">R$ {(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
+            {cartItems.length === 0 && <p className="cart-empty">Carrinho vazio</p>}
           </div>
 
           <div className="cart-summary">
-            <div className="summary-line"><span>Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
-            <div className="summary-line total"><span>TOTAL</span><span>R$ {finalTotal.toFixed(2)}</span></div>
+            <div className="summary-row">
+              <span>Subtotal:</span>
+              <span>R$ {subtotal.toFixed(2)}</span>
+            </div>
+            {totalDiscount > 0 && (
+              <div className="summary-row discount">
+                <span>Descontos:</span>
+                <span>-R$ {totalDiscount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="summary-row total">
+              <span>Total:</span>
+              <span className="value">R$ {finalTotal.toFixed(2)}</span>
+            </div>
           </div>
 
-          <div className="cart-footer">
-            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="payment-select">
+          <div className="payment-section">
+            <label>Forma de Pagamento</label>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
               <option value="cash">Dinheiro</option>
+              <option value="credit_card">Cartão de Crédito</option>
+              <option value="debit_card">Cartão de Débito</option>
               <option value="pix">PIX</option>
-              <option value="card">Cartão</option>
-              <option value="fiado">Fiado</option>
+              <option value="fiado">Fiado (Caderneta)</option>
             </select>
-            <button className="btn-finalize" onClick={handleCheckout} disabled={processingPayment || cartItems.length === 0 || !caixaAberto}>
-              {processingPayment ? "PROCESSANDO..." : "FINALIZAR (F10)"}
-            </button>
+
+            {paymentMethod === "cash" && (
+              <div className="cash-input">
+                <label>Valor Recebido</label>
+                <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder="0.00" />
+                {parseFloat(amountReceived) > finalTotal && (
+                  <div className="change-display">Troco: R$ {(parseFloat(amountReceived) - finalTotal).toFixed(2)}</div>
+                )}
+              </div>
+            )}
           </div>
+
+          <button className="btn-finalize" onClick={handleCheckout} disabled={processingPayment || cartItems.length === 0 || !caixaAberto}>
+            {processingPayment ? "Processando..." : "Finalizar Venda (F10)"}
+          </button>
         </div>
       </div>
     </PageShell>
