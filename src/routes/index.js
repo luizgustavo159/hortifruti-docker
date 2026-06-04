@@ -306,7 +306,7 @@ router.get("/sales/recent", authenticateToken, (req, res) => {
 });
 
 router.post("/sales", authenticateToken, (req, res) => {
-  const { items, payment_method, customer_id, manual_discount } = req.body;
+  const { items, payment_method, customer_id, manual_discount, amount_received, change_amount } = req.body;
   const manualDiscountAmount = parseFloat(manual_discount) || 0;
 
   runWithTransaction((tx, finish) => {
@@ -352,9 +352,9 @@ router.post("/sales", authenticateToken, (req, res) => {
           const itemProportionalDiscount = totalGeralBruto > 0 ? (subtotal / totalGeralBruto) * manualDiscountAmount : 0;
           const finalTotal = subtotal - itemProportionalDiscount;
 
-        tx.run(
-          "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id],
+          tx.run(
+            "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id, amount_received, change_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id, amount_received || 0, change_amount || 0],
           (errS) => {
             if (errS) return finish(errS);
             tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id], (errU) => {
