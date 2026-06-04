@@ -691,22 +691,44 @@ router.post("/caderneta/pay", authenticateToken, (req, res) => {
     }
 
     db.withTransaction((tx, finish) => {
-        tx.run(
-            "INSERT INTO customer_payments (customer_id, amount, payment_method, received_by) VALUES (?, ?, ?, ?)",
-            [customer_id, amount, payment_method, req.user.id],
-            (errP) => {
-                if (errP) return finish(errP);
-                tx.run(
-                    "UPDATE customers SET current_debt = current_debt - ? WHERE id = ?",
-                    [amount, customer_id],
-                    (errU) => {
-                        if (errU) return finish(errU);
-                        createAuditLog("PAGAMENTO_CADERNETA", { customer_id, amount, method: payment_method }, req.user.id, 'payment', 'low');
-                        finish(null);
-                    }
-                );
-            }
-        );
+        // 1. Verificar se o operador tem um caixa aberto para registrar a entrada de dinheiro
+        tx.get("SELECT id FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL", [req.user.id], (errSession, session) => {
+            if (errSession || !session) return finish(new Error("Você precisa abrir o caixa para registrar pagamentos."));
+
+            // 2. Registrar o pagamento na caderneta
+            tx.run(
+                "INSERT INTO customer_payments (customer_id, amount, payment_method, received_by) VALUES (?, ?, ?, ?)",
+                [customer_id, amount, payment_method, req.user.id],
+                (errP) => {
+                    if (errP) return finish(errP);
+
+                    // 3. Atualizar a dívida do cliente
+                    tx.run(
+                        "UPDATE customers SET current_debt = current_debt - ? WHERE id = ?",
+                        [amount, customer_id],
+                        (errU) => {
+                            if (errU) return finish(errU);
+
+                            // 4. Registrar movimento no caixa (apenas se for dinheiro)
+                            if (payment_method.toLowerCase() === 'cash' || payment_method.toLowerCase() === 'dinheiro') {
+                                tx.run(
+                                    "INSERT INTO cash_movements (session_id, type, amount, reason, performed_by) VALUES (?, 'in', ?, ?, ?)",
+                                    [session.id, amount, `PAGAMENTO CADERNETA - CLIENTE ID ${customer_id}`, req.user.id],
+                                    (errM) => {
+                                        if (errM) return finish(errM);
+                                        createAuditLog("PAGAMENTO_CADERNETA", { customer_id, amount, method: payment_method, session_id: session.id }, req.user.id, 'payment', 'low');
+                                        finish(null);
+                                    }
+                                );
+                            } else {
+                                createAuditLog("PAGAMENTO_CADERNETA", { customer_id, amount, method: payment_method, session_id: session.id }, req.user.id, 'payment', 'low');
+                                finish(null);
+                            }
+                        }
+                    );
+                }
+            );
+        });
     }, (err) => {
         if (err) return res.status(400).json({ message: err.message });
         res.json({ status: "ok" });

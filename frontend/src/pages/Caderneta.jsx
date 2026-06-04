@@ -75,6 +75,7 @@ export function Caderneta() {
                     <p>{c.phone || "Sem telefone"}</p>
                   </div>
                   <div className="customer-debt">
+                    <span style={{ fontSize: '10px', display: 'block', opacity: 0.7 }}>Dívida Atual</span>
                     R$ {Number(c.current_debt).toFixed(2)}
                   </div>
                 </div>
@@ -88,7 +89,19 @@ export function Caderneta() {
           {selectedCustomer ? (
             <>
               <div className="details-header">
-                <h3>Histórico: {selectedCustomer.name}</h3>
+                <div className="header-info">
+                  <h3>{selectedCustomer.name}</h3>
+                  <div className="debt-summary">
+                    <div className="summary-item">
+                      <label>Saldo Devedor</label>
+                      <strong style={{ color: 'var(--accent-danger)' }}>R$ {Number(selectedCustomer.current_debt).toFixed(2)}</strong>
+                    </div>
+                    <div className="summary-item">
+                      <label>Limite de Crédito</label>
+                      <strong>R$ {Number(selectedCustomer.credit_limit).toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
                 <button className="btn-pay" onClick={() => setShowPaymentModal(true)}>Registrar Pagamento</button>
               </div>
               
