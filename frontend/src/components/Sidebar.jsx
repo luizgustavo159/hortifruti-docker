@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getAuthUser } from "../lib/auth";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { RelogioGlobal } from "./RelogioGlobal";
 import { Leaf } from "lucide-react";
 
 // Definição de abas por role - cada role vê apenas o que está permitido
@@ -82,7 +83,10 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <ThemeSwitcher />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <ThemeSwitcher />
+          <RelogioGlobal />
+        </div>
         <div className="user-info">
           <span className="user-role-badge">{user?.role || "operador"}</span>
           <p className="user-name">{user?.name || "Usuário"}</p>

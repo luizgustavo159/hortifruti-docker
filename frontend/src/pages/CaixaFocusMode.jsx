@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useScale } from '../hooks/useScale';
-// import { RelogioGlobal } from '../components/RelogioGlobal';
+import { RelogioGlobal } from '../components/RelogioGlobal';
 import './CaixaFocusMode.css';
 
 export function CaixaFocusMode() {
@@ -307,6 +307,9 @@ export function CaixaFocusMode() {
       {/* Header */}
       <div className="focus-header">
         <h1>MODO FOCO - FRENTE DE CAIXA</h1>
+        <div className="focus-header-center">
+          <RelogioGlobal />
+        </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button
             onClick={scale.connected ? scale.disconnect : scale.connect}

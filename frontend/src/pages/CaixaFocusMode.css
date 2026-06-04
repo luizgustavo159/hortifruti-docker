@@ -19,6 +19,16 @@
   justify-content: space-between;
   align-items: center;
   box-shadow: var(--shadow-lg);
+  position: relative;
+}
+
+.focus-header-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
 }
 
 .focus-header h1 {
