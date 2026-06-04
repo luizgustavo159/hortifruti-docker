@@ -55,14 +55,11 @@ export function Estoque() {
 
   // ==================== DICIONÁRIO CARICATO DE FRUTAS/VERDURAS ====================
   const emojiDictionary = {
-    // Frutas vermelhas
     "maçã": "🍎", "maca": "🍎", "apple": "🍎",
     "morango": "🍓", "strawberry": "🍓",
     "cereja": "🍒", "cherry": "🍒",
     "melancia": "🍉", "watermelon": "🍉",
     "tomate": "🍅", "tomato": "🍅",
-    
-    // Frutas amarelas/laranjas
     "banana": "🍌",
     "laranja": "🍊", "orange": "🍊",
     "limão": "🍋", "lemon": "🍋",
@@ -71,13 +68,9 @@ export function Estoque() {
     "melão": "🍈", "melon": "🍈",
     "pêssego": "🍑", "peach": "🍑",
     "pera": "🍐", "pear": "🍐",
-    
-    // Frutas roxas/azuis
     "uva": "🍇", "grape": "🍇",
     "amora": "🫐", "blueberry": "🫐", "mirtilo": "🫐",
     "berinjela": "🍆", "eggplant": "🍆",
-    
-    // Verduras e Legumes
     "brócolis": "🥦", "brocolis": "🥦", "broccoli": "🥦",
     "cenoura": "🥕", "carrot": "🥕",
     "milho": "🌽", "corn": "🌽",
@@ -95,8 +88,6 @@ export function Estoque() {
     "cogumelo": "🍄", "mushroom": "🍄",
     "feijão": "🫘", "beans": "🫘",
     "batata doce": "🍠", "sweet potato": "🍠",
-    
-    // Frutas secas/sementes/outros
     "amendoim": "🥜", "peanut": "🥜",
     "coco": "🥥", "coconut": "🥥",
     "noz": "🌰", "walnut": "🌰", "nut": "🌰",
@@ -104,7 +95,6 @@ export function Estoque() {
     "ovo": "🥚", "egg": "🥚",
   };
 
-  // ==================== FUNÇÕES DE GERAÇÃO DE IMAGEM CARICATA ====================
   const generateCaricatureImage = (productName) => {
     if (!productName || productName.trim().length < 2) return "";
     const nameLower = productName.toLowerCase().trim();
@@ -141,24 +131,11 @@ export function Estoque() {
     });
   };
 
-  // ==================== FUNÇÕES DE CÁLCULO ====================
   const calculateSuggestedPrice = (cost, margin) => {
     if (!cost || parseFloat(cost) <= 0 || !margin || parseFloat(margin) < 0) return 0;
-    const costNum = parseFloat(cost);
-    const marginNum = parseFloat(margin);
-    const suggested = costNum * (1 + marginNum / 100);
-    return Math.round(suggested * 100) / 100;
+    return Math.round(parseFloat(cost) * (1 + parseFloat(margin) / 100) * 100) / 100;
   };
 
-  const calculateCurrentMargin = (price, cost) => {
-    if (!price || !cost || parseFloat(price) <= 0 || parseFloat(cost) <= 0) return 0;
-    const priceNum = parseFloat(price);
-    const costNum = parseFloat(cost);
-    const margin = ((priceNum - costNum) / costNum) * 100;
-    return Math.round(margin * 100) / 100;
-  };
-
-  // ==================== FUNÇÕES DE UPLOAD E COMPRESSÃO DE IMAGEM ====================
   const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -198,24 +175,15 @@ export function Estoque() {
     }
     const imageUrl = await generateCaricatureImage(newProduct.name);
     setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
-    setSuccessMessage(`Imagem gerada para "${newProduct.name}"!`);
+    setSuccessMessage(`Imagem gerada!`);
   };
 
-  // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
   const generateEAN13 = () => {
     const base = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join('');
     let sum = 0;
     for (let i = 0; i < 12; i++) { sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3); }
     const checkDigit = (10 - (sum % 10)) % 10;
     return base + checkDigit;
-  };
-
-  const isValidEAN13 = (ean) => {
-    if (!ean || !/^\d{13}$/.test(ean)) return false;
-    let sum = 0;
-    for (let i = 0; i < 12; i++) { sum += parseInt(ean[i]) * (i % 2 === 0 ? 1 : 3); }
-    const checkDigit = (10 - (sum % 10)) % 10;
-    return parseInt(ean[12]) === checkDigit;
   };
 
   const handleSaveProduct = async () => {
@@ -226,46 +194,6 @@ export function Estoque() {
       setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30", image_url: "" });
       loadData();
     } catch (err) { setError(err.message); }
-  };
-
-  const handleStockMovement = async () => {
-    try {
-      const qty = parseFloat(movement.quantity);
-      const delta = movement.type === "inbound" ? qty : -qty;
-      await apiFetch("/stock/adjust", { method: "POST", body: JSON.stringify({ product_id: selectedProduct.id, delta, reason: movement.reason, unit_cost: movement.type === "inbound" ? movement.unit_cost : 0 }) });
-      setSuccessMessage("Movimentação registrada!");
-      setShowMovementModal(false); loadData();
-    } catch (err) { setError(err.message); }
-  };
-
-  const handleSaveCategory = async () => {
-    try {
-      const method = selectedCategory ? "PUT" : "POST";
-      const url = selectedCategory ? `/categories/${selectedCategory.id}` : "/categories";
-      await apiFetch(url, { method, body: JSON.stringify(newCategory) });
-      setSuccessMessage("Categoria salva!"); setShowCategoryModal(false);
-      setNewCategory({ name: "", description: "" }); setSelectedCategory(null); loadData();
-    } catch (err) { setError(err.message); }
-  };
-
-  const handleSaveSupplier = async () => {
-    try {
-      const method = selectedSupplier ? "PUT" : "POST";
-      const url = selectedSupplier ? `/suppliers/${selectedSupplier.id}` : "/suppliers";
-      await apiFetch(url, { method, body: JSON.stringify(newSupplier) });
-      setSuccessMessage("Fornecedor salvo!"); setShowSupplierModal(false);
-      setNewSupplier({ name: "", contact: "", phone: "", email: "" }); setSelectedSupplier(null); loadData();
-    } catch (err) { setError(err.message); }
-  };
-
-  const handleDeleteCategory = async (id) => {
-    if (!window.confirm("Excluir categoria?")) return;
-    try { await apiFetch(`/categories/${id}`, { method: "DELETE" }); loadData(); } catch (err) { setError(err.message); }
-  };
-
-  const handleDeleteSupplier = async (id) => {
-    if (!window.confirm("Excluir fornecedor?")) return;
-    try { await apiFetch(`/suppliers/${id}`, { method: "DELETE" }); loadData(); } catch (err) { setError(err.message); }
   };
 
   return (
@@ -315,7 +243,6 @@ export function Estoque() {
                         <td><span className={margin < 30 ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
                         <td>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30", image_url: p.image_url || ""}); setShowNewProductModal(true); }}>Editar</button>
-                          <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
                         </td>
                       </tr>
                     );
@@ -326,13 +253,12 @@ export function Estoque() {
           </div>
         )}
 
-        {/* Categorias e Fornecedores simplificados */}
         {activeTab === "categories" && (
           <div className="tab-content">
             <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: ""}); setShowCategoryModal(true); }}>+ Nova Categoria</button></div>
             <table className="table">
-              <thead><tr><th>Nome</th><th>Descrição</th><th>Ações</th></tr></thead>
-              <tbody>{categories.map(c => (<tr key={c.id}><td>{c.name}</td><td>{c.description}</td><td><button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button></td></tr>))}</tbody>
+              <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+              <tbody>{categories.map(c => (<tr key={c.id}><td>{c.name}</td><td><button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button></td></tr>))}</tbody>
             </table>
           </div>
         )}
@@ -341,14 +267,14 @@ export function Estoque() {
           <div className="tab-content">
             <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedSupplier(null); setNewSupplier({name: "", contact: "", phone: "", email: ""}); setShowSupplierModal(true); }}>+ Novo Fornecedor</button></div>
             <table className="table">
-              <thead><tr><th>Nome</th><th>Contato</th><th>Ações</th></tr></thead>
-              <tbody>{suppliers.map(s => (<tr key={s.id}><td>{s.name}</td><td>{s.contact}</td><td><button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button></td></tr>))}</tbody>
+              <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+              <tbody>{suppliers.map(s => (<tr key={s.id}><td>{s.name}</td><td><button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button></td></tr>))}</tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Modal Produto - LAYOUT COM BOTÕES AO LADO DA IMAGEM */}
+      {/* Modal Produto - PADRONIZAÇÃO DE TAMANHOS */}
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '650px' }}>
@@ -356,7 +282,7 @@ export function Estoque() {
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              {/* ÁREA DE IMAGEM E BOTÕES LADO A LADO */}
+              {/* ÁREA DE IMAGEM E BOTÕES PADRONIZADOS */}
               <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee' }}>
                 <div style={{ width: '120px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '2px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
@@ -367,14 +293,13 @@ export function Estoque() {
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ padding: '10px 15px', background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s' }}>
-                    🎨 Gerar Imagem Caricata
+                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '45px', background: '#4CAF50', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: '0.2s' }}>
+                    🎨 Gerar Caricata
                   </button>
-                  <label style={{ padding: '10px 15px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s' }}>
-                    📁 Carregar Foto do PC
+                  <label style={{ height: '45px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: '0.2s' }}>
+                    📁 Upload do PC
                     <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                   </label>
-                  <small style={{ color: '#666', fontSize: '11px' }}>Dica: Digite o nome do produto para gerar uma caricatura automática.</small>
                 </div>
               </div>
 
@@ -384,10 +309,10 @@ export function Estoque() {
               </div>
               
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Código de Barras (EAN-13)</label>
+                <label>Código de Barras</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input placeholder="Código EAN-13" value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} />
-                  <button type="button" onClick={handleGenerateBarcode} style={{ padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>📱 Gerar</button>
+                  <input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} />
+                  <button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>📱 Gerar</button>
                 </div>
               </div>
 
@@ -420,14 +345,6 @@ export function Estoque() {
                   </div>
                 </div>
               </div>
-              <div className="form-group">
-                <label>Estoque</label>
-                <input type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" />
-              </div>
-              <div className="form-group">
-                <label>Mínimo</label>
-                <input type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" />
-              </div>
             </div>
             
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
@@ -438,20 +355,7 @@ export function Estoque() {
         </div>
       )}
 
-      {/* Outros modais */}
-      {showMovementModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Movimentação: {selectedProduct.name}</h2>
-            <input type="number" placeholder="Quantidade" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} className="input" />
-            <div className="modal-actions" style={{ marginTop: '15px' }}>
-              <button onClick={handleStockMovement} className="btn-primary">Confirmar</button>
-              <button onClick={() => setShowMovementModal(false)} className="btn-secondary">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Outros modais simplificados */}
       {showCategoryModal && (
         <div className="modal-overlay">
           <div className="modal">
