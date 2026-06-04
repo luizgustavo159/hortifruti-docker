@@ -493,7 +493,7 @@ router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, 
 router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (req, res) => {
     const { start, end } = req.query;
     db.all(`
-        SELECT u.name as operator_name, COUNT(s.id) as sales_count, SUM(s.total) as total_revenue
+        SELECT u.name as name, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
         FROM sales s
         JOIN users u ON s.sold_by = u.id
         WHERE s.created_at BETWEEN ? AND ?
@@ -507,7 +507,7 @@ router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (r
 router.get("/reports/by-category", authenticateToken, requireRole("manager"), (req, res) => {
     const { start, end } = req.query;
     db.all(`
-        SELECT c.name as category_name, COUNT(s.id) as sales_count, SUM(s.total) as total_revenue
+        SELECT c.name as category, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
         FROM sales s
         JOIN products p ON s.product_id = p.id
         JOIN categories c ON p.category_id = c.id
