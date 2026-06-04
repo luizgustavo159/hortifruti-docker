@@ -122,13 +122,43 @@ router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req,
         newAvgCost = totalQty > 0 ? totalValue / totalQty : cost;
       }
 
-      tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ? WHERE id = ?", 
-        [deltaQty, newAvgCost, product_id], (errU) => {
+      tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ?, last_cost = ? WHERE id = ?", 
+        [deltaQty, newAvgCost, deltaQty > 0 ? cost : p.last_cost, product_id], (errU) => {
           if (errU) return finish(errU);
-          tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-            [product_id, deltaQty > 0 ? 'inbound' : 'outbound', deltaQty, reason, req.user.id], (errM) => {
-              finish(errM);
+          
+          // Se for entrada (compra), cria um novo lote
+          if (deltaQty > 0) {
+            tx.run("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost) VALUES (?, ?, ?, ?)",
+              [product_id, deltaQty, deltaQty, cost], (errB) => {
+                if (errB) return finish(errB);
+                tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+                  [product_id, 'inbound', deltaQty, reason, req.user.id], (errM) => finish(errM));
+              });
+          } else {
+            // Se for saída, consome os lotes (FIFO)
+            let remainingToConsume = Math.abs(deltaQty);
+            tx.all("SELECT id, current_quantity FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
+              if (errL) return finish(errL);
+              
+              const consumeNextBatch = (index) => {
+                if (index >= batches.length || remainingToConsume <= 0) {
+                  return tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+                    [product_id, 'outbound', deltaQty, reason, req.user.id], (errM) => finish(errM));
+                }
+                
+                const batch = batches[index];
+                const consumeAmount = Math.min(batch.current_quantity, remainingToConsume);
+                remainingToConsume -= consumeAmount;
+                
+                tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
+                  if (errCB) return finish(errCB);
+                  consumeNextBatch(index + 1);
+                });
+              };
+              
+              consumeNextBatch(0);
             });
+          }
         });
     });
   }, (err) => err ? res.status(500).json({ message: "Erro ao ajustar estoque." }) : res.json({ status: "ok" }));
