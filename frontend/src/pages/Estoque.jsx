@@ -278,7 +278,7 @@ export function Estoque() {
         )}
       </div>
 
-      {/* Modal Produto - PADRONIZAÇÃO FINAL DE BOTÕES E LAYOUT */}
+      {/* Modal Produto - REMOVIDO FUNDO BRANCO DA ÁREA DE IMAGEM */}
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '650px' }}>
@@ -286,8 +286,8 @@ export function Estoque() {
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              {/* ÁREA DE IMAGEM: LAYOUT LATERAL COM BOTÕES IDÊNTICOS AO SKU */}
-              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #eeeeee' }}>
+              {/* ÁREA DE IMAGEM: SEM FUNDO BRANCO, INTEGRADA NO GRID */}
+              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
                 <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
                     <img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -316,7 +316,6 @@ export function Estoque() {
                 <label>Código de Barras</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} />
-                  {/* BOTÃO SKU ORIGINAL PARA REFERÊNCIA DE ESTILO */}
                   <button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ height: '38px', padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button>
                 </div>
               </div>
@@ -347,7 +346,6 @@ export function Estoque() {
                 <label>Preço de Venda (R$)</label>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} />
-                  {/* PREÇO SUGERIDO RESTAURADO E ELEGANTE */}
                   <div style={{ padding: '8px 12px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '13px', color: '#2e7d32', fontWeight: 'bold', textAlign: 'center', minWidth: '110px' }}>
                     <div style={{ fontSize: '9px', textTransform: 'uppercase', opacity: 0.7 }}>Sugerido</div>
                     R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}
