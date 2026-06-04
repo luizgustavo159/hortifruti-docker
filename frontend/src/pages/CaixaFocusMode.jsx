@@ -28,7 +28,7 @@ export function CaixaFocusMode() {
   useEffect(() => {
     loadData();
     enterFullscreen();
-  }, []);
+  }, [loadData]);
 
   const enterFullscreen = async () => {
     try {
@@ -40,7 +40,7 @@ export function CaixaFocusMode() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -63,12 +63,17 @@ export function CaixaFocusMode() {
         const discData = results[1].value;
         setDiscounts(Array.isArray(discData) ? discData : (discData?.data || []));
       }
+
+      // Conexão automática com a balança no Modo Foco
+      if (!scale.connected) {
+        scale.connect().catch(e => console.log("Balança não detectada no Modo Foco"));
+      }
     } catch (err) {
       setError('Erro ao carregar dados: ' + err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, scale]);
 
   const getProductStock = (product) => Number(product.current_stock ?? product.stock ?? 0);
   const formatCurrency = (value) => Number(value || 0).toFixed(2);
@@ -310,18 +315,46 @@ export function CaixaFocusMode() {
         <div className="focus-header-center">
           <RelogioGlobal />
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <span style={{ 
+            fontSize: '11px', 
+            fontWeight: 'bold', 
+            color: 'white',
+            background: scale.connected ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
+            padding: '4px 10px',
+            borderRadius: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            <span style={{ 
+              width: '6px', 
+              height: '6px', 
+              borderRadius: '50%', 
+              backgroundColor: scale.connected ? '#4ade80' : '#f87171' 
+            }}></span>
+            {scale.connected ? 'BALANÇA ATIVA' : 'BALANÇA DESATIVADA'}
+          </span>
           <button
-            onClick={scale.connected ? scale.disconnect : scale.connect}
+            onClick={() => setShowSalesHistory(true)}
             style={{
-              background: scale.connected ? '#10b981' : '#6b7280',
-              color: 'white', border: 'none', borderRadius: '6px',
-              padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px',
+              background: 'rgba(255, 255, 255, 0.15)',
+              color: 'white',
+              border: '2px solid white',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
             }}
           >
-            {scale.connected
-              ? `${scale.weight !== null ? `${scale.weight}kg` : '---'}`
-              : 'Balança'}
+            <History size={16} />
+            Vendas
           </button>
           <button className="exit-btn" onClick={handleExitFocusMode}>Sair</button>
         </div>

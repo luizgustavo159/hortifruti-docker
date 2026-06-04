@@ -107,12 +107,17 @@ export function Caixa() {
       setProducts(Array.isArray(prods) ? prods : []);
       setDiscounts(Array.isArray(disc) ? disc : []);
       setCustomers(Array.isArray(custs) ? custs : []);
+      
+      // Conexão automática com a balança
+      if (!scale.connected) {
+        scale.connect().catch(e => console.log("Balança não detectada na inicialização"));
+      }
     } catch (err) {
       setError("Falha ao carregar dados: " + err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scale]);
 
   useEffect(() => {
     loadData();
@@ -293,9 +298,6 @@ export function Caixa() {
       subtitle="Ponto de Venda Profissional"
       actions={
         <div className="pos-actions">
-          <button className={`btn-scale ${scale.connected ? "connected" : ""}`} onClick={scale.connected ? scale.disconnect : scale.connect}>
-            ⚖️ {scale.connected ? `${scale.weight || "0.000"}kg` : "Balança"}
-          </button>
           <button className="btn-movimentacao" onClick={() => navigate("/caixa/fechamento")}>💰 Fechar</button>
           <button className="btn-sales-history" onClick={() => setShowSalesHistory(true)}>📋 Vendas</button>
           <button className="btn-focus-mode" onClick={() => navigate("/caixa/focus")}>🎯 Foco</button>
@@ -374,7 +376,25 @@ export function Caixa() {
         </div>
 
         <div className="pos-cart">
-          <h3>🛒 Carrinho</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ margin: 0 }}>🛒 Carrinho</h3>
+            <span style={{ 
+              fontSize: '10px', 
+              fontWeight: 'bold', 
+              color: scale.connected ? '#10b981' : '#ef4444',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <span style={{ 
+                width: '6px', 
+                height: '6px', 
+                borderRadius: '50%', 
+                backgroundColor: scale.connected ? '#10b981' : '#ef4444' 
+              }}></span>
+              {scale.connected ? 'BALANÇA ATIVA' : 'BALANÇA DESATIVADA'}
+            </span>
+          </div>
           {error && <div className="error-message">{error}</div>}
           {successMessage && <div className="success-message">{successMessage}</div>}
 
