@@ -165,11 +165,6 @@ export function Estoque() {
     return Math.round(margin * 100) / 100;
   };
 
-  const getSelectedCategoryMargin = () => {
-    if (!newProduct.category_id) return 30;
-    return 30; // Margem padrão fixa
-  };
-
   // ==================== FUNÇÕES DE UPLOAD E COMPRESSÃO DE IMAGEM ====================
   // Redimensiona e comprime imagem no navegador
   const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
@@ -260,13 +255,6 @@ export function Estoque() {
     }
     const checkDigit = (10 - (sum % 10)) % 10;
     return parseInt(ean[12]) === checkDigit;
-  };
-
-  // Gera SVG de código de barras EAN-13
-  const generateBarcodeImage = (ean) => {
-    if (!ean || !/^\d{13}$/.test(ean)) return '';
-    // Usando uma API simples de geração de código de barras
-    return `https://barcode.tec-it.com/barcode.ashx?data=${ean}&code=EAN13&style=196&unit=Fit&width=200&height=80`;
   };
 
   // Alterna seleção de produto
@@ -390,14 +378,14 @@ export function Estoque() {
       const price = Number(p.price || 0);
       const cost = Number(p.avg_cost || 0);
       const margin = price > 0 ? ((price - cost) / price * 100) : 0;
-      const target = p.category_margin || 30;
+      const target = 30; // Margem padrão simplificada
 
       // Alerta de Margem Baixa
       if (margin < target && price > 0) {
         insights.push({
           type: "warning",
           title: `Margem Baixa: ${p.name}`,
-          text: `A margem atual é de ${margin.toFixed(1)}%, mas o alvo para ${p.category_name} é ${target}%. Considere reajustar o preço.`,
+          text: `A margem atual é de ${margin.toFixed(1)}%, mas o alvo é ${target}%. Considere reajustar o preço.`,
           action: () => handleQuickPriceUpdate(p)
         });
       }
@@ -446,7 +434,7 @@ export function Estoque() {
   };
 
   const handleQuickPriceUpdate = async (product) => {
-    const targetMargin = product.category_margin || 30;
+    const targetMargin = 30; // Simplificado
     const avgCost = Number(product.avg_cost || 0);
     const suggestedPrice = avgCost / (1 - (targetMargin / 100));
     
@@ -488,7 +476,7 @@ export function Estoque() {
       await apiFetch(url, { method, body: JSON.stringify(newCategory) });
       setSuccessMessage("Categoria salva!");
       setShowCategoryModal(false);
-      setNewCategory({ name: "", description: "", margin_target: "30" });
+      setNewCategory({ name: "", description: "" });
       setSelectedCategory(null);
       loadData();
     } catch (err) { setError(err.message); }
@@ -529,7 +517,7 @@ export function Estoque() {
     <PageShell title="Consultoria de Estoque" subtitle="Insights para sua Tomada de Decisão">
       <div className="stock-container">
         
-        {/* NOVO: Painel de Dicas de Atenção (Insights) */}
+        {/* Insights */}
         {insights.length > 0 && (
           <div className="insights-panel">
             <h3 className="insights-title">💡 Dicas de Atenção</h3>
@@ -623,21 +611,20 @@ export function Estoque() {
           <div className="tab-content">
             <div className="inventory-header">
               <input type="text" placeholder="Buscar categoria..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
-              <button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: "", margin_target: "30"}); setShowCategoryModal(true); }}>+ Nova Categoria</button>
+              <button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: ""}); setShowCategoryModal(true); }}>+ Nova Categoria</button>
             </div>
             <div className="table-wrapper">
               <table className="table">
                 <thead>
-                  <tr><th>Nome</th><th>Descrição</th><th>Margem Alvo</th><th>Ações</th></tr>
+                  <tr><th>Nome</th><th>Descrição</th><th>Ações</th></tr>
                 </thead>
                 <tbody>
                   {categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
                     <tr key={c.id}>
                       <td><strong>{c.name}</strong></td>
                       <td>{c.description}</td>
-                      <td>{c.target_margin}%</td>
                       <td>
-                        <button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description, margin_target: c.target_margin}); setShowCategoryModal(true); }}>Editar</button>
+                        <button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button>
                         <button className="btn-action danger" onClick={() => handleDeleteCategory(c.id)}>Excluir</button>
                       </td>
                     </tr>
@@ -679,7 +666,7 @@ export function Estoque() {
         )}
       </div>
 
-      {/* Modais mantidos conforme versão anterior */}
+      {/* Modal Produto */}
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '600px' }}>
@@ -747,15 +734,7 @@ export function Estoque() {
               </div>
               <div className="form-group">
                 <label>Categoria</label>
-                <select value={newProduct.category_id} onChange={e => {
-                  const categoryId = e.target.value;
-                  const category = categories.find(c => c.id === parseInt(categoryId));
-                  setNewProduct({
-                    ...newProduct, 
-                    category_id: categoryId,
-                    profit_margin: category?.target_margin?.toString() || "30"
-                  });
-                }} className="input">
+                <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input">
                     <option value="">Selecione...</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -774,7 +753,6 @@ export function Estoque() {
               <div className="form-group">
                 <label>Margem de Lucro (%)</label>
                 <input placeholder="30" type="number" step="0.1" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" />
-                <small>Padrão da categoria: {getSelectedCategoryMargin()}%</small>
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Preço Sugerido (Calculado)</label>
@@ -805,6 +783,7 @@ export function Estoque() {
         </div>
       )}
 
+      {/* Modal Movimentação */}
       {showMovementModal && (
         <div className="modal-overlay">
           <div className="modal">
@@ -828,8 +807,7 @@ export function Estoque() {
                       const newCost = Number(movement.unit_cost || 0);
                       if (newQty > 0 && newCost > 0) {
                         const newAvgCost = (currentStock * currentCost + newQty * newCost) / (currentStock + newQty);
-                        const targetMargin = selectedProduct.product_profit_margin || selectedProduct.category_margin || 30;
-                        const suggestedPrice = newAvgCost * (1 + targetMargin / 100);
+                        const suggestedPrice = newAvgCost * (1 + 30 / 100);
                         return (
                           <>
                             <small>R$ {newAvgCost.toFixed(2)}</small><br/>
@@ -851,6 +829,7 @@ export function Estoque() {
         </div>
       )}
 
+      {/* Modal Categoria */}
       {showCategoryModal && (
         <div className="modal-overlay">
           <div className="modal">
@@ -863,10 +842,6 @@ export function Estoque() {
               <label>Descrição</label>
               <input value={newCategory.description} onChange={e => setNewCategory({...newCategory, description: e.target.value})} className="input" />
             </div>
-            <div className="form-group">
-              <label>Margem Alvo (%)</label>
-              <input type="number" value={newCategory.margin_target} onChange={e => setNewCategory({...newCategory, margin_target: e.target.value})} className="input" />
-            </div>
             <div className="modal-actions">
               <button onClick={handleSaveCategory} className="btn-primary">Salvar</button>
               <button onClick={() => setShowCategoryModal(false)} className="btn-secondary">Cancelar</button>
@@ -875,6 +850,7 @@ export function Estoque() {
         </div>
       )}
 
+      {/* Modal Fornecedor */}
       {showSupplierModal && (
         <div className="modal-overlay">
           <div className="modal">
