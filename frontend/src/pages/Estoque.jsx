@@ -29,7 +29,7 @@ export function Estoque() {
     name: "", sku: "", category_id: "", supplier_id: "", price: "", 
     current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30", image_url: ""
   });
-  const [newCategory, setNewCategory] = useState({ name: "", description: "", margin_target: "30" });
+  const [newCategory, setNewCategory] = useState({ name: "", description: "" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
   const [movement, setMovement] = useState({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
   const [selectedProducts, setSelectedProducts] = useState(new Set());
@@ -76,8 +76,7 @@ export function Estoque() {
 
   const getSelectedCategoryMargin = () => {
     if (!newProduct.category_id) return 30;
-    const category = categories.find(c => c.id === parseInt(newProduct.category_id));
-    return category?.target_margin || 30;
+    return 30; // Margem padrão fixa
   };
 
 

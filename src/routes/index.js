@@ -326,17 +326,17 @@ router.post("/sales", authenticateToken, (req, res) => {
 });
 
 // --- CATEGORIAS E FORNECEDORES ---
-router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT id, name, description, target_margin, created_at FROM categories ORDER BY name", [], (err, rows) => res.json(rows || [])); });
+router.get("/categories", authenticateToken, (req, res) => { db.all("SELECT id, name, description, created_at FROM categories ORDER BY name", [], (err, rows) => res.json(rows || [])); });
 router.post("/categories", authenticateToken, requireRole("supervisor"), (req, res) => {
-    const { name, description, margin_target } = req.body;
-    db.get("INSERT INTO categories (name, description, target_margin) VALUES (?, ?, ?) RETURNING id", [name, description, margin_target], (err, row) => {
+    const { name, description } = req.body;
+    db.get("INSERT INTO categories (name, description) VALUES (?, ?) RETURNING id", [name, description], (err, row) => {
         if (err) return res.status(400).json({ message: "Erro ao criar categoria." });
         res.status(201).json(row);
     });
 });
 router.put("/categories/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
-    const { name, description, margin_target } = req.body;
-    db.run("UPDATE categories SET name=?, description=?, target_margin=? WHERE id=?", [name, description, margin_target, req.params.id], (err) => {
+    const { name, description } = req.body;
+    db.run("UPDATE categories SET name=?, description=? WHERE id=?", [name, description, req.params.id], (err) => {
         if (err) return res.status(400).json({ message: "Erro ao atualizar categoria." });
         res.json({ status: "ok" });
     });
