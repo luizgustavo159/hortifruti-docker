@@ -27,7 +27,7 @@ export function Estoque() {
 
   const [newProduct, setNewProduct] = useState({ 
     name: "", sku: "", category_id: "", supplier_id: "", price: "", 
-    current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "" 
+    current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30"
   });
   const [newCategory, setNewCategory] = useState({ name: "", description: "", margin_target: "30" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
@@ -51,6 +51,29 @@ export function Estoque() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ==================== FUNÇÕES DE CÁLCULO ====================
+  const calculateSuggestedPrice = (cost, margin) => {
+    if (!cost || parseFloat(cost) <= 0 || !margin || parseFloat(margin) < 0) return 0;
+    const costNum = parseFloat(cost);
+    const marginNum = parseFloat(margin);
+    const suggested = costNum / (1 - marginNum / 100);
+    return Math.round(suggested * 100) / 100;
+  };
+
+  const calculateCurrentMargin = (price, cost) => {
+    if (!price || !cost || parseFloat(price) <= 0 || parseFloat(cost) <= 0) return 0;
+    const priceNum = parseFloat(price);
+    const costNum = parseFloat(cost);
+    const margin = ((priceNum - costNum) / priceNum) * 100;
+    return Math.round(margin * 100) / 100;
+  };
+
+  const getSelectedCategoryMargin = () => {
+    if (!newProduct.category_id) return 30;
+    const category = categories.find(c => c.id === parseInt(newProduct.category_id));
+    return category?.target_margin || 30;
+  };
 
   // Lógica de Geração de Insights (Consultoria)
   const generateInsights = () => {
@@ -102,6 +125,7 @@ export function Estoque() {
       await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) });
       setSuccessMessage("Produto cadastrado!");
       setShowNewProductModal(false);
+      setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30" });
       loadData();
     } catch (err) { setError(err.message); }
   };
@@ -260,7 +284,15 @@ export function Estoque() {
               </div>
               <div className="form-group">
                 <label>Categoria</label>
-                <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input">
+                <select value={newProduct.category_id} onChange={e => {
+                  const categoryId = e.target.value;
+                  const category = categories.find(c => c.id === parseInt(categoryId));
+                  setNewProduct({
+                    ...newProduct, 
+                    category_id: categoryId,
+                    profit_margin: category?.target_margin?.toString() || "30"
+                  });
+                }} className="input">
                     <option value="">Selecione...</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -273,12 +305,25 @@ export function Estoque() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Preço de Venda (R$)</label>
-                <input placeholder="0.00" type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" />
+                <label>Custo Médio (R$)</label>
+                <input placeholder="0.00" type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
               </div>
               <div className="form-group">
-                <label>Custo Médio (R$)</label>
-                <input placeholder="0.00" type="number" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
+                <label>Margem de Lucro (%)</label>
+                <input placeholder="30" type="number" step="0.1" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" />
+                <small>Padrão da categoria: {getSelectedCategoryMargin()}%</small>
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Preço Sugerido (Calculado)</label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px', border: '1px solid #4CAF50' }}>
+                  <strong style={{ fontSize: '18px', color: '#4CAF50' }}>R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}</strong>
+                  <button type="button" onClick={() => setNewProduct({...newProduct, price: calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toString()})} style={{ padding: '6px 12px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓ Usar</button>
+                </div>
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Preço de Venda (R$)</label>
+                <input placeholder="0.00" type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" />
+                <small style={{ color: calculateCurrentMargin(newProduct.price, newProduct.avg_cost) >= parseFloat(newProduct.profit_margin || 30) ? '#4CAF50' : '#f44336' }}>Margem atual: {calculateCurrentMargin(newProduct.price, newProduct.avg_cost).toFixed(1)}% {calculateCurrentMargin(newProduct.price, newProduct.avg_cost) >= parseFloat(newProduct.profit_margin || 30) ? '✓' : '⚠'}</small>
               </div>
               <div className="form-group">
                 <label>Estoque Atual</label>
