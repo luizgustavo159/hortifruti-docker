@@ -21,6 +21,7 @@ import { AIAssistant } from "./pages/AIAssistant";
 import { Caderneta } from "./pages/Caderneta";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Toaster } from "sonner";
+import { RelogioGlobal } from "./components/RelogioGlobal";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
@@ -159,6 +160,7 @@ export default function App() {
         <AuthProvider>
           <AppRoutes />
           <Toaster position="top-right" richColors />
+          <RelogioGlobal />
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
