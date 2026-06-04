@@ -176,17 +176,17 @@ export function Estoque() {
   const normalizeProductName = (name) => {
     if (!name) return "";
     const corrections = {
-      "maca": "MAÇÃ", "limao": "LIMÃO", "mamao": "MAMÃO", "melancia": "MELANCIA",
+      "maca": "MAÇÃ", "limao": "LIMÃO TAHITI", "limao siciliano": "LIMÃO SICILIANO", "mamao": "MAMÃO PAPAYA", "melancia": "MELANCIA",
       "pera": "PÊRA", "pessego": "PÊSSEGO", "maracuja": "MARACUJÁ", "goiaba": "GOIABA",
-      "uva": "UVA", "banana": "BANANA", "morango": "MORANGO", "abacaxi": "ABACAXI",
-      "manga": "MANGA", "laranja": "LARANJA", "mexerica": "MEXERICA", "tangerina": "TANGERINA",
+      "uva": "UVA", "banana": "BANANA NANICA", "banana prata": "BANANA PRATA", "morango": "MORANGO", "abacaxi": "ABACAXI",
+      "manga": "MANGA PALMER", "laranja": "LARANJA PERA", "mexerica": "MEXERICA", "tangerina": "TANGERINA",
       "caqui": "CAQUI", "kiwi": "KIWI", "coco": "COCO", "abacate": "ABACATE",
-      "melao": "MELÃO", "ameixa": "AMEIXA", "cereja": "CEREJA", "framboesa": "FRAMBOESA",
+      "melao": "MELÃO AMARELO", "ameixa": "AMEIXA", "cereja": "CEREJA", "framboesa": "FRAMBOESA",
       "amora": "AMORA", "jabuticaba": "JABUTICABA", "carambola": "CARAMBOLA", "pitaya": "PITAYA",
-      "batata": "BATATA", "cebola": "CEBOLA", "alho": "ALHO", "tomate": "TOMATE",
-      "cenoura": "CENOURA", "pimentao": "PIMENTÃO", "berinjela": "BERINJELA", "abobora": "ABÓBORA",
+      "batata": "BATATA MONALISA", "batata doce": "BATATA DOCE", "cebola": "CEBOLA BRANCA", "alho": "ALHO ROXO", "tomate": "TOMATE ITALIANO",
+      "cenoura": "CENOURA", "pimentao": "PIMENTÃO VERDE", "berinjela": "BERINJELA", "abobora": "ABÓBORA CABOTIÁ",
       "chuchu": "CHUCHU", "quiabo": "QUIABO", "vagem": "VAGEM", "jilo": "JILÓ",
-      "alface": "ALFACE", "couve": "COUVE", "repolho": "REPOLHO", "espinafre": "ESPINAFRE",
+      "alface": "ALFACE CRESPA", "couve": "COUVE MANTEIGA", "repolho": "REPOLHO BRANCO", "espinafre": "ESPINAFRE",
       "rucula": "RÚCULA", "agriao": "AGRIÃO", "brocolis": "BRÓCOLIS", "couve-flor": "COUVE-FLOR",
       "salsa": "SALSA", "coentro": "COENTRO", "cebolinha": "CEBOLINHA", "manjericao": "MANJERICÃO"
     };
@@ -412,7 +412,13 @@ export function Estoque() {
             )}
             <div className="form-group">
               <label>Descrição / Motivo</label>
-              <input value={movement.reason} onChange={e => setMovement({...movement, reason: e.target.value})} className="input" placeholder="Ex: Compra fornecedor X, Ajuste de balanço..." />
+              <input 
+                value={movement.reason} 
+                onChange={e => setMovement({...movement, reason: e.target.value})} 
+                onBlur={e => setMovement({...movement, reason: e.target.value.toUpperCase().trim()})}
+                className="input" 
+                placeholder="Ex: COMPRA FORNECEDOR X, AJUSTE DE BALANÇO..." 
+              />
             </div>
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
               <button onClick={handleSaveMovement} className="btn-primary" style={{ flex: 1, backgroundColor: movement.type === 'loss' ? '#f44336' : '#4CAF50' }}>Confirmar</button>

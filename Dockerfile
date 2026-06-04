@@ -16,7 +16,7 @@ COPY . .
 
 # Build frontend - O Vite está configurado para gerar o output em ../public (raiz do app)
 # Usar flag --silent para reduzir logs excessivos
-RUN cd frontend && npm run build -- --silent
+RUN cd frontend && npm run build
 
 # ============ PRODUCTION STAGE ============
 FROM node:22-alpine
