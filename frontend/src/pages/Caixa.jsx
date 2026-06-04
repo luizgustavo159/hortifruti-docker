@@ -344,8 +344,14 @@ export function Caixa() {
           <div className="products-grid">
             {filteredProducts.map(p => (
               <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
-                <div className="product-emoji" style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: '8px' }}>
-                  {getEmojiForProduct(p.name)}
+                <div className="product-image-container" style={{ width: '100%', height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '8px', overflow: 'hidden', borderRadius: '8px' }}>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div className="product-emoji" style={{ fontSize: '2.5rem' }}>
+                      {getEmojiForProduct(p.name)}
+                    </div>
+                  )}
                 </div>
                 <div className="product-info">
                   <h4>{p.name}</h4>
