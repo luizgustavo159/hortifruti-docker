@@ -1,29 +1,35 @@
-/* ============ RELÓGIO GLOBAL ============ */
+/* ============ RELÓGIO GLOBAL REFINADO ============ */
 .relogio-global {
   position: fixed;
-  bottom: 16px;
+  bottom: 20px;
   right: 20px;
   z-index: 10000;
 
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 4px;
 
-  background-color: var(--bg-secondary, #f9fafb);
+  /* Glassmorphism effect para alinhar com o design moderno */
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
   color: var(--text-primary, #1f2937);
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 10px;
-  padding: 6px 14px;
-  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  border-radius: 12px;
+  padding: 8px 16px;
+  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.08);
 
-  font-size: 13px;
+  /* Tipografia moderna */
+  font-size: 14px;
   font-weight: 600;
-  font-family: "Courier New", Courier, monospace;
-  letter-spacing: 0.5px;
+  font-family: inherit; /* Usa a fonte do sistema */
+  font-variant-numeric: tabular-nums; /* Evita que os números pulem */
+  letter-spacing: -0.01em;
+  
   user-select: none;
   pointer-events: none;
-
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .relogio-data {
@@ -32,7 +38,8 @@
 
 .relogio-separador {
   color: var(--text-tertiary, #9ca3af);
-  margin: 0 2px;
+  margin: 0 4px;
+  font-weight: 400;
 }
 
 .relogio-hora {
@@ -40,12 +47,12 @@
   font-weight: 700;
 }
 
-/* Dark mode */
+/* Dark mode refinement */
 :root.dark-mode .relogio-global {
-  background-color: var(--bg-secondary, #1e293b);
-  border-color: var(--border-color, #334155);
+  background-color: rgba(30, 41, 59, 0.7);
+  border-color: rgba(255, 255, 255, 0.1);
   color: var(--text-primary, #f1f5f9);
-  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.4));
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
 }
 
 :root.dark-mode .relogio-data {
