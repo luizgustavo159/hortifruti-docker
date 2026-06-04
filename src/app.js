@@ -9,6 +9,7 @@ const pinoHttp = require("pino-http");
 const db = require("../db");
 const config = require("../config");
 const { router } = require("./routes");
+const { isTokenBlacklisted } = require("./middleware/tokenManagement");
 
 const app = express();
 const { LOG_LEVEL, corsOrigin, METRICS_ENABLED, ALERT_SLOW_THRESHOLD_MS } = config;
@@ -34,6 +35,18 @@ const limiter = rateLimit({
   max: 1000, // Aumentado para uso profissional
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+// Middleware global de validação de token (blacklist) para API
+app.use("/api", async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    if (await isTokenBlacklisted(token)) {
+      return res.status(401).json({ message: "Sessão encerrada ou token inválido." });
+    }
+  }
+  next();
 });
 
 app.use("/api", limiter, router);
