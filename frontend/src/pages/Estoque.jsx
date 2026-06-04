@@ -340,7 +340,16 @@ export function Estoque() {
                   <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📁 Upload<input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} /></label>
                 </div>
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Nome do Produto</label><input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" /></div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+  <label>Nome do Produto</label>
+  <input 
+    placeholder="Ex: Maçã Gala" 
+    value={newProduct.name} 
+    onChange={e => setNewProduct({...newProduct, name: e.target.value})} 
+    onBlur={e => setNewProduct({...newProduct, name: normalizeProductName(e.target.value)})}
+    className="input" 
+  />
+</div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Código de Barras</label><div style={{ display: 'flex', gap: '8px' }}><input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} /><button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ height: '38px', padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button></div></div>
               <div className="form-group"><label>Unidade</label><select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input"><option value="un">Unidade (un)</option><option value="kg">Quilo (kg)</option><option value="cx">Caixa (cx)</option></select></div>
               <div className="form-group"><label>Categoria</label><select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input"><option value="">Selecione...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
