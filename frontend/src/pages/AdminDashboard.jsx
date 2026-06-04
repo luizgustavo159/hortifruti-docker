@@ -53,12 +53,13 @@ export function AdminDashboard() {
     loadData();
   }, [dateRange]);
 
-  const totalSales = Number(summary.total_sales || 0);
+  const totalSales = Number(summary.total_revenue || 0);
   const totalLosses = Number(summary.total_losses || 0);
-  const realProfit = Number(summary.real_profit || 0);
+  const realProfit = Number(summary.net_profit || 0);
   const lowStockCount = summary.low_stock?.length || 0;
+  const totalCost = Number(summary.total_cost || 0);
   
-  // Lucro líquido (Vendas - Custo das Vendas)
+  // Margem líquida real
   const margin = totalSales > 0 ? (realProfit / totalSales) * 100 : 0;
 
   return (
@@ -117,7 +118,14 @@ export function AdminDashboard() {
             <strong className="value-large" style={{ color: realProfit >= 0 ? '#16a34a' : '#dc2626' }}>
               R$ {realProfit.toFixed(2)}
             </strong>
-            <p className="card-subtitle">Já descontado o custo (CMV)</p>
+            <p className="card-subtitle">Líquido (Vendas - Custo - Perdas)</p>
+          </div>
+          <div className="card">
+            <h3>Perdas Financeiras</h3>
+            <strong className="value-large" style={{ color: '#dc2626' }}>
+              R$ {totalLosses.toFixed(2)}
+            </strong>
+            <p className="card-subtitle">Valor de custo das perdas</p>
           </div>
           <div className="card">
             <h3>Margem Líquida</h3>

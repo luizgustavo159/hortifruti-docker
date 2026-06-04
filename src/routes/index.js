@@ -536,24 +536,36 @@ router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) 
 // --- RELATÓRIOS ---
 router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, res) => {
     const { start, end } = req.query;
-    const dateRange = [start + " 00:00:00", end + " 23:59:59"];
-    
     const isoRange = [start + "T00:00:00.000Z", end + "T23:59:59.999Z"];
+    
     db.get(`
         SELECT 
             COUNT(*) as total_sales,
-            SUM(final_total) as total_revenue,
-            COALESCE((SELECT SUM(quantity * p.avg_cost) FROM stock_losses l JOIN products p ON l.product_id = p.id WHERE l.created_at >= ? AND l.created_at <= ?), 0) as total_losses
-        FROM sales 
-        WHERE created_at >= ? AND created_at <= ?
+            SUM(s.final_total) as total_revenue,
+            COALESCE(SUM(s.quantity * p.avg_cost), 0) as total_cost,
+            COALESCE((SELECT SUM(l.quantity * pr.avg_cost) FROM stock_losses l JOIN products pr ON l.product_id = pr.id WHERE l.created_at >= $1 AND l.created_at <= $2), 0) as total_losses_value
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.created_at >= $3 AND s.created_at <= $4
     `, [...isoRange, ...isoRange], (err, row) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar resumo: " + err.message });
         
-        db.all("SELECT * FROM v_critical_stock", [], (errStock, lowStock) => {
+        const revenue = parseFloat(row.total_revenue || 0);
+        const costOfGoods = parseFloat(row.total_cost || 0);
+        const losses = parseFloat(row.total_losses_value || 0);
+        const grossProfit = revenue - costOfGoods;
+        const netProfit = grossProfit - losses;
+
+        db.all("SELECT * FROM products WHERE current_stock <= min_stock AND deleted_at IS NULL", [], (errStock, lowStock) => {
             res.json({
-                ...row,
+                total_sales: row.total_sales,
+                total_revenue: revenue,
+                total_cost: costOfGoods,
+                total_losses: losses,
+                gross_profit: grossProfit,
+                net_profit: netProfit,
                 low_stock: lowStock || [],
-                real_profit: (row.total_revenue || 0) - (row.total_losses || 0)
+                profit_margin: revenue > 0 ? ((netProfit / revenue) * 100).toFixed(2) : 0
             });
         });
     });
