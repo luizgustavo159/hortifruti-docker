@@ -64,25 +64,34 @@ export function Caixa() {
     loadData();
   }, [loadData]);
 
-  // Lógica de Código de Barras (Leitor)
+  // Lógica de Teclado (Leitor e Atalhos)
   useEffect(() => {
     let barcode = "";
     const handleKeyDown = (e) => {
+      // Atalho F10 para finalizar
+      if (e.key === "F10") {
+        e.preventDefault();
+        handleCheckout();
+        return;
+      }
+
       if (e.key === "Enter") {
         if (barcode.length > 3) {
           const product = products.find(p => p.sku === barcode || p.barcode === barcode);
           if (product) addToCart(product);
           barcode = "";
         }
-      } else if (e.key !== "Shift") {
+      } else if (e.key !== "Shift" && e.key.length === 1) {
         barcode += e.key;
       }
-      // Timeout para limpar barcode se demorar muito (evita inputs manuais)
-      setTimeout(() => { barcode = ""; }, 100);
+      
+      // Limpar barcode se demorar muito
+      const timer = setTimeout(() => { barcode = ""; }, 100);
+      return () => clearTimeout(timer);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [products]);
+  }, [products, cartItems, paymentMethod, caixaAberto]); // Dependências atualizadas para handleCheckout funcionar via atalho
 
   const isKgProduct = (product) => product?.unit_type === "kg";
 
@@ -109,6 +118,15 @@ export function Caixa() {
     if (isKgProduct(product)) {
       setScaleModalProduct(product);
       setManualWeight(scale.weight ? String(scale.weight) : "");
+      return;
+    }
+
+    // Validação preventiva de estoque
+    const existingInCart = cartItems.find(item => item.id === product.id);
+    const currentQtyInCart = existingInCart ? existingInCart.quantity : 0;
+    if (product.current_stock <= currentQtyInCart) {
+      setError(`Estoque insuficiente para ${product.name}. Disponível: ${product.current_stock}`);
+      setTimeout(() => setError(""), 3000);
       return;
     }
 
