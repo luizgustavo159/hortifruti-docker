@@ -668,16 +668,30 @@ router.get("/caderneta", authenticateToken, (req, res) => {
 router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
     const customerId = req.params.id;
     db.all(`
-        SELECT 'venda' as type, s.final_total as amount, s.created_at, s.payment_method, string_agg(p.name::text, ', ') as items
-        FROM sales s
-        JOIN products p ON s.product_id = p.id
-        WHERE s.customer_id = ?
-        GROUP BY s.final_total, s.created_at, s.payment_method
-        UNION ALL
-        SELECT 'pagamento' as type, cp.amount, cp.created_at, cp.payment_method, 'Pagamento de Dívida'::text as items
-        FROM customer_payments cp
-        WHERE cp.customer_id = ?
-        ORDER BY created_at DESC
+        WITH combined_history AS (
+            SELECT 
+                'venda'::text as type, 
+                s.final_total as amount, 
+                s.created_at, 
+                s.payment_method, 
+                string_agg(p.name::text, ', ') as items
+            FROM sales s
+            JOIN products p ON s.product_id = p.id
+            WHERE s.customer_id = ?
+            GROUP BY s.id, s.final_total, s.created_at, s.payment_method
+            
+            UNION ALL
+            
+            SELECT 
+                'pagamento'::text as type, 
+                cp.amount, 
+                cp.created_at, 
+                cp.payment_method, 
+                'Pagamento de Dívida'::text as items
+            FROM customer_payments cp
+            WHERE cp.customer_id = ?
+        )
+        SELECT * FROM combined_history ORDER BY created_at DESC
     `, [customerId, customerId], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao carregar histórico." });
         res.json(rows);
