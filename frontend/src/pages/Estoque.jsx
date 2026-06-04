@@ -63,7 +63,7 @@ export function Estoque() {
     tomate: "🍅", tomato: "🍅",
     
     // Frutas amarelas/laranjas
-    banana: "🍌", banana: "🍌",
+    banana: "🍌",
     laranja: "🍊", orange: "🍊",
     limão: "🍋", lemon: "🍋",
     abacaxi: "🍍", pineapple: "🍍",
@@ -124,9 +124,24 @@ export function Estoque() {
       </svg>
     `;
     
-    // Converte SVG para Data URL
-    const blob = new Blob([svg], { type: "image/svg+xml" });
-    return URL.createObjectURL(blob);
+    // Converte SVG para Data URL via Canvas para garantir que seja uma imagem estática pequena
+    return new Promise((resolve) => {
+      const img = new Image();
+      const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 400;
+        canvas.height = 400;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        // Salva como JPEG com 80% de qualidade para ocupar pouquíssimo espaço
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = url;
+    });
   };
 
   // ==================== FUNÇÕES DE CÁLCULO ====================
@@ -155,24 +170,52 @@ export function Estoque() {
     return 30; // Margem padrão fixa
   };
 
-  // ==================== FUNÇÕES DE UPLOAD DE IMAGEM ====================
-  // Upload de imagem do PC (converte para base64)
+  // ==================== FUNÇÕES DE UPLOAD E COMPRESSÃO DE IMAGEM ====================
+  // Redimensiona e comprime imagem no navegador
+  const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        // Converte para JPEG com 70% de qualidade para garantir tamanho reduzido
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    });
+  };
+
+  // Upload de imagem do PC (converte para base64 e comprime)
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Validar tamanho (máx 500KB para não estourar limite JSON)
-    if (file.size > 500 * 1024) {
-      setError("Imagem muito grande. Máximo 500KB.");
-      return;
-    }
-    
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const base64 = e.target?.result;
       if (typeof base64 === 'string') {
-        setNewProduct(prev => ({ ...prev, image_url: base64 }));
-        setSuccessMessage("Imagem carregada com sucesso!");
+        // Comprime antes de salvar no estado
+        const compressed = await compressImage(base64);
+        setNewProduct(prev => ({ ...prev, image_url: compressed }));
+        setSuccessMessage("Imagem carregada e otimizada!");
       }
     };
     reader.onerror = () => {
@@ -182,15 +225,15 @@ export function Estoque() {
   };
 
   // Gera imagem caricata automática
-  const handleGenerateCaricature = () => {
+  const handleGenerateCaricature = async () => {
     if (!newProduct.name || newProduct.name.length < 2) {
       setError("Digite o nome do produto primeiro (mínimo 2 caracteres)");
       return;
     }
     
-    const imageUrl = generateCaricatureImage(newProduct.name);
+    const imageUrl = await generateCaricatureImage(newProduct.name);
     setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
-    setSuccessMessage(`Imagem caricata gerada para "${newProduct.name}"!`);
+    setSuccessMessage(`Imagem caricata gerada e otimizada para "${newProduct.name}"!`);
   };
 
   // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
@@ -554,7 +597,7 @@ export function Estoque() {
                             <div><strong>{p.name}</strong><br/><small>{p.category_name}</small></div>
                           </div>
                         </td>
-                        <td><span className={Number(p.current_stock) <= Number(p.min_stock) ? "status critical" : "status ok"}>{p.current_stock} {p.unit_type}</span></td>
+                        <td><span className={Number(p.current_stock) <= Number(p.min_stock) ? "status critical" : "status_ok"}>{p.current_stock} {p.unit_type}</span></td>
                         <td>R$ {cost.toFixed(2)}</td>
                         <td>R$ {price.toFixed(2)}</td>
                         <td>
