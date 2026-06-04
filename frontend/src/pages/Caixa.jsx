@@ -14,16 +14,19 @@ export function Caixa() {
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [caixaAberto, setCaixaAberto] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [prods, custs] = await Promise.all([
+      const [prods, custs, currentCaixa] = await Promise.all([
         apiFetch("/products"),
-        apiFetch("/customers")
+        apiFetch("/customers"),
+        apiFetch("/pos/cash-session/current")
       ]);
       setProducts(Array.isArray(prods) ? prods : []);
       setCustomers(Array.isArray(custs) ? custs : []);
+      setCaixaAberto(!!currentCaixa);
     } catch (err) { 
       setError("Erro ao carregar dados: " + err.message); 
     } finally {
@@ -36,6 +39,10 @@ export function Caixa() {
   }, [loadData]);
 
   const addToCart = (product) => {
+    if (!caixaAberto) {
+      setError("Abra o caixa antes de iniciar uma venda.");
+      return;
+    }
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -45,6 +52,7 @@ export function Caixa() {
       }
       return [...prev, {...product, quantity: 1}];
     });
+    setError("");
   };
 
   const removeFromCart = (productId) => {
@@ -62,7 +70,7 @@ export function Caixa() {
   };
 
   const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
-  const finalTotal = subtotal; // Pode adicionar lógica de descontos aqui depois
+  const finalTotal = subtotal;
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
@@ -88,23 +96,24 @@ export function Caixa() {
       setSuccessMessage("Venda finalizada com sucesso!");
       setCartItems([]);
       setSelectedCustomer(null);
+      loadData(); // Atualiza estoque
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) { 
-      setError("Erro ao finalizar venda: " + err.message); 
+      setError(err.message); 
     } finally {
       setProcessingPayment(false);
     }
   };
 
   return (
-    <PageShell title="Caixa PDV" subtitle="Hortifruti Inteligente - Venda Rápida">
+    <PageShell title="Frente de Caixa" subtitle="Ponto de Venda - Registre vendas em tempo real">
       <div className="pos-container">
         {/* Lado Esquerdo: Produtos */}
         <div className="pos-products">
           <div className="search-section">
             <input 
               type="search" 
-              placeholder="Busque por nome ou SKU..." 
+              placeholder="Bipe ou busque o produto..." 
               value={searchTerm} 
               onChange={e => setSearchTerm(e.target.value)} 
               className="search-input" 
@@ -115,19 +124,17 @@ export function Caixa() {
             {loading ? (
               <div className="loading">Carregando produtos...</div>
             ) : products.filter(p => 
-              p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-              (p.sku && p.sku.includes(searchTerm))
+              p.name.toLowerCase().includes(searchTerm.toLowerCase())
             ).length === 0 ? (
               <div className="no-products">Nenhum produto encontrado.</div>
             ) : (
               products.filter(p => 
-                p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                (p.sku && p.sku.includes(searchTerm))
+                p.name.toLowerCase().includes(searchTerm.toLowerCase())
               ).map(p => (
                 <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
                   <div className="product-info">
                     <h4>{p.name}</h4>
-                    <p className="product-category">{p.category_name || 'Sem categoria'}</p>
+                    <p className="product-category">{p.category_name || 'Hortifruti'}</p>
                     <p className={`product-stock ${Number(p.current_stock) <= Number(p.min_stock) ? 'critical' : ''}`}>
                       Estoque: {p.current_stock} {p.unit_type}
                     </p>
@@ -142,16 +149,17 @@ export function Caixa() {
 
         {/* Lado Direito: Carrinho */}
         <div className="pos-cart">
-          <h3>🛒 Carrinho</h3>
+          <h3>🛒 Carrinho de Vendas</h3>
           
+          {!caixaAberto && <div className="error-message" style={{background: '#fef2f2', color: '#dc2626'}}>⚠️ CAIXA FECHADO</div>}
           {successMessage && <div className="success-message">{successMessage}</div>}
           {error && <div className="error-message">{error}</div>}
 
-          <div className="customer-section" style={{ marginBottom: '16px' }}>
-            <label style={{ fontSize: '12px', fontWeight: '700', display: 'block', marginBottom: '4px' }}>Cliente</label>
+          <div className="customer-section" style={{ marginBottom: '16px', background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '10px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '700', display: 'block', marginBottom: '4px', color: 'var(--text-secondary)' }}>CLIENTE / CADERNETA</label>
             <select 
               className="input"
-              style={{ width: '100%' }}
+              style={{ width: '100%', background: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
               value={selectedCustomer?.id || ""} 
               onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))}
             >
@@ -180,10 +188,8 @@ export function Caixa() {
                       <input 
                         type="number" 
                         value={item.quantity} 
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          if (!isNaN(val)) updateQuantity(item.id, val - item.quantity);
-                        }}
+                        readOnly
+                        style={{ width: '50px', textAlign: 'center' }}
                       />
                       <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}>+</button>
                     </div>
@@ -194,38 +200,40 @@ export function Caixa() {
             )}
           </div>
 
-          <div className="cart-summary">
+          <div className="cart-summary" style={{ marginTop: 'auto' }}>
             <div className="summary-row">
               <span>Subtotal</span>
               <span>R$ {subtotal.toFixed(2)}</span>
             </div>
             <div className="summary-row total">
-              <span>Total</span>
+              <span>TOTAL A PAGAR</span>
               <span className="value">R$ {finalTotal.toFixed(2)}</span>
             </div>
           </div>
 
-          <div className="payment-section">
-            <label>Forma de Pagamento</label>
+          <div className="payment-section" style={{ marginTop: '16px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent-info)' }}>FORMA DE PAGAMENTO</label>
             <select 
               className="payment-select"
               value={paymentMethod} 
               onChange={e => setPaymentMethod(e.target.value)}
+              style={{ marginTop: '4px' }}
             >
-                <option value="cash">Dinheiro</option>
-                <option value="pix">PIX</option>
-                <option value="card">Cartão de Crédito/Débito</option>
+                <option value="cash">💵 Dinheiro</option>
+                <option value="pix">📱 PIX</option>
+                <option value="card">💳 Cartão</option>
                 <option value="fiado">📓 Fiado (Caderneta)</option>
             </select>
           </div>
 
-          <div className="cart-actions">
+          <div className="cart-actions" style={{ marginTop: '16px' }}>
             <button 
               className="btn-finalize" 
               onClick={handleCheckout} 
-              disabled={processingPayment || cartItems.length === 0}
+              disabled={processingPayment || cartItems.length === 0 || !caixaAberto}
+              style={{ height: '56px', fontSize: '16px' }}
             >
-                {processingPayment ? "Processando..." : "Finalizar Venda (F10)"}
+                {processingPayment ? "PROCESSANDO..." : "FINALIZAR VENDA"}
             </button>
           </div>
         </div>

@@ -88,13 +88,31 @@ router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), 
 
 // --- ESTOQUE ---
 router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req, res) => {
-  const { product_id, delta, reason } = req.body;
+  const { product_id, delta, reason, unit_cost } = req.body;
   runWithTransaction((tx, finish) => {
-    tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [delta, product_id], (err) => {
-      if (err) return finish(err);
-      tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
-        [product_id, delta > 0 ? 'inbound' : 'outbound', delta, reason, req.user.id], (errM) => {
-          finish(errM);
+    // Buscar dados atuais para cálculo de custo médio
+    tx.get("SELECT current_stock, avg_cost FROM products WHERE id = ?", [product_id], (err, p) => {
+      if (err || !p) return finish(err || new Error("Produto não encontrado"));
+
+      let newAvgCost = p.avg_cost;
+      const currentStock = Number(p.current_stock);
+      const deltaQty = Number(delta);
+      const cost = Number(unit_cost || 0);
+
+      // Cálculo de Custo Médio Automático (apenas em entradas positivas com custo informado)
+      if (deltaQty > 0 && cost > 0) {
+        const totalValue = (currentStock * p.avg_cost) + (deltaQty * cost);
+        const totalQty = currentStock + deltaQty;
+        newAvgCost = totalQty > 0 ? totalValue / totalQty : cost;
+      }
+
+      tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ? WHERE id = ?", 
+        [deltaQty, newAvgCost, product_id], (errU) => {
+          if (errU) return finish(errU);
+          tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
+            [product_id, deltaQty > 0 ? 'inbound' : 'outbound', deltaQty, reason, req.user.id], (errM) => {
+              finish(errM);
+            });
         });
     });
   }, (err) => err ? res.status(500).json({ message: "Erro ao ajustar estoque." }) : res.json({ status: "ok" }));
@@ -221,7 +239,13 @@ router.post("/sales", authenticateToken, (req, res) => {
         if (idx >= items.length) return finish(null);
         const item = items[idx];
         tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
-            if (!p) return finish(new Error("Produto não encontrado"));
+            if (!p) return finish(new Error(`Produto ID ${item.product_id} não encontrado`));
+            
+            // --- TRAVA DE ESTOQUE NEGATIVO ---
+            if (Number(p.current_stock) < Number(item.quantity)) {
+              return finish(new Error(`Estoque insuficiente para ${p.name}. Disponível: ${p.current_stock}`));
+            }
+
             const total = p.price * item.quantity;
             tx.run("INSERT INTO sales (product_id, quantity, total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?)", 
                 [item.product_id, item.quantity, total, payment_method, req.user.id, customer_id], (errS) => {
@@ -234,7 +258,7 @@ router.post("/sales", authenticateToken, (req, res) => {
         });
     };
     processItem(0);
-  }, (err) => err ? res.status(500).json({ message: "Erro ao processar venda." }) : res.json({ status: "ok" }));
+  }, (err) => err ? res.status(400).json({ message: err.message }) : res.json({ status: "ok" }));
 });
 
 // --- CATEGORIAS E FORNECEDORES ---
