@@ -54,7 +54,8 @@
 /* ============ GRID DE PRODUTOS ============ */
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-auto-rows: 140px;
   gap: 12px;
   overflow-y: auto;
   padding-right: 8px;
@@ -83,14 +84,18 @@
   background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
   border: 2px solid var(--border-color);
   border-radius: 12px;
-  padding: 14px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  aspect-ratio: 1 / 1;
 }
 
 .product-card::before {

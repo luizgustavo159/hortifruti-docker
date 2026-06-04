@@ -332,10 +332,15 @@ export function Caixa() {
           <div className="products-grid">
             {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku === searchTerm).map(p => (
               <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
+                <div className="product-emoji" style={{ fontSize: '2rem' }}>
+                  {getEmojiForProduct(p.name)}
+                </div>
                 <div className="product-info">
-                  <h4>{p.name} {isKgProduct(p) && "⚖️"}</h4>
+                  <h4>{p.name}</h4>
                   <p className="product-price">R$ {Number(p.price).toFixed(2)}</p>
-                  <p className="product-stock">Estoque: {p.current_stock}</p>
+                  <p className="product-stock" style={{ fontSize: '10px', opacity: 0.8 }}>
+                    Estoque: {p.current_stock} {p.unit_type}
+                  </p>
                 </div>
               </div>
             ))}
@@ -348,10 +353,28 @@ export function Caixa() {
           {successMessage && <div className="success-message">{successMessage}</div>}
 
           <div className="customer-select">
-            <select value={selectedCustomer?.id || ""} onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))}>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cliente</label>
+            <select value={selectedCustomer?.id || ""} onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))} className="payment-select">
               <option value="">Consumidor Final</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+
+          <div className="payment-section">
+            <label>Valor Recebido</label>
+            <input 
+              type="number" 
+              value={amountReceived} 
+              onChange={e => setAmountReceived(e.target.value)} 
+              placeholder="R$ 0,00"
+              className="search-input"
+              style={{ padding: '8px 12px' }}
+            />
+            {amountReceived && parseFloat(amountReceived) > finalTotal && (
+              <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--accent-primary)' }}>
+                Troco: R$ {(parseFloat(amountReceived) - finalTotal).toFixed(2)}
+              </div>
+            )}
           </div>
 
           <div className="cart-items">
