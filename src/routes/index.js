@@ -672,7 +672,7 @@ router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
         FROM sales s
         JOIN products p ON s.product_id = p.id
         WHERE s.customer_id = ?
-        GROUP BY s.created_at
+        GROUP BY s.final_total, s.created_at, s.payment_method
         UNION ALL
         SELECT 'pagamento' as type, cp.amount, cp.created_at, cp.payment_method, 'Pagamento de Dívida' as items
         FROM customer_payments cp
