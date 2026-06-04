@@ -182,10 +182,40 @@ export function Caixa() {
   const calculateDiscountForItem = (item) => {
     if (!item.discount_id) return 0;
     const d = discounts.find(disc => disc.id === item.discount_id);
-    if (!d) return 0;
-    if (d.type === "percent") return (item.price * item.quantity) * (Number(d.value) / 100);
-    if (d.type === "fixed") return Number(d.value);
-    return 0;
+    if (!d || !d.active) return 0;
+
+    // Verificar validade de data (Timezone simplificado para o navegador)
+    const now = new Date();
+    if (d.starts_at && new Date(d.starts_at) > now) return 0;
+    if (d.ends_at && new Date(d.ends_at) < now) return 0;
+
+    const subtotal = item.price * item.quantity;
+
+    switch (d.type) {
+      case "percent":
+        return subtotal * (Number(d.value) / 100);
+      case "fixed":
+        return Number(d.value);
+      case "buy_x_get_y":
+        // Ex: Leve 3 Pague 2. buy_quantity=3, get_quantity=2
+        if (item.quantity >= d.buy_quantity && d.buy_quantity > 0) {
+          const sets = Math.floor(item.quantity / d.buy_quantity);
+          const freeItemsPerSet = d.buy_quantity - d.get_quantity;
+          return sets * freeItemsPerSet * item.price;
+        }
+        return 0;
+      case "fixed_bundle":
+        // Ex: 3 por R$ 10,00. value=10, min_quantity=3
+        if (item.quantity >= d.min_quantity && d.min_quantity > 0) {
+          const bundles = Math.floor(item.quantity / d.min_quantity);
+          const normalPriceForBundles = bundles * d.min_quantity * item.price;
+          const bundlePrice = bundles * Number(d.value);
+          return normalPriceForBundles - bundlePrice;
+        }
+        return 0;
+      default:
+        return 0;
+    }
   };
 
   const subtotal = calculateTotal();
