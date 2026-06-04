@@ -298,8 +298,8 @@ export function Descontos() {
             <form onSubmit={handleSubmitDiscount} className="form-grid">
 
               {/* Informações Básicas */}
-              <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '16px', marginBottom: '16px' }}>
-                <h4 style={{ color: '#374151', marginBottom: '12px' }}>Informações Básicas</h4>
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '16px' }}>
+                <h4 style={{ color: 'var(--text-primary)', marginBottom: '12px' }}>Informações Básicas</h4>
                 <div className="form-group full-width">
                   <label>Nome do Desconto *</label>
                   <input
@@ -397,8 +397,8 @@ export function Descontos() {
               </div>
 
               {/* Alvo */}
-              <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '16px', marginBottom: '16px' }}>
-                <h4 style={{ color: '#374151', marginBottom: '12px' }}>Aplicar a</h4>
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '16px' }}>
+                <h4 style={{ color: 'var(--text-primary)', marginBottom: '12px' }}>Aplicar a</h4>
                 <div className="form-group full-width">
                   <label>Alvo do Desconto</label>
                   <select
@@ -426,7 +426,7 @@ export function Descontos() {
                 {formData.target_type === "product" && (
                   <div className="form-group full-width">
                     <label>Produtos * ({formData.selected_ids.length} selecionado(s))</label>
-                    <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #d1d5db', padding: '10px', borderRadius: '8px', background: '#f9fafb' }}>
+                    <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--border-color)', padding: '10px', borderRadius: '8px', background: 'var(--bg-primary)' }}>
                       {products.length === 0 ? (
                         <p style={{ color: '#6b7280', fontSize: '14px' }}>Nenhum produto disponível.</p>
                       ) : products.map(p => (
@@ -448,8 +448,8 @@ export function Descontos() {
               </div>
 
               {/* Vigência */}
-              <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '16px', marginBottom: '16px' }}>
-                <h4 style={{ color: '#374151', marginBottom: '12px' }}>Vigência (Opcional)</h4>
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '16px' }}>
+                <h4 style={{ color: 'var(--text-primary)', marginBottom: '12px' }}>Vigência (Opcional)</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Data de Início</label>
@@ -477,8 +477,8 @@ export function Descontos() {
                       <label key={d.value} style={{
                         display: 'flex', alignItems: 'center', gap: '4px',
                         padding: '4px 10px', borderRadius: '20px', cursor: 'pointer',
-                        background: formData.days_of_week.includes(d.value) ? '#2563eb' : '#f3f4f6',
-                        color: formData.days_of_week.includes(d.value) ? '#fff' : '#374151',
+                        background: formData.days_of_week.includes(d.value) ? 'var(--accent-secondary)' : 'var(--bg-tertiary)',
+                        color: formData.days_of_week.includes(d.value) ? '#fff' : 'var(--text-primary)',
                         fontSize: '13px', fontWeight: '500'
                       }}>
                         <input
@@ -496,7 +496,7 @@ export function Descontos() {
 
               {/* Configurações Avançadas */}
               <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ color: '#374151', marginBottom: '12px' }}>Configurações Avançadas</h4>
+                <h4 style={{ color: 'var(--text-primary)', marginBottom: '12px' }}>Configurações Avançadas</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Regra de Acumulação</label>

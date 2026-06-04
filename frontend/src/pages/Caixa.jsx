@@ -301,13 +301,13 @@ export function Caixa() {
     >
       {showAberturaModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Abertura de Caixa</h3>
+          <div className="modal">
+            <h2>Abertura de Caixa</h2>
             <input type="number" value={openingAmount} onChange={e => setOpeningAmount(e.target.value)} placeholder="Valor Inicial R$" className="input" autoFocus />
             <textarea value={openingNotes} onChange={e => setOpeningNotes(e.target.value)} placeholder="Observações" className="input" />
-            <div style={{display:'flex', gap:'8px', marginTop:'16px'}}>
-                <button onClick={handleOpenCaixaRequest} className="btn-finalize" style={{flex:1}}>Solicitar Abertura</button>
-                <button onClick={() => setShowAberturaModal(false)} className="button button-secondary">Cancelar</button>
+            <div className="modal-actions">
+                <button onClick={handleOpenCaixaRequest} className="btn-primary">Solicitar Abertura</button>
+                <button onClick={() => setShowAberturaModal(false)} className="btn-secondary">Cancelar</button>
             </div>
           </div>
         </div>
@@ -319,16 +319,16 @@ export function Caixa() {
 
       {scaleModalProduct && (
         <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>⚖️ Pesagem: {scaleModalProduct.name}</h3>
+          <div className="modal">
+            <h2>⚖️ Pesagem: {scaleModalProduct.name}</h2>
             <div className="weight-display">
                 {scale.connected ? `${(scale.weight || 0).toFixed(3)} kg` : (
                     <input type="number" value={manualWeight} onChange={e => setManualWeight(e.target.value)} placeholder="0.000" className="weight-input" autoFocus />
                 )}
             </div>
-            <div style={{display:'flex', gap:'8px', marginTop:'16px'}}>
-                <button onClick={confirmWeightAndAdd} className="btn-finalize" style={{flex:1}}>Confirmar</button>
-                <button onClick={() => setScaleModalProduct(null)} className="button button-secondary">Cancelar</button>
+            <div className="modal-actions">
+                <button onClick={confirmWeightAndAdd} className="btn-primary">Confirmar</button>
+                <button onClick={() => setScaleModalProduct(null)} className="btn-secondary">Cancelar</button>
             </div>
           </div>
         </div>

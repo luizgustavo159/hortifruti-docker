@@ -122,7 +122,8 @@ export function Estoque() {
     const costNum = parseFloat(cost) || 0;
     const marginNum = parseFloat(margin) || 0;
     if (costNum <= 0) return 0;
-    return Math.round(costNum * (1 + marginNum / 100) * 100) / 100;
+    if (marginNum >= 100) return 0;
+    return Math.round((costNum / (1 - marginNum / 100)) * 100) / 100;
   };
 
   const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
@@ -410,7 +411,7 @@ export function Estoque() {
                 <tbody>
                   {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => {
                     const price = Number(p.price || 0); const cost = Number(p.avg_cost || 0);
-                    const margin = price > 0 && cost > 0 ? ((price - cost) / cost * 100) : 0;
+                    const margin = price > 0 && cost > 0 ? ((price - cost) / price * 100) : 0;
                     return (
                       <tr key={p.id}>
                         <td>
@@ -470,13 +471,13 @@ export function Estoque() {
           <div className="modal" style={{ maxWidth: '650px' }}>
             <h2>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
-                <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
-                  {newProduct.image_url ? (<img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc', fontSize: '12px' }}>Sem Foto</div>)}
+              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', flexShrink: 0 }}>
+                  {newProduct.image_url ? (<img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)', fontSize: '12px' }}>Sem Foto</div>)}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '160px' }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>🎨 Gerar</button>
-                  <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📁 Upload<input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} /></label>
+                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: 'var(--accent-secondary)', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>🎨 Gerar</button>
+                  <label style={{ height: '38px', background: 'var(--accent-secondary)', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📁 Upload<input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} /></label>
                 </div>
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -489,12 +490,12 @@ export function Estoque() {
     className="input" 
   />
 </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Código de Barras</label><div style={{ display: 'flex', gap: '8px' }}><input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} /><button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ height: '38px', padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button></div></div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Código de Barras</label><div style={{ display: 'flex', gap: '8px' }}><input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} /><button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ height: '38px', padding: '0 15px', backgroundColor: 'var(--accent-secondary)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button></div></div>
               <div className="form-group"><label>Unidade</label><select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input"><option value="un">Unidade (un)</option><option value="kg">Quilo (kg)</option><option value="cx">Caixa (cx)</option></select></div>
               <div className="form-group"><label>Categoria</label><select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input"><option value="">Selecione...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
               <div className="form-group"><label>Custo (R$)</label><input type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" /></div>
               <div className="form-group"><label>Margem (%)</label><input type="number" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" /></div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Preço de Venda (R$)</label><div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}><input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} /><div style={{ padding: '8px 12px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '13px', color: '#2e7d32', fontWeight: 'bold', textAlign: 'center', minWidth: '110px' }}><div style={{ fontSize: '9px', textTransform: 'uppercase', opacity: 0.7 }}>Sugerido</div>R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}</div></div></div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Preço de Venda (R$)</label><div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}><input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} /><div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', border: '1px solid var(--accent-primary)', fontSize: '13px', color: 'var(--accent-primary)', fontWeight: 'bold', textAlign: 'center', minWidth: '110px' }}><div style={{ fontSize: '9px', textTransform: 'uppercase', opacity: 0.7 }}>Sugerido</div>R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}</div></div></div>
               <div className="form-group"><label>Estoque</label><input type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" /></div>
               <div className="form-group"><label>Mínimo</label><input type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" /></div>
             </div>

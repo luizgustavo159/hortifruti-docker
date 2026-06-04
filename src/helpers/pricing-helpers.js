@@ -20,7 +20,8 @@ function calculateSuggestedPrice(avgCost, profitMarginPercent) {
     return 0;
   }
 
-  const suggestedPrice = avgCost * (1 + profitMarginPercent / 100);
+  if (profitMarginPercent >= 100) return 0;
+  const suggestedPrice = avgCost / (1 - profitMarginPercent / 100);
   return Math.round(suggestedPrice * 100) / 100;
 }
 

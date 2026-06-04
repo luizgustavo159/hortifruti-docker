@@ -83,9 +83,9 @@ textarea {
 :root.dark-mode input,
 :root.dark-mode select,
 :root.dark-mode textarea {
-  background-color: #0f172a !important; /* Azul marinho profundo para contraste */
-  border-color: #334155 !important;
-  color: #f8fafc !important;
+  background-color: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
 }
 
 input::placeholder {
