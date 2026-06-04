@@ -20,7 +20,23 @@ app.use(helmet({
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
 
-const logger = pino({ level: LOG_LEVEL });
+const logger = pino({
+  level: LOG_LEVEL,
+  transport: {
+    targets: [
+      {
+        target: 'pino/file',
+        options: { destination: path.join(__dirname, "..", "logs", "app.log"), mkdir: true },
+        level: LOG_LEVEL
+      },
+      {
+        target: 'pino-pretty',
+        options: { colorize: true },
+        level: LOG_LEVEL
+      }
+    ]
+  }
+});
 app.use(pinoHttp({ logger, genReqId: () => crypto.randomUUID() }));
 
 // Health Check
