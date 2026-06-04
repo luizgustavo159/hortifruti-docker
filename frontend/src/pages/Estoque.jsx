@@ -27,7 +27,7 @@ export function Estoque() {
 
   const [newProduct, setNewProduct] = useState({ 
     name: "", sku: "", category_id: "", supplier_id: "", price: "", 
-    current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30"
+    current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30", image_url: ""
   });
   const [newCategory, setNewCategory] = useState({ name: "", description: "", margin_target: "30" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
@@ -79,6 +79,14 @@ export function Estoque() {
     return category?.target_margin || 30;
   };
 
+
+  // Busca imagem ilustrativa automática baseada no nome
+  const fetchProductImage = (name) => {
+    if (!name || name.length < 3) return;
+    // Usando Unsplash Source para imagens aleatórias de comida/hortifruti baseadas no termo
+    const imageUrl = `https://source.unsplash.com/featured/400x400/?fruit,vegetable,${encodeURIComponent(name)}`;
+    setNewProduct(prev => ({ ...prev, image_url: imageUrl }));
+  };
   // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
   // Gera um código EAN-13 válido com dígito verificador
   const generateEAN13 = () => {
@@ -178,7 +186,7 @@ export function Estoque() {
       }
       setShowNewProductModal(false);
       setSelectedProduct(null);
-      setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30" });
+      setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30", image_url: "" });
       loadData();
     } catch (err) { setError(err.message); }
   };
@@ -327,7 +335,14 @@ export function Estoque() {
                     const marginStatusColor = marginStatus === 'low_margin' ? '#f44336' : marginStatus === 'high_margin' ? '#ff9800' : '#4CAF50';
                     return (
                       <tr key={p.id} style={{ borderLeft: `4px solid ${marginStatusColor}` }}>
-                        <td><strong>{p.name}</strong><br/><small>{p.category_name}</small></td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #eee', backgroundColor: '#f9f9f9' }}>
+                              <img src={p.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random`} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                            <div><strong>{p.name}</strong><br/><small>{p.category_name}</small></div>
+                          </div>
+                        </td>
                         <td><span className={Number(p.current_stock) <= Number(p.min_stock) ? "status critical" : "status ok"}>{p.current_stock} {p.unit_type}</span></td>
                         <td>R$ {cost.toFixed(2)}</td>
                         <td>R$ {price.toFixed(2)}</td>
@@ -416,9 +431,19 @@ export function Estoque() {
           <div className="modal" style={{ maxWidth: '600px' }}>
             <h2>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+                {newProduct.image_url ? (
+                  <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '2px solid #ddd' }}>
+                    <img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button type="button" onClick={() => fetchProductImage(newProduct.name)} style={{ position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', fontSize: '10px', padding: '4px', cursor: 'pointer' }}>Trocar Foto</button>
+                  </div>
+                ) : (
+                  <div style={{ width: '120px', height: '120px', borderRadius: '8px', border: '2px dashed #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '12px', textAlign: 'center' }}>Digite o nome para gerar foto</div>
+                )}
+              </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Nome do Produto</label>
-                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" />
+                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => { const val = e.target.value; setNewProduct({...newProduct, name: val}); if(val.length > 3) fetchProductImage(val); }} className="input" />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Código de Barras (EAN-13)</label>

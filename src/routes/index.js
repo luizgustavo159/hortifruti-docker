@@ -85,10 +85,10 @@ router.get("/products", authenticateToken, (req, res) => {
 });
 
 router.post("/products", authenticateToken, requireRole("supervisor"), (req, res) => {
-  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin } = req.body;
+  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin, image_url } = req.body;
   db.get(
-    "INSERT INTO products (name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, product_profit_margin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
-    [name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost || 0, profit_margin || null],
+    "INSERT INTO products (name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, product_profit_margin, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    [name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost || 0, profit_margin || null, image_url || null],
     (err, row) => {
       if (err) return res.status(400).json({ message: "Erro ao criar produto: " + err.message });
       res.status(201).json(row);
@@ -107,10 +107,10 @@ router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), 
 });
 
 router.put("/products/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
-    const { name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin } = req.body;
+    const { name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin, image_url } = req.body;
     db.run(
-        "UPDATE products SET name=?, sku=?, unit_type=?, price=?, category_id=?, supplier_id=?, min_stock=?, current_stock=?, avg_cost=?, product_profit_margin=? WHERE id=?",
-        [name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost || 0, profit_margin || null, req.params.id],
+        "UPDATE products SET name=?, sku=?, unit_type=?, price=?, category_id=?, supplier_id=?, min_stock=?, current_stock=?, avg_cost=?, product_profit_margin=?, image_url=? WHERE id=?",
+        [name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost || 0, profit_margin || null, image_url || null, req.params.id],
         (err) => {
             if (err) return res.status(500).json({ message: "Erro ao atualizar produto: " + err.message });
             db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (errGet, product) => {
