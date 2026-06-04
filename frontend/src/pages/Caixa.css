@@ -232,3 +232,60 @@
   font-weight: bold;
   font-size: 16px;
 }
+
+/* ============ BOTÕES SUPERIORES ============ */
+.pos-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--bg-secondary);
+  padding: 12px 20px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+}
+
+.pos-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  white-space: nowrap;
+}
+
+.btn-scale {
+  background: #64748b;
+  color: white;
+}
+
+.btn-scale.connected {
+  background: #10b981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.btn-movimentacao {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-focus-mode {
+  background: #8b5cf6;
+  color: white;
+}
+
+.pos-actions button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.pos-actions button:active {
+  transform: translateY(0);
+}
