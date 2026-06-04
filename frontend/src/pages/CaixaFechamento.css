@@ -2,15 +2,15 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 600px; /* Reduzi para ficar mais compacto e alinhado como na imagem */
+  max-width: 1000px; /* Voltei para 1000px para permitir os cards em linha */
   margin: 0 auto;
   padding-bottom: 60px;
 }
 
 /* ============ RESUMO ============ */
 .resumo-section {
-  display: flex;
-  flex-direction: column; /* Empilhar para garantir alinhamento vertical perfeito */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* 3 colunas fixas para alinhamento perfeito */
   gap: 16px;
 }
 
@@ -22,6 +22,10 @@
   text-align: center;
   transition: all 0.3s ease;
   color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 140px; /* Altura fixa para todos os cards */
 }
 
 .resumo-card h3 {
