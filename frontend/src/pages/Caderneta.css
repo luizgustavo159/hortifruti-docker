@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: 350px 1fr;
   gap: 24px;
-  min-height: calc(100vh - 200px);
+  height: calc(100vh - 180px);
 }
 
 .customers-list {
@@ -13,23 +13,13 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 100%;
+  overflow: hidden;
 }
 
-.btn-new-customer {
-  background: var(--accent-primary);
-  color: white;
-  border: none;
-  padding: 8px 16px !important;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-new-customer:hover {
-  filter: brightness(0.9);
-  transform: translateY(-1px);
+.list-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary);
 }
 
 .customer-cards {
@@ -37,6 +27,7 @@
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 
 .customer-card {
@@ -48,7 +39,7 @@
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition);
 }
 
 .customer-card:hover {
@@ -74,9 +65,17 @@
 }
 
 .customer-debt {
+  text-align: right;
   font-weight: 800;
   color: var(--accent-danger);
   font-size: 14px;
+}
+
+.debt-label {
+  display: block;
+  font-size: 10px;
+  opacity: 0.7;
+  text-transform: uppercase;
 }
 
 .customer-details {
@@ -86,6 +85,7 @@
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .details-header {
@@ -99,13 +99,14 @@
 
 .debt-summary {
   display: flex;
-  gap: 24px;
-  margin-top: 8px;
+  gap: 32px;
+  margin-top: 12px;
 }
 
 .summary-item {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .summary-item label {
@@ -116,22 +117,26 @@
 }
 
 .summary-item strong {
-  font-size: 18px;
+  font-size: 20px;
+}
+
+.debt-value {
+  color: var(--accent-danger);
 }
 
 .btn-pay {
-  background: var(--accent-primary);
+  background-color: var(--accent-primary);
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 12px 24px;
+  border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition);
 }
 
 .btn-pay:hover {
-  background: #059669;
+  filter: brightness(0.9);
   transform: translateY(-2px);
 }
 
@@ -152,26 +157,20 @@
   text-transform: uppercase;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
 }
 
 .history-table td {
   padding: 12px;
   font-size: 13px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.history-table tr.venda td {
-  color: var(--text-primary);
-}
-
-.history-table tr.pagamento td {
-  color: var(--accent-primary);
-  font-weight: 600;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .badge {
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 10px;
   font-weight: 800;
 }
@@ -195,3 +194,27 @@
   font-style: italic;
 }
 
+.btn-new-customer {
+  background-color: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* Modal specific tweaks to ensure alignment */
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.modal-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}

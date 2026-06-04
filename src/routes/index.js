@@ -677,8 +677,7 @@ router.get("/caderneta", authenticateToken, (req, res) => {
                (SELECT SUM(final_total) FROM sales WHERE customer_id = c.id AND payment_method = 'Fiado') as total_fiado,
                (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) as last_purchase
         FROM customers c
-        WHERE c.current_debt > 0
-        ORDER BY c.name
+        ORDER BY c.current_debt DESC, c.name ASC
     `, [], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao carregar caderneta." });
         res.json(rows);

@@ -36,7 +36,7 @@ export function Caderneta() {
   };
 
   const handlePayment = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     try {
       await apiFetch("/caderneta/pay", {
         method: "POST",
@@ -49,14 +49,14 @@ export function Caderneta() {
       setShowPaymentModal(false);
       setPaymentData({ amount: "", method: "cash" });
       loadCaderneta();
-      loadHistory(selectedCustomer);
+      if (selectedCustomer) loadHistory(selectedCustomer);
     } catch (err) {
       alert("Erro ao processar pagamento: " + err.message);
     }
   };
 
   const handleCreateCustomer = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     try {
       await apiFetch("/customers", {
         method: "POST",
@@ -78,12 +78,15 @@ export function Caderneta() {
   }, []);
 
   return (
-    <PageShell title="Caderneta de Fiado" subtitle="Gerenciamento de débitos e pagamentos de clientes">
+    <PageShell 
+      title="Caderneta de Fiado" 
+      subtitle="Gerenciamento de débitos e pagamentos de clientes"
+      actions={<button className="btn-new-customer" onClick={() => setShowCustomerModal(true)}>+ Novo Cliente</button>}
+    >
       <div className="caderneta-container">
         <div className="customers-list">
-          <div className="list-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0 }}>Clientes com Débito</h3>
-            <button className="btn-new-customer" onClick={() => setShowCustomerModal(true)}>+ Novo Cliente</button>
+          <div className="list-header">
+            <h3>Clientes Cadastrados</h3>
           </div>
           {loading ? <p>Carregando...</p> : (
             <div className="customer-cards">
@@ -96,15 +99,14 @@ export function Caderneta() {
                   <div className="customer-info">
                     <h4>{c.name}</h4>
                     <p>{c.phone || "Sem telefone"}</p>
-                    {c.address && <p style={{ fontSize: '11px', opacity: 0.8 }}>{c.address}</p>}
                   </div>
                   <div className="customer-debt">
-                    <span style={{ fontSize: '10px', display: 'block', opacity: 0.7 }}>Dívida Atual</span>
-                    R$ {Number(c.current_debt).toFixed(2)}
+                    <span className="debt-label">Dívida</span>
+                    R$ {Number(c.current_debt || 0).toFixed(2)}
                   </div>
                 </div>
               ))}
-              {customers.length === 0 && <p className="no-data">Nenhum débito pendente.</p>}
+              {customers.length === 0 && <p className="no-data">Nenhum cliente encontrado.</p>}
             </div>
           )}
         </div>
@@ -118,11 +120,11 @@ export function Caderneta() {
                   <div className="debt-summary">
                     <div className="summary-item">
                       <label>Saldo Devedor</label>
-                      <strong style={{ color: 'var(--accent-danger)' }}>R$ {Number(selectedCustomer.current_debt).toFixed(2)}</strong>
+                      <strong className="debt-value">R$ {Number(selectedCustomer.current_debt || 0).toFixed(2)}</strong>
                     </div>
                     <div className="summary-item">
                       <label>Limite de Crédito</label>
-                      <strong>R$ {Number(selectedCustomer.credit_limit).toFixed(2)}</strong>
+                      <strong>R$ {Number(selectedCustomer.credit_limit || 0).toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
@@ -148,6 +150,7 @@ export function Caderneta() {
                         <td>{h.type === 'venda' ? '-' : '+'} R$ {Number(h.amount).toFixed(2)}</td>
                       </tr>
                     ))}
+                    {history.length === 0 && <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-tertiary)' }}>Nenhuma movimentação encontrada.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -162,8 +165,8 @@ export function Caderneta() {
         <div className="modal-overlay">
           <div className="modal">
             <h2>Registrar Pagamento</h2>
-            <p style={{ margin: '0 0 16px 0', color: 'var(--text-secondary)' }}>Cliente: <strong>{selectedCustomer.name}</strong></p>
-            <form onSubmit={handlePayment}>
+            <div className="modal-body">
+              <p className="modal-subtitle">Cliente: <strong>{selectedCustomer.name}</strong></p>
               <div className="form-group">
                 <label>Valor do Pagamento (R$)</label>
                 <input 
@@ -172,7 +175,7 @@ export function Caderneta() {
                   value={paymentData.amount} 
                   onChange={e => setPaymentData({...paymentData, amount: e.target.value})}
                   placeholder="0,00"
-                  required
+                  className="input"
                   autoFocus
                 />
               </div>
@@ -181,17 +184,18 @@ export function Caderneta() {
                 <select 
                   value={paymentData.method} 
                   onChange={e => setPaymentData({...paymentData, method: e.target.value})}
+                  className="input"
                 >
                   <option value="cash">Dinheiro</option>
                   <option value="pix">PIX</option>
                   <option value="card">Cartão</option>
                 </select>
               </div>
-              <div className="modal-actions">
-                <button type="submit" className="button btn-primary">Confirmar Pagamento</button>
-                <button type="button" className="button button-secondary" onClick={() => setShowPaymentModal(false)}>Cancelar</button>
-              </div>
-            </form>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-primary" onClick={handlePayment}>Confirmar Pagamento</button>
+              <button className="btn-secondary" onClick={() => setShowPaymentModal(false)}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
@@ -200,7 +204,7 @@ export function Caderneta() {
         <div className="modal-overlay">
           <div className="modal">
             <h2>Novo Cliente na Caderneta</h2>
-            <form onSubmit={handleCreateCustomer}>
+            <div className="modal-body">
               <div className="form-group">
                 <label>Nome do Cliente</label>
                 <input 
@@ -208,7 +212,7 @@ export function Caderneta() {
                   value={newCustomer.name} 
                   onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}
                   placeholder="NOME COMPLETO"
-                  required
+                  className="input"
                   autoFocus
                 />
               </div>
@@ -219,6 +223,7 @@ export function Caderneta() {
                   value={newCustomer.phone} 
                   onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}
                   placeholder="(00) 00000-0000"
+                  className="input"
                 />
               </div>
               <div className="form-group">
@@ -228,6 +233,7 @@ export function Caderneta() {
                   value={newCustomer.address} 
                   onChange={e => setNewCustomer({...newCustomer, address: e.target.value})}
                   placeholder="RUA, NÚMERO, BAIRRO..."
+                  className="input"
                 />
               </div>
               <div className="form-group">
@@ -238,14 +244,14 @@ export function Caderneta() {
                   value={newCustomer.credit_limit} 
                   onChange={e => setNewCustomer({...newCustomer, credit_limit: e.target.value})}
                   placeholder="100,00"
-                  required
+                  className="input"
                 />
               </div>
-              <div className="modal-actions">
-                <button type="submit" className="button btn-primary">Cadastrar Cliente</button>
-                <button type="button" className="button button-secondary" onClick={() => setShowCustomerModal(false)}>Cancelar</button>
-              </div>
-            </form>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-primary" onClick={handleCreateCustomer}>Cadastrar Cliente</button>
+              <button className="btn-secondary" onClick={() => setShowCustomerModal(false)}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
