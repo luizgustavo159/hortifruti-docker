@@ -8,14 +8,15 @@ COPY package*.json ./
 COPY frontend/package*.json ./frontend/
 
 # Instalar dependências (isso será cacheado se os package.json não mudarem)
-RUN npm ci && \
-    cd frontend && npm ci
+RUN npm ci --no-audit --no-fund && \
+    cd frontend && npm ci --no-audit --no-fund
 
 # Copiar o restante do código
 COPY . .
 
 # Build frontend - O Vite está configurado para gerar o output em ../public (raiz do app)
-RUN cd frontend && npm run build
+# Usar flag --silent para reduzir logs excessivos
+RUN cd frontend && npm run build -- --silent
 
 # ============ PRODUCTION STAGE ============
 FROM node:22-alpine

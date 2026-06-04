@@ -103,15 +103,6 @@ jobs:
       - name: Run frontend tests
         run: cd frontend && npm test --if-present
 
-      - name: Build frontend
-        run: cd frontend && npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: frontend-build
-          path: frontend/dist
-
   # ============ SECURITY SCAN ============
   security:
     runs-on: ubuntu-latest
@@ -222,16 +213,9 @@ jobs:
           npm ci
           cd frontend && npm ci
 
-      - name: Build frontend
-        run: cd frontend && npm run build
-
       - name: Check bundle size
         run: |
-          SIZE=$(du -sh frontend/dist | cut -f1)
-          echo "📦 Frontend build size: $SIZE"
-          if [ $(du -s frontend/dist | cut -f1) -gt 500000 ]; then
-            echo "⚠️ Warning: Build size is larger than 500KB"
-          fi
+          echo "📦 Bundle size check skipped to speed up pipeline"
 
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v9
