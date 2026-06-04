@@ -94,10 +94,10 @@ router.get("/products", authenticateToken, (req, res) => {
 });
 
 router.post("/products", authenticateToken, requireRole("supervisor"), validate(productSchema), (req, res) => {
-  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin, image_url } = req.validated;
+  const { name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin, image_url } = req.validated;
   db.get(
-    "INSERT INTO products (name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, product_profit_margin, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
-    [name, sku, unit_type, price, category_id, supplier_id, min_stock, avg_cost, profit_margin, image_url],
+    "INSERT INTO products (name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, product_profit_margin, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    [name, sku, unit_type, price, category_id, supplier_id, min_stock, current_stock, avg_cost, profit_margin, image_url],
     (err, row) => {
       if (err) {
         createAuditLog("ERRO_CRIAR_PRODUTO", { error: err.message, payload: req.body }, req.user.id, 'error', 'high');
