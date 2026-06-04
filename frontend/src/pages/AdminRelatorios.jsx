@@ -171,8 +171,8 @@ export function AdminRelatorios() {
           <p className="loading">Carregando relatório...</p>
         ) : data.length > 0 ? (
           <div className="report-wrapper">
-            <div className="table-wrapper" style={{ overflowX: 'auto' }}>
-              <table className="table">
+<div className="table-responsive">
+	              <table className="report-table">
                 <thead>
                   <tr>
                     {Object.keys(data[0]).map((header) => (
@@ -201,7 +201,35 @@ export function AdminRelatorios() {
 }
 
 function formatHeader(header) {
-  return header
+  const translations = {
+    "id": "ID",
+    "product_id": "Cód. Produto",
+    "quantity": "Quantidade",
+    "total": "Total (R$)",
+    "discount_id": "Cód. Desconto",
+    "discount_amount": "Vl. Desconto",
+    "final_total": "Total Final",
+    "payment_method": "Pagamento",
+    "sold_by": "Vendedor",
+    "created_at": "Data/Hora",
+    "cancelled_at": "Cancelado em",
+    "cancel_reason": "Motivo Cancel.",
+    "cancelled_by": "Cancelado por",
+    "document_number": "Documento",
+    "fiscal_status": "Status Fiscal",
+    "amount_received": "Recebido",
+    "change_amount": "Troco",
+    "customer_id": "Cód. Cliente",
+    "product_name": "Produto",
+    "customer_name": "Cliente",
+    "category_name": "Categoria",
+    "operator_name": "Operador",
+    "sale_count": "Qtd. Vendas",
+    "total_revenue": "Receita Total",
+    "avg_ticket": "Ticket Médio"
+  };
+
+  return translations[header] || header
     .replace(/_/g, " ")
     .replace(/\b\w/g, (l) => l.toUpperCase());
 }
