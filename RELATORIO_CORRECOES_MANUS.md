@@ -45,4 +45,22 @@ Este documento resume as correções aplicadas ao sistema **Hortifruti GreenStor
 - **Detalhe:** Tecla F10 finaliza a venda. O sistema avisa no frontend se o estoque acabar antes de tentar fechar o pedido.
 
 ---
-**Status Final:** 100% das correções aplicadas e enviadas ao repositório.
+## 🚀 Melhorias Adicionais (Fase 2)
+
+### 11. Descontos Avançados
+- **Implementação:** Lógica de "Leve X Pague Y" e "Pacote Fixo" (ex: 3 por R$ 10) agora funcional no PDV e Modo Foco.
+
+### 12. Segurança Global
+- **Implementação:** Middleware de Blacklist de Tokens aplicado globalmente no `app.js`, garantindo invalidação imediata de sessões.
+
+### 13. Relatório de Perdas e Timezone
+- **Implementação:** Nova rota `/reports/losses` e padronização de filtros de data para ISO 8601 (UTC), corrigindo divergências de fuso horário.
+
+### 14. Padronização Modo Foco
+- **Implementação:** Atalho F10 e regras de descontos sincronizadas no componente `CaixaFocusMode.jsx`.
+
+### 15. Otimização com Views
+- **Implementação:** Criação da view `v_critical_stock` no SQLite para otimizar a consulta de reposição de mercadorias.
+
+---
+**Status Final:** 100% das correções e melhorias aplicadas e enviadas ao repositório (Passos 1 ao 15).
