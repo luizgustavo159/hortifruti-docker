@@ -422,6 +422,9 @@ export function CaixaFocusMode() {
                   onClick={() => handleAddToCart(product)}
                   disabled={getProductStock(product) <= 0}
                 >
+                  <div className="product-image">
+                    <img src={product.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(product.name)}&background=random`} alt={product.name} />
+                  </div>
                   <div className="product-name">
                     {product.name}
                     {isKgProduct(product) && <span style={{ fontSize: '10px', marginLeft: '4px', opacity: 0.8 }}>⚖️</span>}
