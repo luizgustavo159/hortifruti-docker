@@ -57,22 +57,16 @@ export function Estoque() {
   const getEmojiForProduct = (name) => {
     const text = name.toLowerCase().trim();
     
-    // 1. Mapeamento Direto e Categorias (Base de Conhecimento)
     const library = {
-      // Frutas
       "maçã|maca|apple": "🍎", "banana": "🍌", "morango|strawberry": "🍓", "uva|grape": "🍇", 
       "melancia|watermelon": "🍉", "laranja|orange": "🍊", "limão|lemon": "🍋", "abacaxi|pineapple": "🍍",
       "manga|mango": "🥭", "pêssego|peach": "🍑", "pera|pear": "🍐", "cereja|cherry": "🍒",
       "melão|melon": "🍈", "amora|blueberry|mirtilo": "🫐", "coco|coconut": "🥥", "abacate|avocado": "🥑",
       "kiwi": "🥝", "papaya|mamão": "🥭", "graviola|jaca|fruta": "🌳",
-      
-      // Legumes e Verduras
       "tomate|tomato": "🍅", "cenoura|carrot": "🥕", "milho|corn": "🌽", "brócolis|broccoli": "🥦",
       "batata|potato": "🥔", "cebola|onion": "🧅", "alho|garlic": "🧄", "alface|repolho|folha|verde": "🥬",
       "pimentão|pepper": "🫑", "pimenta|chili": "🌶️", "berinjela|eggplant": "🍆", "pepino|cucumber": "🥒",
       "abóbora|pumpkin": "🎃", "cogumelo|mushroom": "🍄", "feijão|bean": "🫘", "batata doce": "🍠",
-      
-      // Outros / Mercearia
       "ovo|egg": "🥚", "mel|honey": "🍯", "leite|milk": "🥛", "pão|bread": "🍞", "queijo|cheese": "🧀",
       "carne|frango|steak": "🥩", "peixe|fish": "🐟", "camarão|shrimp": "🍤",
       "doce|pudim|sobremesa|bolo": "🍮", "suco|bebida|refrigerante": "🥤", "água|water": "💧",
@@ -80,13 +74,11 @@ export function Estoque() {
       "arroz|grão": "🌾", "macarrão|massa": "🍝", "pizza": "🍕", "hambúrguer": "🍔",
     };
 
-    // 2. Busca por Correspondência de Palavras-Chave
     for (const [key, emoji] of Object.entries(library)) {
       const regex = new RegExp(key, "i");
       if (regex.test(text)) return emoji;
     }
 
-    // 3. Lógica Semântica Genérica (IA Fallback)
     if (text.includes("suco") || text.includes("vitamina")) return "🥤";
     if (text.includes("doce") || text.includes("sobremesa")) return "🍰";
     if (text.includes("frito") || text.includes("assado")) return "🍳";
@@ -94,7 +86,6 @@ export function Estoque() {
     if (text.includes("limpeza") || text.includes("detergente")) return "🧼";
     if (text.includes("higiene") || text.includes("papel")) return "🧻";
 
-    // 4. Fallback Final (Ícone de Produto Genérico)
     return "📦";
   };
 
@@ -250,26 +241,6 @@ export function Estoque() {
             </div>
           </div>
         )}
-
-        {activeTab === "categories" && (
-          <div className="tab-content">
-            <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: ""}); setShowCategoryModal(true); }}>+ Nova Categoria</button></div>
-            <table className="table">
-              <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
-              <tbody>{categories.map(c => (<tr key={c.id}><td>{c.name}</td><td><button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description}); setShowCategoryModal(true); }}>Editar</button></td></tr>))}</tbody>
-            </table>
-          </div>
-        )}
-
-        {activeTab === "suppliers" && (
-          <div className="tab-content">
-            <div className="inventory-header"><button className="btn-primary" onClick={() => { setSelectedSupplier(null); setNewSupplier({name: "", contact: "", phone: "", email: ""}); setShowSupplierModal(true); }}>+ Novo Fornecedor</button></div>
-            <table className="table">
-              <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
-              <tbody>{suppliers.map(s => (<tr key={s.id}><td>{s.name}</td><td><button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button></td></tr>))}</tbody>
-            </table>
-          </div>
-        )}
       </div>
 
       {showNewProductModal && (
@@ -279,6 +250,7 @@ export function Estoque() {
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
+              {/* ÁREA DE IMAGEM: BOTÕES COM 1/3 DA LARGURA */}
               <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
                 <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
@@ -288,12 +260,12 @@ export function Estoque() {
                   )}
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    🎨 Gerar Caricata
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '180px' }}>
+                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    🎨 Gerar
                   </button>
-                  <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    📁 Upload do PC
+                  <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    📁 Upload
                     <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                   </label>
                 </div>
