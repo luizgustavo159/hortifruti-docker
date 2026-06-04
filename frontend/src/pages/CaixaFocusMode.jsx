@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useScale } from '../hooks/useScale';
-import { RelogioGlobal } from '../components/RelogioGlobal';
+// import { RelogioGlobal } from '../components/RelogioGlobal';
 import './CaixaFocusMode.css';
 
 export function CaixaFocusMode() {
@@ -572,10 +572,6 @@ export function CaixaFocusMode() {
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="focus-relogio-container-left">
-        <RelogioGlobal />
       </div>
 
       <div className="focus-shortcuts">
