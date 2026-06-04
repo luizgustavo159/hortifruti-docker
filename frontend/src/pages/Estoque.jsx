@@ -32,6 +32,7 @@ export function Estoque() {
   const [newCategory, setNewCategory] = useState({ name: "", description: "", margin_target: "30" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
   const [movement, setMovement] = useState({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
+  const [selectedProducts, setSelectedProducts] = useState(new Set());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -112,6 +113,113 @@ export function Estoque() {
     }
     const checkDigit = (10 - (sum % 10)) % 10;
     return parseInt(ean[12]) === checkDigit;
+  };
+
+
+  // Gera SVG de código de barras EAN-13
+  const generateBarcodeImage = (ean) => {
+    if (!ean || !/^\d{13}$/.test(ean)) return '';
+    // Usando uma API simples de geração de código de barras
+    return `https://barcode.tec-it.com/barcode.ashx?data=${ean}&code=EAN13&style=196&unit=Fit&width=200&height=80`;
+  };
+
+  // Alterna seleção de produto
+  const toggleProductSelection = (productId) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId);
+    } else {
+      newSelected.add(productId);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  // Seleciona/Deseleciona todos
+  const toggleSelectAll = () => {
+    if (selectedProducts.size === products.length) {
+      setSelectedProducts(new Set());
+    } else {
+      setSelectedProducts(new Set(products.map(p => p.id)));
+    }
+  };
+
+  // Exporta etiquetas em PDF
+  const exportLabelsAsPDF = async () => {
+    if (selectedProducts.size === 0) {
+      setError("Selecione pelo menos um produto para exportar");
+      return;
+    }
+
+    const productsToExport = products.filter(p => selectedProducts.has(p.id));
+    
+    // Usando jsPDF para criar o PDF
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    let yPosition = 10;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const cardHeight = 80;
+    const cardWidth = 90;
+    let xPosition = 10;
+
+    for (let i = 0; i < productsToExport.length; i++) {
+      const product = productsToExport[i];
+
+      // Verificar se precisa de nova página
+      if (yPosition + cardHeight > pageHeight - 10) {
+        doc.addPage();
+        yPosition = 10;
+        xPosition = 10;
+      }
+
+      // Desenhar caixa do card
+      doc.setDrawColor(200);
+      doc.rect(xPosition, yPosition, cardWidth, cardHeight);
+
+      // Adicionar imagem (se existir)
+      if (product.image_url) {
+        try {
+          doc.addImage(product.image_url, 'JPEG', xPosition + 2, yPosition + 2, 25, 25);
+        } catch (e) {
+          // Se falhar, apenas continua
+        }
+      }
+
+      // Adicionar nome do produto
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+      const nameLines = doc.splitTextToSize(product.name, cardWidth - 35);
+      doc.text(nameLines, xPosition + 30, yPosition + 5);
+
+      // Adicionar categoria
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Cat: ${product.category_name || 'N/A'}`, xPosition + 30, yPosition + 20);
+
+      // Adicionar preço
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text(`R$ ${Number(product.price || 0).toFixed(2)}`, xPosition + 30, yPosition + 27);
+
+      // Adicionar código de barras (usando texto para simplicidade)
+      doc.setFontSize(7);
+      doc.setFont(undefined, 'normal');
+      doc.text(`EAN: ${product.sku}`, xPosition + 2, yPosition + 72);
+
+      // Mover para próxima posição
+      xPosition += cardWidth + 5;
+      if (xPosition + cardWidth > 210) {
+        xPosition = 10;
+        yPosition += cardHeight + 5;
+      }
+    }
+
+    doc.save('etiquetas-produtos.pdf');
+    setSuccessMessage(`PDF com ${productsToExport.length} etiqueta(s) gerado com sucesso!`);
   };
 
   // Gera um novo código de barras
@@ -323,7 +431,7 @@ export function Estoque() {
             <div className="table-wrapper">
               <table className="table">
                 <thead>
-                  <tr><th>Produto</th><th>Estoque</th><th>Custo Médio</th><th>Preço</th><th>Margem</th><th>Ações</th></tr>
+                  <tr><th><input type="checkbox" checked={selectedProducts.size === products.length} onChange={toggleSelectAll} style={{ cursor: "pointer" }} /></th><th>Produto</th><th>Estoque</th><th>Custo Médio</th><th>Preço</th><th>Margem</th><th>Ações</th></tr>
                 </thead>
                 <tbody>
                   {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => {
@@ -334,7 +442,7 @@ export function Estoque() {
                     const marginStatusLabel = marginStatus === 'low_margin' ? '⚠️ Baixa' : marginStatus === 'high_margin' ? '📈 Alta' : '✓ OK';
                     const marginStatusColor = marginStatus === 'low_margin' ? '#f44336' : marginStatus === 'high_margin' ? '#ff9800' : '#4CAF50';
                     return (
-                      <tr key={p.id} style={{ borderLeft: `4px solid ${marginStatusColor}` }}>
+                      <tr key={p.id} style={{ borderLeft: `4px solid ${marginStatusColor}`, backgroundColor: selectedProducts.has(p.id) ? "#e3f2fd" : "transparent" }}><td><input type="checkbox" checked={selectedProducts.has(p.id)} onChange={() => toggleProductSelection(p.id)} style={{ cursor: "pointer" }} /></td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div style={{ width: '40px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #eee', backgroundColor: '#f9f9f9' }}>
