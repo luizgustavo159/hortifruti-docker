@@ -173,6 +173,39 @@ export function Estoque() {
       await apiFetch(url, { method, body: JSON.stringify(newCategory) });
       setSuccessMessage("Categoria salva!");
       setShowCategoryModal(false);
+      setNewCategory({ name: "", description: "", margin_target: "30" });
+      setSelectedCategory(null);
+      loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleSaveSupplier = async () => {
+    try {
+      const method = selectedSupplier ? "PUT" : "POST";
+      const url = selectedSupplier ? `/suppliers/${selectedSupplier.id}` : "/suppliers";
+      await apiFetch(url, { method, body: JSON.stringify(newSupplier) });
+      setSuccessMessage("Fornecedor salvo!");
+      setShowSupplierModal(false);
+      setNewSupplier({ name: "", contact: "", phone: "", email: "" });
+      setSelectedSupplier(null);
+      loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm("Deseja realmente excluir esta categoria?")) return;
+    try {
+      await apiFetch(`/categories/${id}`, { method: "DELETE" });
+      setSuccessMessage("Categoria excluída!");
+      loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleDeleteSupplier = async (id) => {
+    if (!window.confirm("Deseja realmente excluir este fornecedor?")) return;
+    try {
+      await apiFetch(`/suppliers/${id}`, { method: "DELETE" });
+      setSuccessMessage("Fornecedor excluído!");
       loadData();
     } catch (err) { setError(err.message); }
   };
@@ -256,7 +289,64 @@ export function Estoque() {
           </div>
         )}
 
-        {/* ... (restante das abas mantidas) */}
+        {activeTab === "categories" && (
+          <div className="tab-content">
+            <div className="inventory-header">
+              <input type="text" placeholder="Buscar categoria..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
+              <button className="btn-primary" onClick={() => { setSelectedCategory(null); setNewCategory({name: "", description: "", margin_target: "30"}); setShowCategoryModal(true); }}>+ Nova Categoria</button>
+            </div>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr><th>Nome</th><th>Descrição</th><th>Margem Alvo</th><th>Ações</th></tr>
+                </thead>
+                <tbody>
+                  {categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+                    <tr key={c.id}>
+                      <td><strong>{c.name}</strong></td>
+                      <td>{c.description}</td>
+                      <td>{c.target_margin}%</td>
+                      <td>
+                        <button className="btn-action" onClick={() => { setSelectedCategory(c); setNewCategory({name: c.name, description: c.description, margin_target: c.target_margin}); setShowCategoryModal(true); }}>Editar</button>
+                        <button className="btn-action danger" onClick={() => handleDeleteCategory(c.id)}>Excluir</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "suppliers" && (
+          <div className="tab-content">
+            <div className="inventory-header">
+              <input type="text" placeholder="Buscar fornecedor..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
+              <button className="btn-primary" onClick={() => { setSelectedSupplier(null); setNewSupplier({name: "", contact: "", phone: "", email: ""}); setShowSupplierModal(true); }}>+ Novo Fornecedor</button>
+            </div>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr><th>Nome</th><th>Contato</th><th>Telefone</th><th>Email</th><th>Ações</th></tr>
+                </thead>
+                <tbody>
+                  {suppliers.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map(s => (
+                    <tr key={s.id}>
+                      <td><strong>{s.name}</strong></td>
+                      <td>{s.contact}</td>
+                      <td>{s.phone}</td>
+                      <td>{s.email}</td>
+                      <td>
+                        <button className="btn-action" onClick={() => { setSelectedSupplier(s); setNewSupplier({name: s.name, contact: s.contact, phone: s.phone, email: s.email}); setShowSupplierModal(true); }}>Editar</button>
+                        <button className="btn-action danger" onClick={() => handleDeleteSupplier(s.id)}>Excluir</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modais mantidos conforme versão anterior */}
@@ -351,6 +441,58 @@ export function Estoque() {
             <div className="modal-actions">
                 <button onClick={handleStockMovement} className="btn-primary">Confirmar</button>
                 <button onClick={() => setShowMovementModal(false)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCategoryModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>{selectedCategory ? "Editar Categoria" : "Nova Categoria"}</h2>
+            <div className="form-group">
+              <label>Nome</label>
+              <input value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} className="input" />
+            </div>
+            <div className="form-group">
+              <label>Descrição</label>
+              <input value={newCategory.description} onChange={e => setNewCategory({...newCategory, description: e.target.value})} className="input" />
+            </div>
+            <div className="form-group">
+              <label>Margem Alvo (%)</label>
+              <input type="number" value={newCategory.margin_target} onChange={e => setNewCategory({...newCategory, margin_target: e.target.value})} className="input" />
+            </div>
+            <div className="modal-actions">
+              <button onClick={handleSaveCategory} className="btn-primary">Salvar</button>
+              <button onClick={() => setShowCategoryModal(false)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSupplierModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>{selectedSupplier ? "Editar Fornecedor" : "Novo Fornecedor"}</h2>
+            <div className="form-group">
+              <label>Nome da Empresa</label>
+              <input value={newSupplier.name} onChange={e => setNewSupplier({...newSupplier, name: e.target.value})} className="input" />
+            </div>
+            <div className="form-group">
+              <label>Nome do Contato</label>
+              <input value={newSupplier.contact} onChange={e => setNewSupplier({...newSupplier, contact: e.target.value})} className="input" />
+            </div>
+            <div className="form-group">
+              <label>Telefone</label>
+              <input value={newSupplier.phone} onChange={e => setNewSupplier({...newSupplier, phone: e.target.value})} className="input" />
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input value={newSupplier.email} onChange={e => setNewSupplier({...newSupplier, email: e.target.value})} className="input" />
+            </div>
+            <div className="modal-actions">
+              <button onClick={handleSaveSupplier} className="btn-primary">Salvar</button>
+              <button onClick={() => setShowSupplierModal(false)} className="btn-secondary">Cancelar</button>
             </div>
           </div>
         </div>
