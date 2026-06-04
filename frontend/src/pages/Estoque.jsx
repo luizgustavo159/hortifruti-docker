@@ -79,6 +79,47 @@ export function Estoque() {
     return category?.target_margin || 30;
   };
 
+  // ==================== FUNÇÕES DE CÓDIGO DE BARRAS ====================
+  // Gera um código EAN-13 válido com dígito verificador
+  const generateEAN13 = () => {
+    const timestamp = Date.now().toString().slice(-9); // Últimos 9 dígitos do timestamp
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3 dígitos aleatórios
+    const base = '2' + timestamp + random; // Começa com 2 (produto nacional)
+    
+    // Calcula dígito verificador EAN-13
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    const checkDigit = (10 - (sum % 10)) % 10;
+    return base + checkDigit;
+  };
+
+  // Valida se é um EAN-13 válido
+  const isValidEAN13 = (ean) => {
+    if (!ean || !/^\d{13}$/.test(ean)) return false;
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(ean[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    const checkDigit = (10 - (sum % 10)) % 10;
+    return parseInt(ean[12]) === checkDigit;
+  };
+
+  // Gera um novo código de barras
+  const handleGenerateBarcode = () => {
+    const newBarcode = generateEAN13();
+    setNewProduct({...newProduct, sku: newBarcode});
+    setSuccessMessage(`Código de barras gerado: ${newBarcode}`);
+  };
+
+  // Valida código de barras ao sair do campo
+  const handleBarcodeBlur = () => {
+    if (newProduct.sku && !isValidEAN13(newProduct.sku)) {
+      setError(`Código de barras inválido. Deve ser um EAN-13 válido (13 dígitos).`);
+    }
+  };
+
   // Lógica de Geração de Insights (Consultoria)
   const generateInsights = () => {
     const insights = [];
@@ -379,9 +420,27 @@ export function Estoque() {
                 <label>Nome do Produto</label>
                 <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" />
               </div>
-              <div className="form-group">
-                <label>Código SKU / Barras</label>
-                <input placeholder="Ex: 789..." value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" />
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Código de Barras (EAN-13)</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input 
+                    placeholder="Clique em 'Gerar' ou use o bipador" 
+                    value={newProduct.sku} 
+                    onChange={e => setNewProduct({...newProduct, sku: e.target.value})} 
+                    onBlur={handleBarcodeBlur}
+                    className="input" 
+                    style={{ flex: 1 }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleGenerateBarcode} 
+                    style={{ padding: '8px 16px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}
+                  >
+                    📱 Gerar
+                  </button>
+                </div>
+                {newProduct.sku && isValidEAN13(newProduct.sku) && <small style={{ color: '#4CAF50' }}>✓ Código válido</small>}
+                {newProduct.sku && !isValidEAN13(newProduct.sku) && <small style={{ color: '#f44336' }}>✗ Código inválido (EAN-13 esperado)</small>}
               </div>
               <div className="form-group">
                 <label>Tipo de Unidade</label>
