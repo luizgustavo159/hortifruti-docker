@@ -344,9 +344,9 @@ export function Caixa() {
           <div className="products-grid">
             {filteredProducts.map(p => (
               <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
-                <div className="product-image-container" style={{ width: '100%', height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '8px', overflow: 'hidden', borderRadius: '8px', background: 'transparent' }}>
+                <div className="product-image-container" style={{ width: '60px', height: '60px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '4px', overflow: 'hidden' }}>
                   {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }} />
+                    <img src={p.image_url} alt={p.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   ) : (
                     <div className="product-emoji" style={{ fontSize: '2.5rem' }}>
                       {getEmojiForProduct(p.name)}
@@ -354,10 +354,10 @@ export function Caixa() {
                   )}
                 </div>
                 <div className="product-info">
-                  <h4>{p.name}</h4>
-                  <p className="product-price">R$ {Number(p.price).toFixed(2)}{isKgProduct(p) ? "/kg" : ""}</p>
-                  <p className="product-stock" style={{ fontSize: '11px', opacity: 0.8 }}>
-                    Estoque: {Number(p.current_stock).toFixed(isKgProduct(p) ? 3 : 0)} {p.unit_type}
+                  <h4 style={{ fontSize: '13px', margin: '4px 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.2' }}>{p.name}</h4>
+                  <p className="product-price" style={{ margin: '2px 0', fontSize: '16px' }}>R$ {Number(p.price).toFixed(2)}</p>
+                  <p className="product-stock" style={{ fontSize: '10px', opacity: 0.7, margin: 0 }}>
+                    Estoque: {Number(p.current_stock).toFixed(isKgProduct(p) ? 1 : 0)}
                   </p>
                 </div>
               </div>
