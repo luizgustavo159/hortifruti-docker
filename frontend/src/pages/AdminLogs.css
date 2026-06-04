@@ -99,8 +99,8 @@
 .filter-input:focus,
 .filter-select:focus {
   outline: none;
-  border-color: #4caf50;
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 .search-input {
@@ -142,7 +142,7 @@
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--bg-secondary);
+  background: var(--bg-secondary) !important;
 }
 
 /* Tabela */
@@ -150,6 +150,8 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
 }
 
 .logs-table thead {
@@ -182,11 +184,11 @@
 }
 
 .logs-table tbody tr.level-error {
-  border-left: 3px solid #f44336;
+  border-left: 3px solid var(--accent-danger);
 }
 
 .logs-table tbody tr.level-warning {
-  border-left: 3px solid #ff9800;
+  border-left: 3px solid var(--accent-warning);
 }
 
 .logs-table tbody tr.level-critical {
@@ -194,7 +196,7 @@
 }
 
 .logs-table tbody tr.level-info {
-  border-left: 3px solid #2196f3;
+  border-left: 3px solid var(--accent-secondary);
 }
 
 /* Células */
