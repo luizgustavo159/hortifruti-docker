@@ -482,14 +482,15 @@ router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, 
     const { start, end } = req.query;
     const dateRange = [start + " 00:00:00", end + " 23:59:59"];
     
+    const isoRange = [start + "T00:00:00.000Z", end + "T23:59:59.999Z"];
     db.get(`
         SELECT 
             COUNT(*) as total_sales,
             SUM(final_total) as total_revenue,
-            COALESCE((SELECT SUM(quantity * p.avg_cost) FROM stock_losses l JOIN products p ON l.product_id = p.id WHERE l.created_at BETWEEN ? AND ?), 0) as total_losses
+            COALESCE((SELECT SUM(quantity * p.avg_cost) FROM stock_losses l JOIN products p ON l.product_id = p.id WHERE l.created_at >= ? AND l.created_at <= ?), 0) as total_losses
         FROM sales 
-        WHERE created_at BETWEEN ? AND ?
-    `, [...dateRange, ...dateRange], (err, row) => {
+        WHERE created_at >= ? AND created_at <= ?
+    `, [...isoRange, ...isoRange], (err, row) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar resumo: " + err.message });
         
         db.all("SELECT id, name, current_stock, min_stock FROM products WHERE current_stock <= min_stock", [], (errStock, lowStock) => {
@@ -523,10 +524,24 @@ router.get("/reports/by-category", authenticateToken, requireRole("manager"), (r
         FROM sales s
         JOIN products p ON s.product_id = p.id
         JOIN categories c ON p.category_id = c.id
-        WHERE s.created_at BETWEEN ? AND ?
+        WHERE s.created_at >= ? AND s.created_at <= ?
         GROUP BY c.id
-    `, [start + " 00:00:00", end + " 23:59:59"], (err, rows) => {
+    `, [start + "T00:00:00.000Z", end + "T23:59:59.999Z"], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar relatório por categoria." });
+        res.json(rows);
+    });
+});
+
+router.get("/reports/losses", authenticateToken, requireRole("manager"), (req, res) => {
+    const { start, end } = req.query;
+    db.all(`
+        SELECT l.*, p.name as product_name, (l.quantity * p.avg_cost) as financial_loss
+        FROM stock_losses l
+        JOIN products p ON l.product_id = p.id
+        WHERE l.created_at >= ? AND l.created_at <= ?
+        ORDER BY l.created_at DESC
+    `, [start + "T00:00:00.000Z", end + "T23:59:59.999Z"], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao gerar relatório de perdas." });
         res.json(rows);
     });
 });
