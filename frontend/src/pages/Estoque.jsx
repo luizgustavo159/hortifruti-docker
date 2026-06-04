@@ -1,10 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
-import Barcode from "react-barcode";
-import { createRoot } from "react-dom/client";
 import "./Estoque.css";
 
 export function Estoque() {
@@ -39,7 +37,6 @@ export function Estoque() {
   const [movement, setMovement] = useState({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
   const [exportOptions, setExportOptions] = useState({ type: "all", category_id: "", product_id: "" });
   const [selectedProducts, setSelectedProducts] = useState(new Set());
-  const barcodeRef = useRef(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
