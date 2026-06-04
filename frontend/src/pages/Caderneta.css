@@ -218,3 +218,20 @@
   color: var(--text-secondary);
   font-size: 14px;
 }
+
+.btn-delete-small {
+  background: transparent;
+  color: var(--accent-danger);
+  border: 1px solid var(--accent-danger);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-small:hover {
+  background: var(--accent-danger);
+  color: white;
+}

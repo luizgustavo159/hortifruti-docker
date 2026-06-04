@@ -73,6 +73,17 @@ export function Caderneta() {
     }
   };
 
+  const handleDeleteCustomer = async (id) => {
+    if (!window.confirm("Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.")) return;
+    try {
+      await apiFetch(`/customers/${id}`, { method: "DELETE" });
+      if (selectedCustomer?.id === id) setSelectedCustomer(null);
+      loadCaderneta();
+    } catch (err) {
+      alert("Erro ao excluir cliente: " + err.message);
+    }
+  };
+
   useEffect(() => {
     loadCaderneta();
   }, []);
@@ -100,9 +111,20 @@ export function Caderneta() {
                     <h4>{c.name}</h4>
                     <p>{c.phone || "Sem telefone"}</p>
                   </div>
-                  <div className="customer-debt">
-                    <span className="debt-label">Dívida</span>
-                    R$ {Number(c.current_debt || 0).toFixed(2)}
+                  <div className="customer-actions-cell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                    <div className="customer-debt">
+                      <span className="debt-label">Dívida</span>
+                      R$ {Number(c.current_debt || 0).toFixed(2)}
+                    </div>
+                    {Number(c.current_debt || 0) === 0 && (
+                      <button 
+                        className="btn-delete-small" 
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCustomer(c.id); }}
+                        title="Excluir cliente"
+                      >
+                        Excluir
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

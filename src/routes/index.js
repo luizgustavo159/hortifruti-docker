@@ -73,7 +73,7 @@ router.get("/products", authenticateToken, (req, res) => {
           END
         ELSE 'no_cost'
       END as margin_status,
-      (SELECT SUM(quantity) FROM product_batches WHERE product_id = p.id AND quantity > 0) as batch_stock_total
+      (SELECT SUM(current_quantity) FROM product_batches WHERE product_id = p.id AND current_quantity > 0) as batch_stock_total
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -149,7 +149,7 @@ router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req,
           if (errU) return finish(errU);
           
           if (deltaQty > 0) {
-            tx.run("INSERT INTO product_batches (product_id, initial_quantity, quantity, unit_cost) VALUES (?, ?, ?, ?)",
+            tx.run("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost) VALUES (?, ?, ?, ?)",
               [product_id, deltaQty, deltaQty, cost], (errB) => {
                 if (errB) return finish(errB);
                 tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
@@ -157,7 +157,7 @@ router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req,
               });
           } else {
             let remainingToConsume = Math.abs(deltaQty);
-            tx.all("SELECT id, quantity FROM product_batches WHERE product_id = ? AND quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
+            tx.all("SELECT id, current_quantity FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
               if (errL) return finish(errL);
               
               const consumeNextBatch = (index) => {
@@ -167,10 +167,10 @@ router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req,
                 }
                 
                 const batch = batches[index];
-                const consumeAmount = Math.min(batch.quantity, remainingToConsume);
+                const consumeAmount = Math.min(batch.current_quantity, remainingToConsume);
                 remainingToConsume -= consumeAmount;
                 
-                tx.run("UPDATE product_batches SET quantity = quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
+                tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
                   if (errCB) return finish(errCB);
                   consumeNextBatch(index + 1);
                 });
@@ -196,7 +196,7 @@ router.post("/stock/loss", authenticateToken, (req, res) => {
         if (err) return finish(err);
         
         let remainingToConsume = Math.abs(Number(quantity));
-        tx.all("SELECT id, quantity FROM product_batches WHERE product_id = ? AND quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
+        tx.all("SELECT id, current_quantity FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
           if (errL) return finish(errL);
           
           const consumeNextBatch = (index) => {
@@ -206,10 +206,10 @@ router.post("/stock/loss", authenticateToken, (req, res) => {
             }
             
             const batch = batches[index];
-            const consumeAmount = Math.min(batch.quantity, remainingToConsume);
+            const consumeAmount = Math.min(batch.current_quantity, remainingToConsume);
             remainingToConsume -= consumeAmount;
             
-            tx.run("UPDATE product_batches SET quantity = quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
+            tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
               if (errCB) return finish(errCB);
               consumeNextBatch(index + 1);
             });
@@ -416,7 +416,7 @@ router.post("/sales", authenticateToken, (req, res) => {
                   
                   // Baixar Estoque por Lotes (FIFO)
                   let remaining = Number(item.quantity);
-                  tx.all("SELECT id, quantity FROM product_batches WHERE product_id = ? AND quantity > 0 ORDER BY received_at ASC", [item.product_id], (errL, batches) => {
+                  tx.all("SELECT id, current_quantity FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [item.product_id], (errL, batches) => {
                     if (errL) return finish(errL);
                     
                     const consumeBatches = (bIdx) => {
@@ -425,9 +425,9 @@ router.post("/sales", authenticateToken, (req, res) => {
                         return processItem(idx + 1);
                       }
                       const batch = batches[bIdx];
-                      const take = Math.min(batch.quantity, remaining);
+                      const take = Math.min(batch.current_quantity, remaining);
                       remaining -= take;
-                      tx.run("UPDATE product_batches SET quantity = quantity - ? WHERE id = ?", [take, batch.id], (errCB) => {
+                      tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [take, batch.id], (errCB) => {
                         if (errCB) return finish(errCB);
                         consumeBatches(bIdx + 1);
                       });
@@ -541,6 +541,20 @@ router.put("/customers/:id", authenticateToken, (req, res) => {
             res.json({ status: "ok" });
         }
     );
+});
+
+router.delete("/customers/:id", authenticateToken, (req, res) => {
+    const { id } = req.params;
+    db.get("SELECT current_debt FROM customers WHERE id = ?", [id], (err, row) => {
+        if (err) return res.status(500).json({ message: "Erro ao verificar cliente." });
+        if (!row) return res.status(404).json({ message: "Cliente não encontrado." });
+        if (row.current_debt > 0) return res.status(400).json({ message: "Não é possível excluir cliente com débito pendente." });
+
+        db.run("DELETE FROM customers WHERE id = ?", [id], (err) => {
+            if (err) return res.status(500).json({ message: "Erro ao excluir cliente: " + err.message });
+            res.json({ status: "ok" });
+        });
+    });
 });
 
 // --- USUÁRIOS ---
