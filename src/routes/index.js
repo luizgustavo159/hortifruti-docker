@@ -365,6 +365,79 @@ router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) 
   });
 });
 
+// --- RELATÓRIOS ---
+router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, res) => {
+    const { start, end } = req.query;
+    db.get(`
+        SELECT 
+            COUNT(*) as total_sales,
+            SUM(total) as total_revenue,
+            (SELECT COUNT(*) FROM products WHERE current_stock <= min_stock) as critical_items
+        FROM sales 
+        WHERE created_at BETWEEN ? AND ?
+    `, [start + " 00:00:00", end + " 23:59:59"], (err, row) => {
+        if (err) return res.status(500).json({ message: "Erro ao gerar resumo." });
+        res.json([row]);
+    });
+});
+
+router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (req, res) => {
+    const { start, end } = req.query;
+    db.all(`
+        SELECT u.name as operator_name, COUNT(s.id) as sales_count, SUM(s.total) as total_revenue
+        FROM sales s
+        JOIN users u ON s.sold_by = u.id
+        WHERE s.created_at BETWEEN ? AND ?
+        GROUP BY u.id
+    `, [start + " 00:00:00", end + " 23:59:59"], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao gerar relatório por operador." });
+        res.json(rows);
+    });
+});
+
+router.get("/reports/by-category", authenticateToken, requireRole("manager"), (req, res) => {
+    const { start, end } = req.query;
+    db.all(`
+        SELECT c.name as category_name, COUNT(s.id) as sales_count, SUM(s.total) as total_revenue
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        JOIN categories c ON p.category_id = c.id
+        WHERE s.created_at BETWEEN ? AND ?
+        GROUP BY c.id
+    `, [start + " 00:00:00", end + " 23:59:59"], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao gerar relatório por categoria." });
+        res.json(rows);
+    });
+});
+
+// --- AUDITORIA (LOGS) ---
+router.get("/logs", authenticateToken, requireRole("manager"), (req, res) => {
+    const { start, end, type, level } = req.query;
+    let query = `
+        SELECT l.*, u.name as user_name 
+        FROM audit_logs l
+        LEFT JOIN users u ON l.performed_by = u.id
+        WHERE l.created_at BETWEEN ? AND ?
+    `;
+    const params = [start + " 00:00:00", end + " 23:59:59"];
+
+    if (type && type !== 'all') {
+        query += " AND l.type = ?";
+        params.push(type);
+    }
+    if (level && level !== 'all') {
+        query += " AND l.level = ?";
+        params.push(level);
+    }
+
+    query += " ORDER BY l.created_at DESC LIMIT 500";
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao buscar logs: " + err.message });
+        res.json(rows);
+    });
+});
+
 // --- CONFIGURAÇÕES ---
 router.get("/settings", authenticateToken, (req, res) => {
   db.all("SELECT * FROM settings", [], (err, rows) => {
