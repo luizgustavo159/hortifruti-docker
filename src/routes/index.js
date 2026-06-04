@@ -87,6 +87,7 @@ router.get("/products", authenticateToken, (req, res) => {
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
+    WHERE p.deleted_at IS NULL
     ORDER BY p.name
   `, [], (err, rows) => res.json(rows || []));
 });
@@ -387,8 +388,9 @@ router.put("/categories/:id", authenticateToken, requireRole("supervisor"), (req
     });
 });
 router.delete("/categories/:id", authenticateToken, requireRole("manager"), (req, res) => {
-    db.run("DELETE FROM categories WHERE id=?", [req.params.id], (err) => {
+    db.run("UPDATE categories SET deleted_at = CURRENT_TIMESTAMP WHERE id=?", [req.params.id], (err) => {
         if (err) return res.status(500).json({ message: "Erro ao excluir categoria." });
+        createAuditLog("CATEGORIA_EXCLUIDA", { category_id: req.params.id }, req.user.id, 'system', 'low');
         res.json({ status: "ok" });
     });
 });
@@ -468,8 +470,9 @@ router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, re
 });
 
 router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) => {
-  db.run("UPDATE users SET is_active = 0 WHERE id = ?", [req.params.id], (err) => {
+  db.run("UPDATE users SET is_active = 0, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id], (err) => {
     if (err) return res.status(500).json({ message: "Erro ao desativar usuário." });
+    createAuditLog("USUARIO_EXCLUIDO", { user_id: req.params.id }, req.user.id, 'security', 'medium');
     res.json({ status: "ok" });
   });
 });
