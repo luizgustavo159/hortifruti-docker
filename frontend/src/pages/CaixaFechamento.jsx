@@ -224,19 +224,19 @@ export function CaixaFechamento() {
 
         {/* Resumo por Forma de Pagamento */}
         {caixaData.sales_summary && Object.keys(caixaData.sales_summary).length > 0 && (
-          <div className="resumo-pagamentos-section" style={{ marginTop: '20px', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-            <h3 style={{ marginBottom: '10px', fontSize: '16px', color: '#475569' }}>Conferência de Outras Formas (Não afetam o dinheiro)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
+          <div className="resumo-pagamentos-section">
+            <h3>Conferência de Outras Formas (Não afetam o dinheiro)</h3>
+            <div className="pagamentos-grid">
               {Object.entries(caixaData.sales_summary).map(([method, total]) => (
                 method !== 'cash' && (
-                  <div key={method} style={{ padding: '10px', background: 'white', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                    <span style={{ display: 'block', fontSize: '12px', color: '#64748b', textTransform: 'uppercase' }}>{method}</span>
-                    <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>R$ {total.toFixed(2)}</span>
+                  <div key={method} className="pagamento-item">
+                    <span className="label">{method}</span>
+                    <span className="valor">R$ {total.toFixed(2)}</span>
                   </div>
                 )
               ))}
             </div>
-            <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '10px' }}>* Confira se os valores acima batem com o relatório da sua maquininha/banco.</p>
+            <p className="hint">* Confira se os valores acima batem com o relatório da sua maquininha/banco.</p>
           </div>
         )}
 

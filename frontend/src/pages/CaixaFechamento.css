@@ -4,6 +4,7 @@
   gap: 24px;
   max-width: 1000px;
   margin: 0 auto;
+  padding-bottom: 60px;
 }
 
 /* ============ RESUMO ============ */
@@ -168,6 +169,11 @@
   background: rgba(16, 185, 129, 0.1);
 }
 
+.movimento-item.supply {
+  border-left-color: var(--accent-primary);
+  background: rgba(16, 185, 129, 0.1);
+}
+
 .movimento-item .tipo {
   font-weight: 700;
   color: var(--text-primary);
@@ -266,7 +272,62 @@
 }
 
 .btn-cancelar:hover {
-  background: #e5e7eb;
+  background: var(--bg-tertiary);
+  opacity: 0.8;
+}
+
+/* Novos estilos para resumo de pagamentos */
+.resumo-pagamentos-section {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.resumo-pagamentos-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pagamentos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.pagamento-item {
+  background: var(--bg-primary);
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pagamento-item .label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.pagamento-item .valor {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.resumo-pagamentos-section .hint {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
 }
 
 /* ============ RESPONSIVIDADE ============ */
