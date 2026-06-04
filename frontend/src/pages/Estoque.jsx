@@ -54,7 +54,6 @@ export function Estoque() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ==================== DICIONÁRIO CARICATO DE FRUTAS/VERDURAS ====================
-  // REORGANIZADO PARA PRIORIZAR DETECÇÃO EXATA
   const emojiDictionary = {
     "maçã": "🍎", "maca": "🍎", "apple": "🍎",
     "banana": "🍌",
@@ -100,27 +99,22 @@ export function Estoque() {
     if (!productName || productName.trim().length < 2) return "";
     const nameLower = productName.toLowerCase().trim();
     
-    // Busca exata primeiro, depois parcial
     let emoji = "🥬";
-    if (emojiDictionary[nameLower]) {
-      emoji = emojiDictionary[nameLower];
-    } else {
-      const sortedKeys = Object.keys(emojiDictionary).sort((a, b) => b.length - a.length);
-      for (const key of sortedKeys) {
-        if (nameLower.includes(key)) {
-          emoji = emojiDictionary[key];
-          break;
-        }
+    const sortedKeys = Object.keys(emojiDictionary).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+      if (nameLower.includes(key)) {
+        emoji = emojiDictionary[key];
+        break;
       }
     }
 
     const svg = `
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
-        <rect width="400" height="400" fill="#ffffff"/>
-        <circle cx="200" cy="150" r="110" fill="#f8f9fa" stroke="#eeeeee" stroke-width="2"/>
+        <rect width="400" height="400" fill="#1e293b"/>
+        <circle cx="200" cy="150" r="110" fill="#334155" stroke="#475569" stroke-width="2"/>
         <text x="200" y="165" font-size="180" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
-        <text x="200" y="320" font-size="36" font-weight="bold" text-anchor="middle" fill="#333333" font-family="system-ui, -apple-system, sans-serif">${productName.toUpperCase()}</text>
-        <rect x="120" y="345" width="160" height="4" fill="#4CAF50" rx="2"/>
+        <text x="200" y="320" font-size="36" font-weight="bold" text-anchor="middle" fill="#f8fafc" font-family="Arial">${productName.toUpperCase()}</text>
+        <rect x="120" y="345" width="160" height="4" fill="#10b981" rx="2"/>
       </svg>
     `;
     return new Promise((resolve) => {
@@ -140,8 +134,10 @@ export function Estoque() {
   };
 
   const calculateSuggestedPrice = (cost, margin) => {
-    if (!cost || parseFloat(cost) <= 0 || !margin || parseFloat(margin) < 0) return 0;
-    return Math.round(parseFloat(cost) * (1 + parseFloat(margin) / 100) * 100) / 100;
+    const costNum = parseFloat(cost) || 0;
+    const marginNum = parseFloat(margin) || 0;
+    if (costNum <= 0) return 0;
+    return Math.round(costNum * (1 + marginNum / 100) * 100) / 100;
   };
 
   const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
@@ -282,102 +278,86 @@ export function Estoque() {
         )}
       </div>
 
-      {/* Modal Produto - LAYOUT FINAL COM BOTÕES EMPILHADOS AO LADO DA IMAGEM */}
+      {/* Modal Produto - CORREÇÃO FINAL DE TEMA E LAYOUT */}
       {showNewProductModal && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: '650px' }}>
-            <h2>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
+          <div className="modal" style={{ maxWidth: '650px', backgroundColor: '#0f172a', color: '#f8fafc' }}>
+            <h2 style={{ color: '#10b981' }}>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'flex-start', gap: '15px', padding: '15px', backgroundColor: '#fdfdfd', borderRadius: '12px', border: '1px solid #eeeeee' }}>
-                {/* IMAGEM À ESQUERDA */}
-                <div style={{ width: '130px', height: '130px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #dddddd', backgroundColor: '#ffffff', flexShrink: 0, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+              {/* ÁREA DE IMAGEM: LAYOUT LATERAL E TEMA ESCURO */}
+              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '20px', padding: '20px', backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155' }}>
+                <div style={{ width: '130px', height: '130px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #475569', backgroundColor: '#0f172a', flexShrink: 0, boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>
                   {newProduct.image_url ? (
                     <img src={newProduct.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#bbbbbb', fontSize: '12px', textAlign: 'center', padding: '10px' }}>Sem Imagem</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', fontSize: '12px' }}>Sem Foto</div>
                   )}
                 </div>
                 
-                {/* BOTÕES EMPILHADOS À DIREITA (ESTILO SKU) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                  <button type="button" onClick={handleGenerateCaricature} style={{ height: '42px', background: '#3b82f6', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: '0.2s' }}>
                     🎨 Gerar Caricata
                   </button>
-                  <label style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <label style={{ height: '42px', background: '#3b82f6', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: '0.2s' }}>
                     📁 Upload do PC
                     <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                   </label>
-                  <p style={{ margin: '4px 0 0 0', color: '#888888', fontSize: '11px', fontStyle: 'italic' }}>
-                    * Digite o nome do produto para gerar automaticamente.
-                  </p>
                 </div>
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Nome do Produto</label>
-                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" />
+                <label style={{ color: '#94a3b8' }}>Nome do Produto</label>
+                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }} />
               </div>
               
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Código de Barras</label>
+                <label style={{ color: '#94a3b8' }}>Código de Barras</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1 }} />
-                  <button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ padding: '0 15px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>📱 Gerar</button>
+                  <input value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" style={{ flex: 1, backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }} />
+                  <button type="button" onClick={() => setNewProduct({...newProduct, sku: generateEAN13()})} style={{ padding: '0 15px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>📱 Gerar</button>
                 </div>
               </div>
 
               <div className="form-group">
-                <label>Unidade de Medida</label>
-                <select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input">
+                <label style={{ color: '#94a3b8' }}>Unidade</label>
+                <select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input" style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }}>
                   <option value="un">Unidade (un)</option>
                   <option value="kg">Quilo (kg)</option>
                   <option value="cx">Caixa (cx)</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Categoria</label>
-                <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input">
+                <label style={{ color: '#94a3b8' }}>Categoria</label>
+                <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input" style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }}>
                   <option value="">Selecione...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label>Custo (R$)</label>
-                <input type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
+                <label style={{ color: '#94a3b8' }}>Custo (R$)</label>
+                <input type="number" step="0.01" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }} />
               </div>
               <div className="form-group">
-                <label>Margem (%)</label>
-                <input type="number" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" />
+                <label style={{ color: '#94a3b8' }}>Margem (%)</label>
+                <input type="number" value={newProduct.profit_margin} onChange={e => setNewProduct({...newProduct, profit_margin: e.target.value})} className="input" style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }} />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Preço de Venda (R$)</label>
+                <label style={{ color: '#94a3b8' }}>Preço de Venda (R$)</label>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1 }} />
-                  <div style={{ padding: '8px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50', fontSize: '12px' }}>
-                    Sugestão: <strong>R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}</strong>
+                  <input type="number" step="0.01" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" style={{ flex: 1, backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white' }} />
+                  {/* PREÇO SUGERIDO INTEGRADO */}
+                  <div style={{ padding: '8px 12px', backgroundColor: '#064e3b', borderRadius: '6px', border: '1px solid #10b981', fontSize: '13px', color: '#10b981', fontWeight: 'bold', textAlign: 'center', minWidth: '100px' }}>
+                    <div style={{ fontSize: '9px', opacity: 0.8 }}>SUGERIDO</div>
+                    R$ {calculateSuggestedPrice(newProduct.avg_cost, newProduct.profit_margin).toFixed(2)}
                   </div>
                 </div>
               </div>
             </div>
             
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
-              <button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1 }}>Salvar Produto</button>
-              <button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Outros modais simplificados */}
-      {showCategoryModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Categoria</h2>
-            <input placeholder="Nome" value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} className="input" style={{ marginBottom: '10px' }} />
-            <div className="modal-actions">
-              <button onClick={handleSaveCategory} className="btn-primary">Salvar</button>
-              <button onClick={() => setShowCategoryModal(false)} className="btn-secondary">Cancelar</button>
+              <button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1, backgroundColor: '#10b981' }}>Salvar Produto</button>
+              <button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1, backgroundColor: '#334155', color: 'white' }}>Cancelar</button>
             </div>
           </div>
         </div>
