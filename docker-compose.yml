@@ -38,6 +38,9 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+    volumes:
+      - ./logs:/home/node/app/logs
+      - ./backups:/home/node/app/backups
     environment:
       - NODE_ENV=production
       - PORT=3000
