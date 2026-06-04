@@ -13,39 +13,41 @@
 
 /* Estilo padrão (usado na Sidebar) */
 .sidebar .relogio-global {
-  font-size: 16px; /* Aumentado para preencher melhor o espaço */
+  font-size: 14px;
   font-weight: 800;
   color: var(--text-primary);
   background: var(--bg-secondary);
-  padding: 0 8px;
+  padding: 0 12px;
   border-radius: 12px;
   border: 2px solid var(--border-color);
   height: 48px; /* Altura idêntica ao ThemeSwitcher */
   display: flex;
-  flex-direction: column; /* Empilhar data e hora para usar todo o espaço vertical */
+  flex-direction: row; /* Volta para uma linha única */
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-sm);
   flex: 1;
   margin-left: 8px;
-  line-height: 1.1;
+  white-space: nowrap; /* Impede quebra de linha */
 }
 
 .sidebar .relogio-data {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--text-secondary);
-  margin-bottom: -2px;
 }
 
 .sidebar .relogio-hora {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--accent-primary);
   font-weight: 800;
 }
 
 .sidebar .relogio-separador {
-  display: none; /* Remove o separador para ganhar espaço vertical */
+  display: inline;
+  margin: 0 4px;
+  color: var(--text-tertiary);
+  opacity: 0.5;
 }
 
 /* Regras movidas e otimizadas acima */
