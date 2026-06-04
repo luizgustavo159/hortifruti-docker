@@ -14,18 +14,19 @@
 }
 
 .resumo-card {
-  background: white;
-  border: 2px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
   border-radius: 12px;
   padding: 20px;
   text-align: center;
   transition: all 0.3s ease;
+  color: var(--text-primary);
 }
 
 .resumo-card h3 {
   margin: 0 0 12px 0;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 600;
@@ -35,18 +36,19 @@
   margin: 0;
   font-size: 28px;
   font-weight: 800;
-  color: #10b981;
+  color: var(--accent-primary);
 }
 
 .resumo-card .valor-input {
   width: 100%;
   padding: 12px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   font-size: 24px;
   font-weight: 700;
   text-align: center;
-  color: #1f2937;
+  color: var(--text-primary);
+  background: var(--bg-primary);
 }
 
 .resumo-card .valor-input:focus {
@@ -56,26 +58,26 @@
 }
 
 .resumo-card.balanced {
-  background: #ecfdf5;
-  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: var(--accent-primary);
 }
 
 .resumo-card.surplus {
-  background: #fef3c7;
-  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: var(--accent-warning);
 }
 
 .resumo-card.surplus .valor {
-  color: #f59e0b;
+  color: var(--accent-warning);
 }
 
 .resumo-card.deficit {
-  background: #fee2e2;
-  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--accent-danger);
 }
 
 .resumo-card.deficit .valor {
-  color: #ef4444;
+  color: var(--accent-danger);
 }
 
 .resumo-card .status {
@@ -87,17 +89,18 @@
 
 /* ============ MOVIMENTOS ============ */
 .movimentos-section {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .movimentos-section h3 {
   margin: 0 0 16px 0;
   font-size: 16px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .movimento-buttons {
@@ -150,47 +153,48 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg-tertiary);
   border-radius: 8px;
-  border-left: 4px solid #e5e7eb;
+  border-left: 4px solid var(--border-color);
 }
 
 .movimento-item.withdrawal {
-  border-left-color: #ef4444;
-  background: #fef2f2;
+  border-left-color: var(--accent-danger);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .movimento-item.deposit {
-  border-left-color: #10b981;
-  background: #f0fdf4;
+  border-left-color: var(--accent-primary);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .movimento-item .tipo {
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
   flex: 1;
 }
 
 .movimento-item .valor {
   font-size: 14px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
   min-width: 100px;
   text-align: right;
 }
 
 .movimento-item .hora {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   margin-left: 12px;
 }
 
 /* ============ NOTAS ============ */
 .notas-section {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .notas-section label {
@@ -198,17 +202,19 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .notas-section textarea {
   width: 100%;
   padding: 12px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
   resize: vertical;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .notas-section textarea:focus {
@@ -249,9 +255,9 @@
 
 .btn-cancelar {
   padding: 14px 32px;
-  background: #f3f4f6;
-  color: #1f2937;
-  border: 2px solid #e5e7eb;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-color);
   border-radius: 10px;
   font-size: 14px;
   font-weight: 700;
