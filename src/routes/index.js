@@ -477,16 +477,25 @@ router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) 
 // --- RELATÓRIOS ---
 router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, res) => {
     const { start, end } = req.query;
+    const dateRange = [start + " 00:00:00", end + " 23:59:59"];
+    
     db.get(`
         SELECT 
             COUNT(*) as total_sales,
-            SUM(total) as total_revenue,
-            (SELECT COUNT(*) FROM products WHERE current_stock <= min_stock) as critical_items
+            SUM(final_total) as total_revenue,
+            COALESCE((SELECT SUM(quantity * p.avg_cost) FROM stock_losses l JOIN products p ON l.product_id = p.id WHERE l.created_at BETWEEN ? AND ?), 0) as total_losses
         FROM sales 
         WHERE created_at BETWEEN ? AND ?
-    `, [start + " 00:00:00", end + " 23:59:59"], (err, row) => {
-        if (err) return res.status(500).json({ message: "Erro ao gerar resumo." });
-        res.json([row]);
+    `, [...dateRange, ...dateRange], (err, row) => {
+        if (err) return res.status(500).json({ message: "Erro ao gerar resumo: " + err.message });
+        
+        db.all("SELECT id, name, current_stock, min_stock FROM products WHERE current_stock <= min_stock", [], (errStock, lowStock) => {
+            res.json({
+                ...row,
+                low_stock: lowStock || [],
+                real_profit: (row.total_revenue || 0) - (row.total_losses || 0)
+            });
+        });
     });
 });
 
@@ -566,13 +575,8 @@ router.put("/settings", authenticateToken, requireRole("admin"), (req, res) => {
   }, (err) => res.json({ status: "ok" }));
 });
 
-// --- RELATÓRIOS (PLACEHOLDERS) ---
-router.get("/reports/summary", authenticateToken, (req, res) => {
-  res.json({ total_sales: 0, total_losses: 0, real_profit: 0, low_stock: [] });
-});
-router.get("/reports/by-operator", authenticateToken, (req, res) => { res.json([]); });
-router.get("/reports/by-category", authenticateToken, (req, res) => { res.json([]); });
-router.get("/reports/hourly-sales", authenticateToken, (req, res) => { res.json([]); });
+// --- RELATÓRIOS (EXTRAS) ---
+router.get("/reports/hourly-sales", authenticateToken, requireRole("manager"), (req, res) => { res.json([]); });
 
 // --- APROVAÇÕES ---
 router.post("/approvals", authenticateToken, (req, res) => {
