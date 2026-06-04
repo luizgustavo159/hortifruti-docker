@@ -84,7 +84,8 @@ router.get("/products", authenticateToken, (req, res) => {
             ELSE 'ok'
           END
         ELSE 'no_cost'
-      END as margin_status
+      END as margin_status,
+      (SELECT SUM(quantity) FROM product_batches WHERE product_id = p.id AND quantity > 0) as batch_stock_total
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -140,76 +141,101 @@ router.put("/products/:id", authenticateToken, requireRole("supervisor"), valida
 // --- ESTOQUE ---
 router.post("/stock/adjust", authenticateToken, requireRole("supervisor"), (req, res) => {
   const { product_id, delta, reason, unit_cost } = req.body;
-  runWithTransaction((tx, finish) => {
-    // Buscar dados atuais para cálculo de custo médio
+  db.withTransaction((tx, finish) => {
     tx.get("SELECT current_stock, avg_cost FROM products WHERE id = ?", [product_id], (err, p) => {
       if (err || !p) return finish(err || new Error("Produto não encontrado"));
 
-      let newAvgCost = p.avg_cost;
-      const currentStock = Number(p.current_stock);
+      let newAvgCost = Number(p.avg_cost || 0);
+      const currentStock = Number(p.current_stock || 0);
       const deltaQty = Number(delta);
       const cost = Number(unit_cost || 0);
 
-      // Cálculo de Custo Médio Automático (apenas em entradas positivas com custo informado)
       if (deltaQty > 0 && cost > 0) {
-        const totalValue = (currentStock * p.avg_cost) + (deltaQty * cost);
+        const totalValue = (currentStock * newAvgCost) + (deltaQty * cost);
         const totalQty = currentStock + deltaQty;
         newAvgCost = totalQty > 0 ? totalValue / totalQty : cost;
       }
 
-      tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ?, last_cost = ? WHERE id = ?", 
-        [deltaQty, newAvgCost, deltaQty > 0 ? cost : p.last_cost, product_id], (errU) => {
+      tx.run("UPDATE products SET current_stock = current_stock + ?, avg_cost = ? WHERE id = ?", 
+        [deltaQty, newAvgCost, product_id], (errU) => {
           if (errU) return finish(errU);
           
-          // Se for entrada (compra), cria um novo lote
           if (deltaQty > 0) {
-            tx.run("INSERT INTO product_batches (product_id, initial_quantity, current_quantity, unit_cost) VALUES (?, ?, ?, ?)",
+            tx.run("INSERT INTO product_batches (product_id, initial_quantity, quantity, unit_cost) VALUES (?, ?, ?, ?)",
               [product_id, deltaQty, deltaQty, cost], (errB) => {
                 if (errB) return finish(errB);
                 tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
                   [product_id, 'inbound', deltaQty, reason, req.user.id], (errM) => finish(errM));
               });
           } else {
-            // Se for saída, consome os lotes (FIFO)
             let remainingToConsume = Math.abs(deltaQty);
-            tx.all("SELECT id, current_quantity FROM product_batches WHERE product_id = ? AND current_quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
+            tx.all("SELECT id, quantity FROM product_batches WHERE product_id = ? AND quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
               if (errL) return finish(errL);
               
               const consumeNextBatch = (index) => {
-                if (index >= batches.length || remainingToConsume <= 0) {
+                if (remainingToConsume <= 0 || index >= batches.length) {
                   return tx.run("INSERT INTO stock_movements (product_id, type, delta, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
                     [product_id, 'outbound', deltaQty, reason, req.user.id], (errM) => finish(errM));
                 }
                 
                 const batch = batches[index];
-                const consumeAmount = Math.min(batch.current_quantity, remainingToConsume);
+                const consumeAmount = Math.min(batch.quantity, remainingToConsume);
                 remainingToConsume -= consumeAmount;
                 
-                tx.run("UPDATE product_batches SET current_quantity = current_quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
+                tx.run("UPDATE product_batches SET quantity = quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
                   if (errCB) return finish(errCB);
                   consumeNextBatch(index + 1);
                 });
               };
-              
               consumeNextBatch(0);
             });
           }
         });
     });
-  }, (err) => err ? res.status(500).json({ message: "Erro ao ajustar estoque." }) : res.json({ status: "ok" }));
+  }, (err) => {
+    if (err) {
+      createAuditLog("ERRO_AJUSTE_ESTOQUE", { product_id, error: err.message }, req.user.id, 'error', 'high');
+      return res.status(500).json({ message: "Erro ao ajustar estoque: " + err.message });
+    }
+    res.json({ status: "ok" });
+  });
 });
 
 router.post("/stock/loss", authenticateToken, (req, res) => {
     const { product_id, quantity, reason } = req.body;
-    runWithTransaction((tx, finish) => {
+    db.withTransaction((tx, finish) => {
       tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [quantity, product_id], (err) => {
         if (err) return finish(err);
-        tx.run("INSERT INTO stock_losses (product_id, quantity, reason) VALUES (?, ?, ?)",
-          [product_id, quantity, reason], (errL) => {
-            finish(errL);
-          });
+        
+        let remainingToConsume = Math.abs(Number(quantity));
+        tx.all("SELECT id, quantity FROM product_batches WHERE product_id = ? AND quantity > 0 ORDER BY received_at ASC", [product_id], (errL, batches) => {
+          if (errL) return finish(errL);
+          
+          const consumeNextBatch = (index) => {
+            if (remainingToConsume <= 0 || index >= batches.length) {
+              return tx.run("INSERT INTO stock_losses (product_id, quantity, reason) VALUES (?, ?, ?)",
+                [product_id, quantity, reason], (errSL) => finish(errSL));
+            }
+            
+            const batch = batches[index];
+            const consumeAmount = Math.min(batch.quantity, remainingToConsume);
+            remainingToConsume -= consumeAmount;
+            
+            tx.run("UPDATE product_batches SET quantity = quantity - ? WHERE id = ?", [consumeAmount, batch.id], (errCB) => {
+              if (errCB) return finish(errCB);
+              consumeNextBatch(index + 1);
+            });
+          };
+          consumeNextBatch(0);
+        });
       });
-    }, (err) => err ? res.status(500).json({ message: "Erro ao registrar perda." }) : res.json({ status: "ok" }));
+    }, (err) => {
+      if (err) {
+        createAuditLog("ERRO_REGISTRAR_PERDA", { product_id, error: err.message }, req.user.id, 'error', 'high');
+        return res.status(500).json({ message: "Erro ao registrar perda: " + err.message });
+      }
+      res.json({ status: "ok" });
+    });
 });
 
 // --- DESCONTOS ---
