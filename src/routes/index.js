@@ -319,13 +319,74 @@ router.post("/pos/cash-session/movement", authenticateToken, (req, res) => {
 
 // --- VENDAS ---
 router.get("/sales/recent", authenticateToken, (req, res) => {
-    db.all(`
+    const { start, end } = req.query;
+    let query = `
         SELECT s.*, p.name as product_name, c.name as customer_name 
         FROM sales s 
         JOIN products p ON s.product_id = p.id 
         LEFT JOIN customers c ON s.customer_id = c.id
-        ORDER BY s.created_at DESC LIMIT 50
-    `, [], (err, rows) => res.json(rows));
+    `;
+    const params = [];
+
+    if (start && end) {
+        query += " WHERE s.created_at >= ? AND s.created_at <= ?";
+        params.push(start + "T00:00:00.000Z", end + "T23:59:59.999Z");
+    }
+
+    query += " ORDER BY s.created_at DESC LIMIT 500";
+    db.all(query, params, (err, rows) => res.json(rows || []));
+});
+
+router.delete("/sales/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
+  const saleId = req.params.id;
+
+  db.withTransaction((tx, finish) => {
+    // 1. Buscar detalhes da venda
+    tx.get("SELECT * FROM sales WHERE id = ?", [saleId], (err, sale) => {
+      if (err || !sale) return finish(err || new Error("Venda não encontrada."));
+
+      // 2. Estornar Estoque do Produto
+      tx.run("UPDATE products SET current_stock = current_stock + ? WHERE id = ?", [sale.quantity, sale.product_id], (errU) => {
+        if (errU) return finish(errU);
+
+        // 3. Devolver ao último lote (simplificação: devolve ao lote mais recente do produto)
+        tx.get("SELECT id FROM product_batches WHERE product_id = ? ORDER BY received_at DESC LIMIT 1", [sale.product_id], (errB, batch) => {
+          if (batch) {
+            tx.run("UPDATE product_batches SET current_quantity = current_quantity + ? WHERE id = ?", [sale.quantity, batch.id], (errCB) => {
+              if (errCB) return finish(errCB);
+              proceed();
+            });
+          } else {
+            proceed();
+          }
+
+          function proceed() {
+            // 4. Se for Fiado, estornar a dívida do cliente
+            if (sale.payment_method.toLowerCase() === "fiado" && sale.customer_id) {
+              tx.run("UPDATE customers SET current_debt = current_debt - ? WHERE id = ?", [sale.final_total, sale.customer_id], (errD) => {
+                if (errD) return finish(errD);
+                finalize();
+              });
+            } else {
+              finalize();
+            }
+          }
+
+          function finalize() {
+            // 5. Excluir a venda
+            tx.run("DELETE FROM sales WHERE id = ?", [saleId], (errDel) => {
+              if (errDel) return finish(errDel);
+              createAuditLog("VENDA_EXCLUIDA", { sale_id: saleId, product_id: sale.product_id, qty: sale.quantity, total: sale.final_total }, req.user.id, 'security', 'medium');
+              finish(null);
+            });
+          }
+        });
+      });
+    });
+  }, (err) => {
+    if (err) return res.status(500).json({ message: "Erro ao excluir venda: " + err.message });
+    res.json({ status: "ok" });
+  });
 });
 
 const { z } = require("zod");

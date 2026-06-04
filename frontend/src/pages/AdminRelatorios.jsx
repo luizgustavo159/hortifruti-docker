@@ -1,13 +1,18 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageShell } from "../components/PageShell";
 import { apiFetch } from "../lib/api";
+import { getAuthUser } from "../lib/auth";
+import { ApprovalModal } from "../components/ApprovalModal";
 import "./AdminRelatorios.css";
 
 export function AdminRelatorios() {
+  const user = getAuthUser();
   const [reportType, setReportType] = useState("sales");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showApproval, setShowApproval] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -51,9 +56,9 @@ export function AdminRelatorios() {
 
       let endpoint = "";
       if (reportType === "sales") {
-        endpoint = "/sales/recent"; // Fallback para rota existente
+        endpoint = `/sales/recent?start=${dateRange.start}&end=${dateRange.end}`;
       } else {
-        endpoint = `/reports/${reportType}`;
+        endpoint = `/reports/${reportType}?start=${dateRange.start}&end=${dateRange.end}`;
       }
 
       const reportData = await apiFetch(endpoint);
@@ -117,6 +122,25 @@ export function AdminRelatorios() {
 
   const totals = calculateTotals();
 
+  const handleDeleteSale = (id) => {
+    setPendingDeleteId(id);
+    setShowApproval(true);
+  };
+
+  const confirmDeleteSale = async (token) => {
+    try {
+      await apiFetch(`/sales/${pendingDeleteId}`, { 
+        method: 'DELETE',
+        headers: { 'X-Approval-Token': token }
+      });
+      setShowApproval(false);
+      setPendingDeleteId(null);
+      loadReport();
+    } catch (err) {
+      alert("Erro ao excluir venda: " + err.message);
+    }
+  };
+
   return (
     <PageShell
       title="Relatórios Financeiros"
@@ -167,6 +191,16 @@ export function AdminRelatorios() {
 
         {error && <div className="error-message" style={{ marginBottom: '16px' }}>{error}</div>}
 
+        {showApproval && (
+          <ApprovalModal
+            title="Autorização para Excluir Venda"
+            message="Esta operação irá estornar o estoque e excluir o registro permanentemente. Requer senha de gerente."
+            action="delete_sale"
+            onApproved={confirmDeleteSale}
+            onCancel={() => setShowApproval(false)}
+          />
+        )}
+
         {loading ? (
           <p className="loading">Carregando relatório...</p>
         ) : data.length > 0 ? (
@@ -186,6 +220,19 @@ export function AdminRelatorios() {
                       {Object.keys(row).map((key) => (
                         <td key={key}>{formatValue(row[key])}</td>
                       ))}
+                      {reportType === "sales" && (
+                        <td>
+                          {['supervisor', 'manager', 'admin'].includes(user?.role) && (
+                            <button 
+                              className="button-danger"
+                              style={{ padding: '4px 8px', fontSize: '11px' }}
+                              onClick={() => handleDeleteSale(row.id)}
+                            >
+                              Excluir
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -226,7 +273,8 @@ function formatHeader(header) {
     "operator_name": "Operador",
     "sale_count": "Qtd. Vendas",
     "total_revenue": "Receita Total",
-    "avg_ticket": "Ticket Médio"
+    "avg_ticket": "Ticket Médio",
+    "actions": "Ações"
   };
 
   return translations[header] || header
