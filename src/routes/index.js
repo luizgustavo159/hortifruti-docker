@@ -305,8 +305,29 @@ router.get("/sales/recent", authenticateToken, (req, res) => {
     `, [], (err, rows) => res.json(rows));
 });
 
+const { z } = require("zod");
+
+const saleSchema = z.object({
+  items: z.array(z.object({
+    product_id: z.number().int().positive(),
+    quantity: z.number().positive(),
+    discount_id: z.number().int().nullable().optional()
+  })).min(1),
+  payment_method: z.enum(["cash", "pix", "card", "fiado"]),
+  customer_id: z.number().int().nullable().optional(),
+  manual_discount: z.number().min(0).optional(),
+  amount_received: z.number().min(0).optional(),
+  change_amount: z.number().min(0).optional(),
+  approval_token: z.string().nullable().optional()
+});
+
 router.post("/sales", authenticateToken, (req, res) => {
-  const { items, payment_method, customer_id, manual_discount, amount_received, change_amount } = req.body;
+  const validation = saleSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ message: "Dados de venda inválidos.", errors: validation.error.errors });
+  }
+
+  const { items, payment_method, customer_id, manual_discount, amount_received, change_amount } = validation.data;
   const manualDiscountAmount = parseFloat(manual_discount) || 0;
 
   runWithTransaction((tx, finish) => {
