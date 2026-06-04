@@ -294,11 +294,11 @@ export function Caixa() {
       actions={
         <div className="pos-actions">
           <button className={`btn-scale ${scale.connected ? "connected" : ""}`} onClick={scale.connected ? scale.disconnect : scale.connect}>
-            ⚖️ {scale.connected ? `Balança: ${scale.weight || "0.000"} kg` : "Conectar Balança"}
+            ⚖️ {scale.connected ? `${scale.weight || "0.000"}kg` : "Balança"}
           </button>
-          <button className="btn-movimentacao" onClick={() => navigate("/caixa/fechamento")}>💰 Fechar Caixa</button>
+          <button className="btn-movimentacao" onClick={() => navigate("/caixa/fechamento")}>💰 Fechar</button>
           <button className="btn-sales-history" onClick={() => setShowSalesHistory(true)}>📋 Vendas</button>
-          <button className="btn-focus-mode" onClick={() => navigate("/caixa/focus")}>🎯 Modo Foco</button>
+          <button className="btn-focus-mode" onClick={() => navigate("/caixa/focus")}>🎯 Foco</button>
         </div>
       }
     >

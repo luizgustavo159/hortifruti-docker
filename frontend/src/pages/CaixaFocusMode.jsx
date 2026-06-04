@@ -320,10 +320,10 @@ export function CaixaFocusMode() {
             }}
           >
             {scale.connected
-              ? `Balança: ${scale.weight !== null ? `${scale.weight} kg` : 'Aguardando...'}`
-              : 'Conectar Balança'}
+              ? `${scale.weight !== null ? `${scale.weight}kg` : '---'}`
+              : 'Balança'}
           </button>
-          <button className="exit-btn" onClick={handleExitFocusMode}>Sair do Modo Foco</button>
+          <button className="exit-btn" onClick={handleExitFocusMode}>Sair</button>
         </div>
       </div>
 
