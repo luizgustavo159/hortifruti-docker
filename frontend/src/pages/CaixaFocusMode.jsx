@@ -571,10 +571,11 @@ export function CaixaFocusMode() {
               {processingPayment ? 'Processando...' : 'Finalizar (F10)'}
             </button>
           </div>
-          <div className="focus-relogio-container">
-            <RelogioGlobal />
-          </div>
         </div>
+      </div>
+
+      <div className="focus-relogio-container-left">
+        <RelogioGlobal />
       </div>
 
       <div className="focus-shortcuts">

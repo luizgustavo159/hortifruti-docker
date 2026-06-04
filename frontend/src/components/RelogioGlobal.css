@@ -13,25 +13,37 @@
 }
 
 /* Ajuste específico para quando o relógio está no Modo Foco */
-.focus-relogio-container .relogio-global {
+.focus-relogio-container-left {
+  position: fixed;
+  bottom: 45px; /* Acima da barra de atalhos */
+  left: 20px;
+  z-index: 10001;
+}
+
+.focus-relogio-container-left .relogio-global {
   position: static;
-  background: transparent;
-  backdrop-filter: none;
-  border: none;
-  box-shadow: none;
-  padding: 0;
-  margin-top: 12px;
-  width: 100%;
-  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  padding: 6px 12px;
+  border-radius: 8px;
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.focus-relogio-container .relogio-data {
+.focus-relogio-container-left .relogio-data {
+  color: #cbd5e1;
+}
+
+.focus-relogio-container-left .relogio-hora {
+  color: #10b981;
+}
+
+.focus-relogio-container-left .relogio-separador {
   color: #94a3b8;
-}
-
-.focus-relogio-container .relogio-hora {
-  color: #4ade80;
 }
 
   /* Glassmorphism effect para alinhar com o design moderno */
