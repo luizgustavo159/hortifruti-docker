@@ -106,10 +106,10 @@
 }
 
 .report-table .totals-row {
-  background: #f0f0f0;
-  border-top: 2px solid #e0e0e0;
+  background: var(--bg-tertiary);
+  border-top: 2px solid var(--border-color);
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .report-table .totals-row td {

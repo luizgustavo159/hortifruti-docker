@@ -58,12 +58,12 @@
 }
 
 .resumo-card.balanced {
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.05);
   border-color: var(--accent-primary);
 }
 
 .resumo-card.surplus {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.05);
   border-color: var(--accent-warning);
 }
 
@@ -72,7 +72,7 @@
 }
 
 .resumo-card.deficit {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.05);
   border-color: var(--accent-danger);
 }
 

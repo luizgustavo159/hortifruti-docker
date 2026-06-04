@@ -109,11 +109,11 @@
 
 /* Mensagens */
 .error-message {
-  background: #ffebee;
-  color: #c62828;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-danger);
   padding: 14px 16px;
   border-radius: 6px;
-  border-left: 4px solid #f44336;
+  border-left: 4px solid var(--accent-danger);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -205,7 +205,7 @@
 .date-cell {
   font-family: "Courier New", monospace;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
@@ -415,14 +415,14 @@
   background: none;
   border: none;
   font-size: 28px;
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   line-height: 1;
   transition: color 0.2s;
 }
 
 .close-modal-btn:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .log-modal-body {
