@@ -668,7 +668,7 @@ router.get("/caderneta", authenticateToken, (req, res) => {
 router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
     const customerId = req.params.id;
     db.all(`
-        SELECT 'venda' as type, s.final_total as amount, s.created_at, s.payment_method, GROUP_CONCAT(p.name, ', ') as items
+        SELECT 'venda' as type, s.final_total as amount, s.created_at, s.payment_method, string_agg(p.name, ', ') as items
         FROM sales s
         JOIN products p ON s.product_id = p.id
         WHERE s.customer_id = ?
