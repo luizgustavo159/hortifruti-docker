@@ -18,6 +18,7 @@ import { AdminRelatorios } from "./pages/AdminRelatorios";
 import { AdminFuncionarios } from "./pages/AdminFuncionarios";
 import { AdminConfiguracao } from "./pages/AdminConfiguracao";
 import { AIAssistant } from "./pages/AIAssistant";
+import { Caderneta } from "./pages/Caderneta";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Toaster } from "sonner";
 
@@ -63,6 +64,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Estoque />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/caderneta"
+          element={
+            <ProtectedRoute>
+              <Caderneta />
             </ProtectedRoute>
           }
         />

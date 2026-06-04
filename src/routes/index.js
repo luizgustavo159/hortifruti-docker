@@ -650,6 +650,69 @@ router.get("/reports/losses", authenticateToken, requireRole("manager"), (req, r
     });
 });
 
+// --- CADERNETA (FIADO) ---
+router.get("/caderneta", authenticateToken, (req, res) => {
+    db.all(`
+        SELECT c.*, 
+               (SELECT SUM(final_total) FROM sales WHERE customer_id = c.id AND payment_method = 'Fiado') as total_fiado,
+               (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) as last_purchase
+        FROM customers c
+        WHERE c.current_debt > 0
+        ORDER BY c.name
+    `, [], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao carregar caderneta." });
+        res.json(rows);
+    });
+});
+
+router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
+    const customerId = req.params.id;
+    db.all(`
+        SELECT 'venda' as type, s.final_total as amount, s.created_at, s.payment_method, GROUP_CONCAT(p.name, ', ') as items
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.customer_id = ?
+        GROUP BY s.created_at
+        UNION ALL
+        SELECT 'pagamento' as type, cp.amount, cp.created_at, cp.payment_method, 'Pagamento de Dívida' as items
+        FROM customer_payments cp
+        WHERE cp.customer_id = ?
+        ORDER BY created_at DESC
+    `, [customerId, customerId], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao carregar histórico." });
+        res.json(rows);
+    });
+});
+
+router.post("/caderneta/pay", authenticateToken, (req, res) => {
+    const { customer_id, amount, payment_method } = req.body;
+    if (!customer_id || !amount || amount <= 0) {
+        return res.status(400).json({ message: "Dados de pagamento inválidos." });
+    }
+
+    db.withTransaction((tx, finish) => {
+        tx.run(
+            "INSERT INTO customer_payments (customer_id, amount, payment_method, received_by) VALUES (?, ?, ?, ?)",
+            [customer_id, amount, payment_method, req.user.id],
+            (errP) => {
+                if (errP) return finish(errP);
+                tx.run(
+                    "UPDATE customers SET current_debt = current_debt - ? WHERE id = ?",
+                    [amount, customer_id],
+                    (errU) => {
+                        if (errU) return finish(errU);
+                        createAuditLog("PAGAMENTO_CADERNETA", { customer_id, amount, method: payment_method }, req.user.id, 'payment', 'low');
+                        finish(null);
+                    }
+                );
+            }
+        );
+    }, (err) => {
+        if (err) return res.status(400).json({ message: err.message });
+        res.json({ status: "ok" });
+    });
+});
+
 // --- AUDITORIA (LOGS) ---
 router.get("/logs", authenticateToken, requireRole("manager"), (req, res) => {
     const { start, end, type, level } = req.query;

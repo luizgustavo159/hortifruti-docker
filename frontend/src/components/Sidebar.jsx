@@ -10,10 +10,12 @@ const getNavItemsByRole = (role) => {
     operator: [
       { to: "/caixa", label: "Caixa PDV" },
       { to: "/estoque", label: "Estoque" },
+      { to: "/caderneta", label: "Caderneta" },
     ],
     supervisor: [
       { to: "/caixa", label: "Caixa PDV" },
       { to: "/estoque", label: "Estoque" },
+      { to: "/caderneta", label: "Caderneta" },
       { to: "/descontos", label: "Descontos" },
       { to: "/admin", label: "Dashboard" },
       { to: "/admin/relatorios", label: "Relatórios" },
@@ -22,6 +24,7 @@ const getNavItemsByRole = (role) => {
     manager: [
       { to: "/caixa", label: "Caixa PDV" },
       { to: "/estoque", label: "Estoque" },
+      { to: "/caderneta", label: "Caderneta" },
       { to: "/descontos", label: "Descontos" },
       { to: "/admin", label: "Dashboard" },
       { to: "/admin/relatorios", label: "Relatórios" },
@@ -30,6 +33,7 @@ const getNavItemsByRole = (role) => {
     admin: [
       { to: "/caixa", label: "Caixa PDV" },
       { to: "/estoque", label: "Estoque" },
+      { to: "/caderneta", label: "Caderneta" },
       { to: "/descontos", label: "Descontos" },
       { to: "/admin", label: "Dashboard" },
       { to: "/admin/relatorios", label: "Relatórios" },
