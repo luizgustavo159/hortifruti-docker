@@ -122,9 +122,17 @@ export function Estoque() {
 
   const handleSaveProduct = async () => {
     try {
-      await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) });
-      setSuccessMessage("Produto cadastrado!");
+      if (selectedProduct) {
+        // Edição de produto existente
+        await apiFetch(`/products/${selectedProduct.id}`, { method: "PUT", body: JSON.stringify(newProduct) });
+        setSuccessMessage("Produto atualizado!");
+      } else {
+        // Criação de novo produto
+        await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) });
+        setSuccessMessage("Produto cadastrado!");
+      }
       setShowNewProductModal(false);
+      setSelectedProduct(null);
       setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "", profit_margin: "30" });
       loadData();
     } catch (err) { setError(err.message); }
@@ -278,6 +286,7 @@ export function Estoque() {
                         <td>R$ {price.toFixed(2)}</td>
                         <td><span className={isLow ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
                         <td>
+                          <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30"}); setShowNewProductModal(true); }}>Editar</button>
                           <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({type: "inbound", quantity: "", reason: "Compra", unit_cost: ""}); setShowMovementModal(true); }}>Entrada</button>
                         </td>
                       </tr>
@@ -353,7 +362,7 @@ export function Estoque() {
       {showNewProductModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '600px' }}>
-            <h2>📦 Novo Produto</h2>
+            <h2>📦 {selectedProduct ? "Editar Produto" : "Novo Produto"}</h2>
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Nome do Produto</label>
@@ -436,8 +445,40 @@ export function Estoque() {
         <div className="modal-overlay">
           <div className="modal">
             <h2>Movimentação: {selectedProduct.name}</h2>
+            <div style={{ marginBottom: '15px', padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <small><strong>Estoque Atual:</strong> {selectedProduct.current_stock} {selectedProduct.unit_type}</small><br/>
+              <small><strong>Custo Médio:</strong> R$ {Number(selectedProduct.avg_cost || 0).toFixed(2)}</small><br/>
+              <small><strong>Preço Venda:</strong> R$ {Number(selectedProduct.price || 0).toFixed(2)}</small>
+            </div>
             <input type="number" placeholder="Quantidade" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} className="input" />
-            {movement.type === 'inbound' && <input type="number" placeholder="Custo Unitário R$" value={movement.unit_cost} onChange={e => setMovement({...movement, unit_cost: e.target.value})} className="input" />}
+            {movement.type === 'inbound' && (
+              <>
+                <input type="number" placeholder="Custo Unitário R$" step="0.01" value={movement.unit_cost} onChange={e => setMovement({...movement, unit_cost: e.target.value})} className="input" />
+                {movement.unit_cost && parseFloat(movement.unit_cost) > 0 && (
+                  <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4CAF50' }}>
+                    <small><strong>Novo Custo Médio Estimado:</strong></small><br/>
+                    {(() => {
+                      const currentStock = Number(selectedProduct.current_stock || 0);
+                      const newQty = Number(movement.quantity || 0);
+                      const currentCost = Number(selectedProduct.avg_cost || 0);
+                      const newCost = Number(movement.unit_cost || 0);
+                      if (newQty > 0 && newCost > 0) {
+                        const newAvgCost = (currentStock * currentCost + newQty * newCost) / (currentStock + newQty);
+                        const targetMargin = selectedProduct.product_profit_margin || selectedProduct.category_margin || 30;
+                        const suggestedPrice = newAvgCost / (1 - targetMargin / 100);
+                        return (
+                          <>
+                            <small>R$ {newAvgCost.toFixed(2)}</small><br/>
+                            <small style={{ color: '#4CAF50', marginTop: '6px', display: 'block' }}><strong>💰 Preço Sugerido:</strong> R$ {suggestedPrice.toFixed(2)}</small>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
+              </>
+            )}
             <div className="modal-actions">
                 <button onClick={handleStockMovement} className="btn-primary">Confirmar</button>
                 <button onClick={() => setShowMovementModal(false)} className="btn-secondary">Cancelar</button>
