@@ -1,4 +1,4 @@
-CREATE VIEW IF NOT EXISTS v_critical_stock AS
+CREATE OR REPLACE VIEW v_critical_stock AS
 SELECT 
     id, 
     name, 
