@@ -42,6 +42,13 @@ const runWithTransaction = (work, callback) => {
   db.withTransaction((tx, finish) => { work(tx, finish); }, callback);
 };
 
+const createAuditLog = (action, details, performed_by, type = 'info', level = 'low') => {
+  db.run("INSERT INTO audit_logs (action, details, performed_by, type, level) VALUES (?, ?, ?, ?, ?)",
+    [action, JSON.stringify(details), performed_by, type, level], (err) => {
+      if (err) console.error("Erro ao gravar log de auditoria:", err);
+    });
+};
+
 // --- CLIENTES ---
 router.get("/customers", authenticateToken, (req, res) => {
     db.all("SELECT * FROM customers ORDER BY name", [], (err, rows) => res.json(rows));
@@ -244,9 +251,10 @@ router.get("/pos/cash-session/current", authenticateToken, (req, res) => {
 
 router.post("/pos/cash-session/open", authenticateToken, (req, res) => {
   const { opening_amount, notes } = req.body;
-  db.get("INSERT INTO cash_sessions (operator_id, opening_amount, notes) VALUES (?, ?, ?) RETURNING *",
+    db.get("INSERT INTO cash_sessions (operator_id, opening_amount, notes) VALUES (?, ?, ?) RETURNING *",
     [req.user.id, opening_amount, notes], (err, row) => {
       if (err) return res.status(400).json({ message: "Erro ao abrir caixa." });
+      createAuditLog("CAIXA_ABERTO", { opening_amount, notes }, req.user.id, 'system', 'medium');
       res.status(201).json(row);
     });
 });
@@ -343,17 +351,18 @@ router.post("/sales", authenticateToken, (req, res) => {
           const itemProportionalDiscount = totalGeralBruto > 0 ? (subtotal / totalGeralBruto) * manualDiscountAmount : 0;
           const finalTotal = subtotal - itemProportionalDiscount;
 
-          tx.run(
-            "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id],
-            (errS) => {
-              if (errS) return finish(errS);
-              tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id], (errU) => {
-                if (errU) return finish(errU);
-                processItem(idx + 1);
-              });
-            }
-          );
+        tx.run(
+          "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id],
+          (errS) => {
+            if (errS) return finish(errS);
+            tx.run("UPDATE products SET current_stock = current_stock - ? WHERE id = ?", [item.quantity, item.product_id], (errU) => {
+              if (errU) return finish(errU);
+              createAuditLog("VENDA_REALIZADA", { product_id: item.product_id, quantity: item.quantity, total: finalTotal }, req.user.id, 'sale', 'low');
+              processItem(idx + 1);
+            });
+          }
+        );
         });
       };
       processItem(0);
