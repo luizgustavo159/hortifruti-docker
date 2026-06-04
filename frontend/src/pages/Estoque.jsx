@@ -26,8 +26,8 @@ export function Estoque() {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   const [newProduct, setNewProduct] = useState({ 
-    name: "", category_id: "", supplier_id: "", price: "", 
-    current_stock: "", min_stock: "", unit_type: "un", avg_cost: "" 
+    name: "", sku: "", category_id: "", supplier_id: "", price: "", 
+    current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "" 
   });
   const [newCategory, setNewCategory] = useState({ name: "", description: "", margin_target: "30" });
   const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", phone: "", email: "" });
@@ -238,20 +238,60 @@ export function Estoque() {
       {/* Modais mantidos conforme versão anterior */}
       {showNewProductModal && (
         <div className="modal-overlay">
-          <div className="modal">
-            <h2>Novo Produto</h2>
-            <input placeholder="Nome" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" />
-            <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input">
-                <option value="">Categoria...</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <div className="form-row">
-                <input placeholder="Custo" type="number" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
-                <input placeholder="Preço" type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" />
+          <div className="modal" style={{ maxWidth: '600px' }}>
+            <h2>📦 Novo Produto</h2>
+            <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Nome do Produto</label>
+                <input placeholder="Ex: Maçã Gala" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="input" />
+              </div>
+              <div className="form-group">
+                <label>Código SKU / Barras</label>
+                <input placeholder="Ex: 789..." value={newProduct.sku} onChange={e => setNewProduct({...newProduct, sku: e.target.value})} className="input" />
+              </div>
+              <div className="form-group">
+                <label>Tipo de Unidade</label>
+                <select value={newProduct.unit_type} onChange={e => setNewProduct({...newProduct, unit_type: e.target.value})} className="input">
+                  <option value="un">Unidade (un)</option>
+                  <option value="kg">Quilo (kg)</option>
+                  <option value="g">Grama (g)</option>
+                  <option value="cx">Caixa (cx)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Categoria</label>
+                <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="input">
+                    <option value="">Selecione...</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Fornecedor</label>
+                <select value={newProduct.supplier_id} onChange={e => setNewProduct({...newProduct, supplier_id: e.target.value})} className="input">
+                    <option value="">Selecione...</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Preço de Venda (R$)</label>
+                <input placeholder="0.00" type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="input" />
+              </div>
+              <div className="form-group">
+                <label>Custo Médio (R$)</label>
+                <input placeholder="0.00" type="number" value={newProduct.avg_cost} onChange={e => setNewProduct({...newProduct, avg_cost: e.target.value})} className="input" />
+              </div>
+              <div className="form-group">
+                <label>Estoque Atual</label>
+                <input placeholder="0" type="number" value={newProduct.current_stock} onChange={e => setNewProduct({...newProduct, current_stock: e.target.value})} className="input" />
+              </div>
+              <div className="form-group">
+                <label>Estoque Mínimo</label>
+                <input placeholder="0" type="number" value={newProduct.min_stock} onChange={e => setNewProduct({...newProduct, min_stock: e.target.value})} className="input" />
+              </div>
             </div>
-            <div className="modal-actions">
-                <button onClick={handleSaveProduct} className="btn-primary">Salvar</button>
-                <button onClick={() => setShowNewProductModal(false)} className="btn-secondary">Cancelar</button>
+            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                <button onClick={handleSaveProduct} className="btn-primary" style={{ flex: 1 }}>Cadastrar Produto</button>
+                <button onClick={() => setShowNewProductModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
             </div>
           </div>
         </div>
