@@ -112,6 +112,8 @@
 .focus-products-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-auto-rows: min-content;
+  align-items: start;
   gap: 12px;
   overflow-y: auto;
   padding-right: 8px;
@@ -127,10 +129,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   aspect-ratio: 1 / 1;
+  width: 100%;
+  height: auto;
   text-align: center;
   font-weight: 600;
+  gap: 4px;
 }
 
 .focus-product-btn:hover:not(:disabled) {
