@@ -95,11 +95,7 @@ export function Estoque() {
     const emoji = getEmojiForProduct(productName);
     const svg = `
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
-        <rect width="400" height="400" fill="#ffffff"/>
-        <circle cx="200" cy="150" r="110" fill="#f8f9fa" stroke="#eeeeee" stroke-width="2"/>
-        <text x="200" y="165" font-size="180" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
-        <text x="200" y="320" font-size="36" font-weight="bold" text-anchor="middle" fill="#333333" font-family="Arial">${productName.toUpperCase()}</text>
-        <rect x="120" y="345" width="160" height="4" fill="#4CAF50" rx="2"/>
+        <text x="200" y="220" font-size="280" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
       </svg>
     `;
     return new Promise((resolve) => {

@@ -344,7 +344,7 @@ export function Caixa() {
           <div className="products-grid">
             {filteredProducts.map(p => (
               <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
-                <div className="product-image-container" style={{ width: '100%', height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '8px', overflow: 'hidden', borderRadius: '8px', background: p.image_url ? 'white' : 'transparent' }}>
+                <div className="product-image-container" style={{ width: '100%', height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '8px', overflow: 'hidden', borderRadius: '8px', background: 'transparent' }}>
                   {p.image_url ? (
                     <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }} />
                   ) : (
