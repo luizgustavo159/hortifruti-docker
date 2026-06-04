@@ -53,17 +53,22 @@ export function Estoque() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ==================== MOTOR DE BUSCA SEMÂNTICA (IA LIGHT) ====================
+  // ==================== MOTOR DE BUSCA SEMÂNTICA REFINADO ====================
   const getEmojiForProduct = (name) => {
     const text = name.toLowerCase().trim();
     
+    // PRIORIDADE ABSOLUTA PARA MAÇÃ E TERMOS CRÍTICOS
+    if (text.includes("maçã") || text.includes("maca") || text === "apple") return "🍎";
+    if (text.includes("banana")) return "🍌";
+    if (text.includes("uva")) return "🍇";
+
     const library = {
-      "maçã|maca|apple": "🍎", "banana": "🍌", "morango|strawberry": "🍓", "uva|grape": "🍇", 
-      "melancia|watermelon": "🍉", "laranja|orange": "🍊", "limão|lemon": "🍋", "abacaxi|pineapple": "🍍",
-      "manga|mango": "🥭", "pêssego|peach": "🍑", "pera|pear": "🍐", "cereja|cherry": "🍒",
-      "melão|melon": "🍈", "amora|blueberry|mirtilo": "🫐", "coco|coconut": "🥥", "abacate|avocado": "🥑",
+      "morango|strawberry": "🍓", "cereja|cherry": "🍒", "melancia|watermelon": "🍉", 
+      "tomate|tomato": "🍅", "laranja|orange": "🍊", "limão|lemon": "🍋", "abacaxi|pineapple": "🍍",
+      "manga|mango": "🥭", "pêssego|peach": "🍑", "pera|pear": "🍐", "melão|melon": "🍈", 
+      "amora|blueberry|mirtilo": "🫐", "coco|coconut": "🥥", "abacate|avocado": "🥑",
       "kiwi": "🥝", "papaya|mamão": "🥭", "graviola|jaca|fruta": "🌳",
-      "tomate|tomato": "🍅", "cenoura|carrot": "🥕", "milho|corn": "🌽", "brócolis|broccoli": "🥦",
+      "cenoura|carrot": "🥕", "milho|corn": "🌽", "brócolis|broccoli": "🥦",
       "batata|potato": "🥔", "cebola|onion": "🧅", "alho|garlic": "🧄", "alface|repolho|folha|verde": "🥬",
       "pimentão|pepper": "🫑", "pimenta|chili": "🌶️", "berinjela|eggplant": "🍆", "pepino|cucumber": "🥒",
       "abóbora|pumpkin": "🎃", "cogumelo|mushroom": "🍄", "feijão|bean": "🫘", "batata doce": "🍠",
@@ -81,11 +86,8 @@ export function Estoque() {
 
     if (text.includes("suco") || text.includes("vitamina")) return "🥤";
     if (text.includes("doce") || text.includes("sobremesa")) return "🍰";
-    if (text.includes("frito") || text.includes("assado")) return "🍳";
     if (text.includes("verde") || text.includes("orgânico")) return "🌿";
-    if (text.includes("limpeza") || text.includes("detergente")) return "🧼";
-    if (text.includes("higiene") || text.includes("papel")) return "🧻";
-
+    
     return "📦";
   };
 
@@ -250,7 +252,6 @@ export function Estoque() {
             
             <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               
-              {/* ÁREA DE IMAGEM: BOTÕES COM 1/3 DA LARGURA */}
               <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
                 <div style={{ width: '130px', height: '130px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #ddd', backgroundColor: 'white', flexShrink: 0 }}>
                   {newProduct.image_url ? (
@@ -260,7 +261,7 @@ export function Estoque() {
                   )}
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '180px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '160px' }}>
                   <button type="button" onClick={handleGenerateCaricature} style={{ height: '38px', background: '#2196F3', border: 'none', color: 'white', cursor: 'pointer', borderRadius: '4px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                     🎨 Gerar
                   </button>
