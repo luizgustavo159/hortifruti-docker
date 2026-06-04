@@ -173,13 +173,51 @@ export function Estoque() {
     return base + checkDigit;
   };
 
+  const normalizeProductName = (name) => {
+    if (!name) return "";
+    const corrections = {
+      "maca": "MAÇÃ", "limao": "LIMÃO", "mamao": "MAMÃO", "melancia": "MELANCIA",
+      "pera": "PÊRA", "pessego": "PÊSSEGO", "maracuja": "MARACUJÁ", "goiaba": "GOIABA",
+      "uva": "UVA", "banana": "BANANA", "morango": "MORANGO", "abacaxi": "ABACAXI",
+      "manga": "MANGA", "laranja": "LARANJA", "mexerica": "MEXERICA", "tangerina": "TANGERINA",
+      "caqui": "CAQUI", "kiwi": "KIWI", "coco": "COCO", "abacate": "ABACATE",
+      "melao": "MELÃO", "ameixa": "AMEIXA", "cereja": "CEREJA", "framboesa": "FRAMBOESA",
+      "amora": "AMORA", "jabuticaba": "JABUTICABA", "carambola": "CARAMBOLA", "pitaya": "PITAYA",
+      "batata": "BATATA", "cebola": "CEBOLA", "alho": "ALHO", "tomate": "TOMATE",
+      "cenoura": "CENOURA", "pimentao": "PIMENTÃO", "berinjela": "BERINJELA", "abobora": "ABÓBORA",
+      "chuchu": "CHUCHU", "quiabo": "QUIABO", "vagem": "VAGEM", "jilo": "JILÓ",
+      "alface": "ALFACE", "couve": "COUVE", "repolho": "REPOLHO", "espinafre": "ESPINAFRE",
+      "rucula": "RÚCULA", "agriao": "AGRIÃO", "brocolis": "BRÓCOLIS", "couve-flor": "COUVE-FLOR",
+      "salsa": "SALSA", "coentro": "COENTRO", "cebolinha": "CEBOLINHA", "manjericao": "MANJERICÃO"
+    };
+    const lower = name.toLowerCase().trim();
+    return corrections[lower] || name.toUpperCase().trim();
+  };
+
   const handleSaveProduct = async () => {
     try {
-      if (selectedProduct) { await apiFetch(`/products/${selectedProduct.id}`, { method: "PUT", body: JSON.stringify(newProduct) }); }
-      else { await apiFetch("/products", { method: "POST", body: JSON.stringify(newProduct) }); }
+      const productToSave = { ...newProduct, name: normalizeProductName(newProduct.name) };
+      if (selectedProduct) { await apiFetch(`/products/${selectedProduct.id}`, { method: "PUT", body: JSON.stringify(productToSave) }); }
+      else { await apiFetch("/products", { method: "POST", body: JSON.stringify(productToSave) }); }
       setShowNewProductModal(false); setSelectedProduct(null);
       setNewProduct({ name: "", sku: "", category_id: "", supplier_id: "", price: "", current_stock: "0", min_stock: "0", unit_type: "un", avg_cost: "0", profit_margin: "30", image_url: "" });
       loadData();
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleSaveMovement = async () => {
+    try {
+      if (!selectedProduct) return;
+      const endpoint = movement.type === "loss" ? "/stock/loss" : "/stock/adjust";
+      const payload = movement.type === "loss" 
+        ? { product_id: selectedProduct.id, quantity: Number(movement.quantity), reason: movement.reason }
+        : { product_id: selectedProduct.id, delta: movement.type === "inbound" ? Number(movement.quantity) : -Number(movement.quantity), reason: movement.reason, unit_cost: Number(movement.unit_cost) };
+      
+      await apiFetch(endpoint, { method: "POST", body: JSON.stringify(payload) });
+      setShowMovementModal(false);
+      setMovement({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
+      loadData();
+      setSuccessMessage("Movimentação realizada com sucesso!");
     } catch (err) { setError(err.message); }
   };
 
@@ -249,7 +287,10 @@ export function Estoque() {
                         <td>R$ {price.toFixed(2)}</td>
                         <td><span className={margin < 30 ? "text-danger" : "text-success"}>{margin.toFixed(1)}%</span></td>
                         <td>
-                          <button className="btn-action" onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30", image_url: p.image_url || ""}); setShowNewProductModal(true); }}>Editar</button>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+  <button className="btn-action" onClick={() => { setSelectedProduct(p); setMovement({ type: "inbound", quantity: "", reason: "Ajuste de Estoque", unit_cost: p.avg_cost || "" }); setShowMovementModal(true); }}>Estoque</button>
+  <button className="btn-action" style={{ backgroundColor: '#9e9e9e' }} onClick={() => { setSelectedProduct(p); setNewProduct({name: p.name, sku: p.sku, category_id: p.category_id?.toString() || "", supplier_id: p.supplier_id?.toString() || "", price: p.price?.toString() || "", current_stock: p.current_stock?.toString() || "0", min_stock: p.min_stock?.toString() || "0", unit_type: p.unit_type, avg_cost: p.avg_cost?.toString() || "", profit_margin: p.product_profit_margin?.toString() || "30", image_url: p.image_url || ""}); setShowNewProductModal(true); }}>Editar</button>
+</div>
                         </td>
                       </tr>
                     );
@@ -334,6 +375,40 @@ export function Estoque() {
             <div className="form-group"><label>Telefone</label><input value={newSupplier.phone} onChange={e => setNewSupplier({...newSupplier, phone: e.target.value})} className="input" /></div>
             <div className="form-group"><label>Email</label><input value={newSupplier.email} onChange={e => setNewSupplier({...newSupplier, email: e.target.value})} className="input" /></div>
             <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}><button onClick={handleSaveSupplier} className="btn-primary" style={{ flex: 1 }}>Salvar</button><button onClick={() => setShowSupplierModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button></div>
+          </div>
+        </div>
+      )}
+
+      {showMovementModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '450px' }}>
+            <h2>🔄 Movimentação: {selectedProduct?.name}</h2>
+            <div className="form-group">
+              <label>Tipo de Operação</label>
+              <select value={movement.type} onChange={e => setMovement({...movement, type: e.target.value, reason: e.target.value === 'loss' ? 'Quebra/Avaria' : 'Compra'})} className="input">
+                <option value="inbound">Entrada (Compra/Ajuste +)</option>
+                <option value="outbound">Saída (Ajuste -)</option>
+                <option value="loss">Perda (Quebra/Vencimento)</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Quantidade ({selectedProduct?.unit_type})</label>
+              <input type="number" value={movement.quantity} onChange={e => setMovement({...movement, quantity: e.target.value})} className="input" placeholder="0.00" />
+            </div>
+            {movement.type === "inbound" && (
+              <div className="form-group">
+                <label>Custo Unitário (R$)</label>
+                <input type="number" step="0.01" value={movement.unit_cost} onChange={e => setMovement({...movement, unit_cost: e.target.value})} className="input" placeholder="0.00" />
+              </div>
+            )}
+            <div className="form-group">
+              <label>Descrição / Motivo</label>
+              <input value={movement.reason} onChange={e => setMovement({...movement, reason: e.target.value})} className="input" placeholder="Ex: Compra fornecedor X, Ajuste de balanço..." />
+            </div>
+            <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+              <button onClick={handleSaveMovement} className="btn-primary" style={{ flex: 1, backgroundColor: movement.type === 'loss' ? '#f44336' : '#4CAF50' }}>Confirmar</button>
+              <button onClick={() => setShowMovementModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
