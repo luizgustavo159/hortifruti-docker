@@ -11,7 +11,7 @@ export function Caderneta() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [paymentData, setPaymentData] = useState({ amount: "", method: "cash" });
-  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", credit_limit: 100 });
+  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", address: "", credit_limit: 100 });
 
   const loadCaderneta = async () => {
     setLoading(true);
@@ -66,7 +66,7 @@ export function Caderneta() {
         })
       });
       setShowCustomerModal(false);
-      setNewCustomer({ name: "", phone: "", credit_limit: 100 });
+      setNewCustomer({ name: "", phone: "", address: "", credit_limit: 100 });
       loadCaderneta();
     } catch (err) {
       alert("Erro ao cadastrar cliente: " + err.message);
@@ -96,6 +96,7 @@ export function Caderneta() {
                   <div className="customer-info">
                     <h4>{c.name}</h4>
                     <p>{c.phone || "Sem telefone"}</p>
+                    {c.address && <p style={{ fontSize: '11px', opacity: 0.8 }}>{c.address}</p>}
                   </div>
                   <div className="customer-debt">
                     <span style={{ fontSize: '10px', display: 'block', opacity: 0.7 }}>Dívida Atual</span>
@@ -218,6 +219,15 @@ export function Caderneta() {
                   value={newCustomer.phone} 
                   onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}
                   placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div className="form-group">
+                <label>Endereço</label>
+                <input 
+                  type="text" 
+                  value={newCustomer.address} 
+                  onChange={e => setNewCustomer({...newCustomer, address: e.target.value})}
+                  placeholder="RUA, NÚMERO, BAIRRO..."
                 />
               </div>
               <div className="form-group">

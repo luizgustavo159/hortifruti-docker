@@ -523,6 +523,38 @@ router.get("/stock/restock-suggestions", authenticateToken, (req, res) => {
     });
 });
 
+// --- CLIENTES ---
+router.get("/customers", authenticateToken, (req, res) => {
+    db.all("SELECT * FROM customers ORDER BY name", [], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Erro ao buscar clientes." });
+        res.json(rows || []);
+    });
+});
+
+router.post("/customers", authenticateToken, (req, res) => {
+    const { name, phone, address, credit_limit } = req.body;
+    db.get(
+        "INSERT INTO customers (name, phone, address, credit_limit) VALUES (?, ?, ?, ?) RETURNING id",
+        [name, phone, address, credit_limit || 500],
+        function(err, row) {
+            if (err) return res.status(500).json({ message: "Erro ao cadastrar cliente: " + err.message });
+            res.status(201).json(row || { id: this.lastID });
+        }
+    );
+});
+
+router.put("/customers/:id", authenticateToken, (req, res) => {
+    const { name, phone, address, credit_limit } = req.body;
+    db.run(
+        "UPDATE customers SET name=?, phone=?, address=?, credit_limit=? WHERE id=?",
+        [name, phone, address, credit_limit, req.params.id],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Erro ao atualizar cliente." });
+            res.json({ status: "ok" });
+        }
+    );
+});
+
 // --- USUÁRIOS ---
 router.get("/users", authenticateToken, (req, res) => {
   db.all("SELECT id, name, email, role, is_active, phone, permissions, created_at FROM users WHERE is_active = 1", [], (err, rows) => {

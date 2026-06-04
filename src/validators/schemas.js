@@ -119,6 +119,16 @@ const categorySchema = z.object({
 
 const categoryUpdateSchema = categorySchema.partial();
 
+// ============ CUSTOMER SCHEMAS ============
+const customerSchema = z.object({
+  name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
+  phone: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  credit_limit: z.coerce.number().min(0).default(500),
+});
+
+const customerUpdateSchema = customerSchema.partial();
+
 // ============ VALIDATION HELPER ============
 const validate = (schema) => {
   return (req, res, next) => {
@@ -179,6 +189,8 @@ module.exports = {
   stockMovementSchema,
   categorySchema,
   categoryUpdateSchema,
+  customerSchema,
+  customerUpdateSchema,
   validate,
   validateQuery
 };
