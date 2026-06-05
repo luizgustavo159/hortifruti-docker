@@ -57,21 +57,6 @@ export function Estoque() {
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }, []);
-    setLoading(true);
-    try {
-      const [prods, cats, sups, suggestions] = await Promise.all([
-        apiFetch("/products"),
-        apiFetch("/categories"),
-        apiFetch("/suppliers"),
-        apiFetch("/stock/restock-suggestions")
-      ]);
-      setProducts(Array.isArray(prods) ? prods : []);
-      setCategories(Array.isArray(cats) ? cats : []);
-      setSuppliers(Array.isArray(sups) ? sups : []);
-      setRestockSuggestions(Array.isArray(suggestions) ? suggestions : []);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
-  }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -414,7 +399,16 @@ export function Estoque() {
       )}
 
       <div className="inventory-controls">
-        <div className="search-bar">id">
+        <div className="search-bar">
+          <input 
+            type="text" 
+            placeholder="Buscar por nome, SKU ou categoria..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="input-search"
+          />
+        </div>
+        <div className="quick-stats">
           <div className="card"><h3>Itens Críticos</h3><strong className="value-large critical">{restockSuggestions.length}</strong></div>
           <div className="card"><h3>Valor em Estoque</h3><strong className="value-large">R$ {products.reduce((acc, p) => acc + (p.current_stock * (p.avg_cost || 0)), 0).toFixed(2)}</strong></div>
           <div className="card"><h3>Giro Médio</h3><strong className="value-large">Alta</strong></div>
