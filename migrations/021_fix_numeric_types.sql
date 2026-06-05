@@ -4,7 +4,10 @@
 -- O PostgreSQL não permite alterar o tipo de uma coluna que é usada por uma VIEW.
 -- Precisamos remover a view, alterar as colunas e recriar a view.
 
-DROP VIEW IF EXISTS v_product_margins;
+-- Remover views que dependem das colunas de estoque e quantidade
+DROP VIEW IF EXISTS v_product_margins CASCADE;
+DROP VIEW IF EXISTS v_critical_stock CASCADE;
+DROP VIEW IF EXISTS v_restock_suggestions CASCADE;
 
 -- Alterar a tabela products
 ALTER TABLE products ALTER COLUMN current_stock TYPE NUMERIC(12,3);
@@ -41,3 +44,27 @@ SELECT
     ELSE 0
   END as current_margin
 FROM products p;
+
+-- Recriar a view v_critical_stock (baseada na migração 020)
+CREATE VIEW v_critical_stock AS
+SELECT 
+    id, 
+    name, 
+    current_stock, 
+    min_stock,
+    (min_stock - current_stock) as missing_quantity
+FROM products
+WHERE current_stock <= min_stock AND deleted_at IS NULL;
+
+-- Recriar a view v_restock_suggestions (baseada na migração 009)
+CREATE VIEW v_restock_suggestions AS
+SELECT 
+    p.id,
+    p.name,
+    p.min_stock,
+    p.current_stock,
+    (p.min_stock - p.current_stock) AS deficit,
+    p.price,
+    (p.price * GREATEST(p.min_stock - p.current_stock, 0)) AS reposition_cost
+FROM products p
+WHERE p.current_stock <= p.min_stock AND p.deleted_at IS NULL;
