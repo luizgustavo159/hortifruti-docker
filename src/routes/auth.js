@@ -47,8 +47,32 @@ router.post("/login", validate(loginSchema), async (req, res) => {
         return res.status(401).json({ message: "Credenciais inválidas." });
       }
 
-      // Verificar se o usuário está bloqueado
-      if (!user.is_active) {
+      // Verificar se o usuário está em penalidade de tempo (trava progressiva)
+      if (user.locked_at) {
+        const lockedAt = new Date(user.locked_at).getTime();
+        const now = new Date().getTime();
+        const attempts = user.login_attempts_count || 0;
+        
+        // Cálculo da penalidade: a cada 3 erros, dobra o tempo (30s, 60s, 120s...)
+        // 3-5 erros: 30s | 6-8 erros: 60s | 9-11 erros: 120s | 12+ erros: 240s...
+        const penaltyLevel = Math.floor(attempts / 3);
+        if (penaltyLevel > 0) {
+          const waitSeconds = 30 * Math.pow(2, penaltyLevel - 1);
+          const waitMillis = waitSeconds * 1000;
+          
+          if (now < lockedAt + waitMillis) {
+            const remainingSeconds = Math.ceil((lockedAt + waitMillis - now) / 1000);
+            return res.status(429).json({ 
+              message: `Muitas tentativas. Tente novamente em ${remainingSeconds} segundos.`,
+              remainingSeconds,
+              locked: true
+            });
+          }
+        }
+      }
+
+      // Verificar se o usuário comum está bloqueado permanentemente
+      if (!user.is_active && user.role !== 'admin') {
         return res.status(403).json({ 
           message: "Usuário bloqueado. Procure o administrador para redefinir sua senha.",
           blocked: true 
@@ -60,19 +84,32 @@ router.post("/login", validate(loginSchema), async (req, res) => {
       if (!isMatch) {
         const newCount = (user.login_attempts_count || 0) + 1;
         
-        // Atualizar contagem de falhas
-        db.run("UPDATE users SET login_attempts_count = ? WHERE id = ?", [newCount, user.id]);
+        // Atualizar contagem e data do último erro para cálculo da penalidade
+        db.run("UPDATE users SET login_attempts_count = ?, locked_at = CURRENT_TIMESTAMP WHERE id = ?", [newCount, user.id]);
         
         db.run("INSERT INTO login_attempts (email, ip) VALUES (?, ?)", [user.email, req.ip]);
         createAuditLog("LOGIN_FALHA_SENHA_INCORRETA", { email: user.email, attempts: newCount }, user.id, 'warning', 'medium');
 
-        if (newCount >= 10) {
-          db.run("UPDATE users SET is_active = FALSE, locked_at = CURRENT_TIMESTAMP WHERE id = ?", [user.id]);
+        // Bloqueio permanente apenas para NÃO-ADMINS
+        if (newCount >= 10 && user.role !== 'admin') {
+          db.run("UPDATE users SET is_active = FALSE WHERE id = ?", [user.id]);
           createAuditLog("USUARIO_BLOQUEADO_FORCA_BRUTA", { email: user.email }, user.id, 'security', 'high');
           return res.status(403).json({ 
             message: "Muitas tentativas falhas. Usuário bloqueado.",
             attempts: newCount,
             blocked: true
+          });
+        }
+
+        // Retornar penalidade se atingiu múltiplo de 3
+        if (newCount >= 3) {
+          const penaltyLevel = Math.floor(newCount / 3);
+          const waitSeconds = 30 * Math.pow(2, penaltyLevel - 1);
+          return res.status(429).json({ 
+            message: `Credenciais inválidas. Aguarde ${waitSeconds} segundos para tentar novamente.`,
+            attempts: newCount,
+            remainingSeconds: waitSeconds,
+            locked: true
           });
         }
 

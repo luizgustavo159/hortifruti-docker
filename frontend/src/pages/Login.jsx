@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -9,12 +9,25 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [remainingTime, setRemainingTime] = useState(0);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let timer;
+    if (remainingTime > 0) {
+      timer = setInterval(() => {
+        setRemainingTime((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [remainingTime]);
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   const onSubmit = async (event) => {
     event.preventDefault();
+    if (remainingTime > 0) return;
+
     setError("");
     setLoading(true);
     try {
@@ -22,6 +35,13 @@ export function Login() {
     } catch (submitError) {
       const attempts = submitError.data?.attempts;
       const isBlocked = submitError.data?.blocked;
+      const waitTime = submitError.data?.remainingSeconds;
+
+      if (waitTime) {
+        setRemainingTime(waitTime);
+        setError(`Muitas tentativas. Aguarde ${waitTime}s.`);
+        return;
+      }
 
       if (isBlocked) {
         alert("🚫 USUÁRIO BLOQUEADO\n\nEste usuário foi bloqueado por excesso de tentativas falhas ou por decisão administrativa.\n\nPor favor, procure o administrador do sistema para redefinir sua senha.");
@@ -98,9 +118,15 @@ export function Login() {
             </div>
           )}
 
-          <button className="login-submit" type="submit" disabled={loading}>
+          <button 
+            className={`login-submit ${remainingTime > 0 ? 'bg-gray-400 cursor-not-allowed' : ''}`} 
+            type="submit" 
+            disabled={loading || remainingTime > 0}
+          >
             {loading ? (
               <span className="loading-spinner"></span>
+            ) : remainingTime > 0 ? (
+              <span>Tente em {remainingTime}s</span>
             ) : (
               <>
                 <LogIn size={18} />
