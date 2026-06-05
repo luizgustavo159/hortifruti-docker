@@ -8,6 +8,7 @@
 DROP VIEW IF EXISTS v_product_margins CASCADE;
 DROP VIEW IF EXISTS v_critical_stock CASCADE;
 DROP VIEW IF EXISTS v_restock_suggestions CASCADE;
+DROP VIEW IF EXISTS v_expiring_products CASCADE;
 
 -- Alterar a tabela products
 ALTER TABLE products ALTER COLUMN current_stock TYPE NUMERIC(12,3);
@@ -68,3 +69,14 @@ SELECT
     (p.price * GREATEST(p.min_stock - p.current_stock, 0)) AS reposition_cost
 FROM products p
 WHERE p.current_stock <= p.min_stock AND p.deleted_at IS NULL;
+
+-- Recriar a view v_expiring_products (baseada na migração 015)
+CREATE VIEW v_expiring_products AS
+SELECT 
+    id, 
+    name, 
+    expiry_date, 
+    current_stock, 
+    (expiry_date - CURRENT_DATE) as days_until_expiry
+FROM products
+WHERE expiry_date IS NOT NULL AND deleted_at IS NULL;
