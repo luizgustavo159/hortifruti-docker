@@ -9,6 +9,9 @@ DROP VIEW IF EXISTS v_product_margins CASCADE;
 DROP VIEW IF EXISTS v_critical_stock CASCADE;
 DROP VIEW IF EXISTS v_restock_suggestions CASCADE;
 DROP VIEW IF EXISTS v_expiring_products CASCADE;
+DROP VIEW IF EXISTS v_daily_sales CASCADE;
+DROP VIEW IF EXISTS v_operator_performance CASCADE;
+DROP VIEW IF EXISTS v_category_performance CASCADE;
 
 -- Alterar a tabela products
 ALTER TABLE products ALTER COLUMN current_stock TYPE NUMERIC(12,3);
@@ -80,3 +83,38 @@ SELECT
     (expiry_date - CURRENT_DATE) as days_until_expiry
 FROM products
 WHERE expiry_date IS NOT NULL AND deleted_at IS NULL;
+
+-- Recriar a view v_daily_sales (baseada na migração 005)
+CREATE VIEW v_daily_sales AS
+SELECT 
+    DATE(created_at) as sale_date,
+    SUM(total_amount) as daily_revenue,
+    SUM(quantity) as items_count,
+    COUNT(DISTINCT id) as sales_count
+FROM sales
+WHERE cancelled_at IS NULL
+GROUP BY DATE(created_at);
+
+-- Recriar a view v_operator_performance (baseada na migração 005)
+CREATE VIEW v_operator_performance AS
+SELECT 
+    operator_id,
+    COUNT(id) as total_sales,
+    SUM(total_amount) as total_revenue,
+    AVG(total_amount) as avg_ticket
+FROM sales
+WHERE cancelled_at IS NULL
+GROUP BY operator_id;
+
+-- Recriar a view v_category_performance (baseada na migração 005)
+CREATE VIEW v_category_performance AS
+SELECT 
+    p.category_id,
+    c.name as category_name,
+    SUM(s.quantity) as items_sold,
+    SUM(s.total_amount) as total_revenue
+FROM sales s
+JOIN products p ON s.product_id = p.id
+JOIN categories c ON p.category_id = c.id
+WHERE s.cancelled_at IS NULL
+GROUP BY p.category_id, c.name;
