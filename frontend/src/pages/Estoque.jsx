@@ -399,15 +399,6 @@ export function Estoque() {
       )}
 
       <div className="inventory-controls">
-        <div className="search-bar">
-          <input 
-            type="text" 
-            placeholder="Buscar por nome, SKU ou categoria..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-search"
-          />
-        </div>
         <div className="quick-stats">
           <div className="card"><h3>Itens Críticos</h3><strong className="value-large critical">{restockSuggestions.length}</strong></div>
           <div className="card"><h3>Valor em Estoque</h3><strong className="value-large">R$ {products.reduce((acc, p) => acc + (p.current_stock * (p.avg_cost || 0)), 0).toFixed(2)}</strong></div>
@@ -426,7 +417,13 @@ export function Estoque() {
         {activeTab === "inventory" && (
           <div className="tab-content">
             <div className="inventory-header">
-              <input type="text" placeholder="Buscar produto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="search-input" />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome, SKU ou categoria..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="search-input"
+              />
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn-secondary" onClick={() => setShowExportModal(true)}>📤 Exportar Catálogo</button>
                 <button className="btn-primary" onClick={() => setShowNewProductModal(true)}>+ Novo Produto</button>
