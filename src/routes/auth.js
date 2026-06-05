@@ -44,6 +44,7 @@ router.post("/login", validate(loginSchema), async (req, res) => {
 
       if (!user) {
         createAuditLog("LOGIN_FALHA_USUARIO_INEXISTENTE", { identifier }, null, 'warning', 'medium');
+        // Mensagem genérica para não dar pista se o usuário existe
         return res.status(401).json({ message: "Credenciais inválidas." });
       }
 
@@ -111,6 +112,7 @@ router.post("/login", validate(loginSchema), async (req, res) => {
           });
         }
 
+        // Mensagem genérica sempre
         return res.status(401).json({ 
           message: "Credenciais inválidas.",
           attempts: newCount 
