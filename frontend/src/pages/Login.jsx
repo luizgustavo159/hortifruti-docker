@@ -53,7 +53,9 @@ export function Login() {
         alert("🚨 ÚLTIMA TENTATIVA!\n\nVocê errou a senha 9 vezes.\n\nSe errar agora, sua conta será BLOQUEADA por segurança e apenas um administrador poderá reativá-la.");
         setError("ÚLTIMA TENTATIVA antes do bloqueio!");
       } else {
-        setError(submitError.message || "Falha ao autenticar. Verifique suas credenciais.");
+        const msg = submitError.message || "Falha ao autenticar. Verifique suas credenciais.";
+        alert(`❌ ERRO DE ACESSO\n\n${msg}`);
+        setError(msg);
       }
     } finally {
       setLoading(false);
