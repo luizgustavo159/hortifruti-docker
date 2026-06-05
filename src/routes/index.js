@@ -675,6 +675,16 @@ router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, re
   const { name, email, password, role, is_active } = req.body;
   
   const proceedUpdate = async () => {
+    // Trava de segurança: Admin não pode se desativar ou mudar o próprio cargo
+    if (String(req.user.id) === String(req.params.id)) {
+      if (is_active === false || is_active === 'false') {
+        return res.status(400).json({ message: "Você não pode desativar sua própria conta de administrador." });
+      }
+      if (role && role !== 'admin') {
+        return res.status(400).json({ message: "Você não pode alterar seu próprio cargo de administrador." });
+      }
+    }
+
     const callback = (err) => {
       if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
       createAuditLog("USUARIO_ATUALIZADO", { target_user_id: req.params.id, name, role }, req.user.id, 'security', 'medium');
@@ -706,6 +716,11 @@ router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, re
 });
 
 router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) => {
+  // Trava de segurança: Admin não pode se excluir
+  if (String(req.user.id) === String(req.params.id)) {
+    return res.status(400).json({ message: "Você não pode excluir sua própria conta de administrador." });
+  }
+
   db.run("UPDATE users SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id], (err) => {
     if (err) return res.status(500).json({ message: "Erro ao desativar usuário." });
     createAuditLog("USUARIO_EXCLUIDO", { user_id: req.params.id }, req.user.id, 'security', 'medium');
