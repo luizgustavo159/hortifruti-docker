@@ -325,6 +325,7 @@ router.get("/sales/recent", authenticateToken, (req, res) => {
         FROM sales s 
         JOIN products p ON s.product_id = p.id 
         LEFT JOIN customers c ON s.customer_id = c.id
+        WHERE s.cancelled_at IS NULL
     `;
     const params = [];
 
@@ -373,12 +374,16 @@ router.delete("/sales/:id", authenticateToken, requireRole("supervisor"), (req, 
           }
 
           function finalize() {
-            // 5. Excluir a venda
-            tx.run("DELETE FROM sales WHERE id = ?", [saleId], (errDel) => {
-              if (errDel) return finish(errDel);
-              createAuditLog("VENDA_EXCLUIDA", { sale_id: saleId, product_id: sale.product_id, qty: sale.quantity, total: sale.final_total }, req.user.id, 'security', 'medium');
-              finish(null);
-            });
+            // 5. Cancelar a venda (Soft-Delete)
+            tx.run(
+              "UPDATE sales SET cancelled_at = CURRENT_TIMESTAMP, cancel_reason = ?, cancelled_by = ? WHERE id = ?", 
+              ["Cancelamento solicitado pelo supervisor", req.user.id, saleId], 
+              (errDel) => {
+                if (errDel) return finish(errDel);
+                createAuditLog("VENDA_CANCELADA", { sale_id: saleId, product_id: sale.product_id, qty: sale.quantity, total: sale.final_total }, req.user.id, 'security', 'medium');
+                finish(null);
+              }
+            );
           }
         });
       });
@@ -677,7 +682,7 @@ router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, 
             COALESCE((SELECT SUM(l.quantity * pr.avg_cost) FROM stock_losses l JOIN products pr ON l.product_id = pr.id WHERE l.created_at >= $1 AND l.created_at <= $2), 0) as total_losses_value
         FROM sales s
         JOIN products p ON s.product_id = p.id
-        WHERE s.created_at >= $3 AND s.created_at <= $4
+        WHERE s.created_at >= $3 AND s.created_at <= $4 AND s.cancelled_at IS NULL
     `, [...isoRange, ...isoRange], (err, row) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar resumo: " + err.message });
         
@@ -708,7 +713,7 @@ router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (r
         SELECT u.name as name, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
         FROM sales s
         JOIN users u ON s.sold_by = u.id
-        WHERE s.created_at BETWEEN ? AND ?
+        WHERE s.created_at BETWEEN ? AND ? AND s.cancelled_at IS NULL
         GROUP BY u.id
     `, [start + " 00:00:00", end + " 23:59:59"], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar relatório por operador." });
@@ -723,7 +728,7 @@ router.get("/reports/by-category", authenticateToken, requireRole("manager"), (r
         FROM sales s
         JOIN products p ON s.product_id = p.id
         JOIN categories c ON p.category_id = c.id
-        WHERE s.created_at >= ? AND s.created_at <= ?
+        WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
         GROUP BY c.id
     `, [start + "T00:00:00.000Z", end + "T23:59:59.999Z"], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar relatório por categoria." });
@@ -749,7 +754,7 @@ router.get("/reports/losses", authenticateToken, requireRole("manager"), (req, r
 router.get("/caderneta", authenticateToken, (req, res) => {
     db.all(`
         SELECT c.*, 
-               (SELECT SUM(final_total) FROM sales WHERE customer_id = c.id AND payment_method = 'Fiado') as total_fiado,
+	               (SELECT SUM(final_total) FROM sales WHERE customer_id = c.id AND payment_method = 'Fiado' AND cancelled_at IS NULL) as total_fiado,
                (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) as last_purchase
         FROM customers c
         ORDER BY c.current_debt DESC, c.name ASC
@@ -769,10 +774,10 @@ router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
                 s.created_at, 
                 s.payment_method, 
                 string_agg(p.name::text, ', ') as items
-            FROM sales s
-            JOIN products p ON s.product_id = p.id
-            WHERE s.customer_id = ?::integer
-            GROUP BY s.id, s.final_total, s.created_at, s.payment_method
+	            FROM sales s
+	            JOIN products p ON s.product_id = p.id
+	            WHERE s.customer_id = ?::integer AND s.cancelled_at IS NULL
+	            GROUP BY s.id, s.final_total, s.created_at, s.payment_method
             
             UNION ALL
             

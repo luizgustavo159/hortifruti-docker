@@ -21,7 +21,8 @@ SELECT
   p.last_cost,
   COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) as target_margin,
   CASE 
-    WHEN p.avg_cost > 0 THEN ROUND(p.avg_cost * (1 + (COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) / 100)), 2)
+    WHEN p.avg_cost > 0 AND COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) < 100 THEN 
+      ROUND(p.avg_cost / (1 - (COALESCE(p.product_profit_margin, CAST(COALESCE((SELECT value FROM settings WHERE key = 'default_profit_margin'), '30') AS NUMERIC)) / 100)), 2)
     ELSE p.price
   END as suggested_price,
   CASE 

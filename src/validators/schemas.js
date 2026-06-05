@@ -48,7 +48,7 @@ const saleItemSchema = z.object({
 
 const saleSchema = z.object({
   items: z.array(saleItemSchema).min(1, 'Venda deve ter no mínimo 1 item'),
-  payment_method: z.enum(['cash', 'credit', 'debit', 'pix']),
+  payment_method: z.enum(['cash', 'pix', 'card', 'fiado']),
   discount_amount: z.number().min(0).default(0),
   notes: z.string().optional().default(''),
 });
