@@ -653,31 +653,55 @@ router.get("/users", authenticateToken, (req, res) => {
 
 router.post("/users", authenticateToken, requireRole("admin"), async (req, res) => {
   const { name, email, password, role, is_active } = req.body;
-  const bcrypt = require("bcryptjs");
-  const password_hash = await bcrypt.hash(password, 10);
-  db.get("INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?) RETURNING id",
-    [name, email, password_hash, role, is_active ? true : false], (err, row) => {
-      if (err) return res.status(400).json({ message: "Erro ao criar usuário: " + err.message });
-      res.status(201).json(row);
-    });
+  const prefix = email.split('@')[0];
+
+  // Verificar se o prefixo já existe
+  db.get("SELECT id FROM users WHERE email LIKE ? AND deleted_at IS NULL", [`${prefix}@%`], async (err, existing) => {
+    if (existing) {
+      return res.status(400).json({ message: `O prefixo '${prefix}' já está em uso por outro e-mail. Escolha um diferente.` });
+    }
+
+    const bcrypt = require("bcryptjs");
+    const password_hash = await bcrypt.hash(password, 10);
+    db.get("INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?) RETURNING id",
+      [name, email, password_hash, role, is_active ? true : false], (err, row) => {
+        if (err) return res.status(400).json({ message: "Erro ao criar usuário: " + err.message });
+        res.status(201).json(row);
+      });
+  });
 });
 
 router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, res) => {
   const { name, email, password, role, is_active } = req.body;
-  const callback = (err) => {
-    if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
-    createAuditLog("USUARIO_ATUALIZADO", { target_user_id: req.params.id, name, role }, req.user.id, 'security', 'medium');
-    res.json({ status: "ok" });
+  
+  const proceedUpdate = async () => {
+    const callback = (err) => {
+      if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
+      createAuditLog("USUARIO_ATUALIZADO", { target_user_id: req.params.id, name, role }, req.user.id, 'security', 'medium');
+      res.json({ status: "ok" });
+    };
+
+    if (password) {
+      const bcrypt = require("bcryptjs");
+      const password_hash = await bcrypt.hash(password, 10);
+      db.run("UPDATE users SET name=?, email=?, password_hash=?, role=?, is_active=? WHERE id=?",
+        [name, email, password_hash, role, is_active ? true : false, req.params.id], callback);
+    } else {
+      db.run("UPDATE users SET name=?, email=?, role=?, is_active=? WHERE id=?",
+        [name, email, role, is_active ? true : false, req.params.id], callback);
+    }
   };
 
-  if (password) {
-    const bcrypt = require("bcryptjs");
-    const password_hash = await bcrypt.hash(password, 10);
-    db.run("UPDATE users SET name=?, email=?, password_hash=?, role=?, is_active=? WHERE id=?",
-      [name, email, password_hash, role, is_active ? true : false, req.params.id], callback);
+  if (email) {
+    const prefix = email.split('@')[0];
+    db.get("SELECT id FROM users WHERE email LIKE ? AND id != ? AND deleted_at IS NULL", [`${prefix}@%`, req.params.id], (err, existing) => {
+      if (existing) {
+        return res.status(400).json({ message: `O prefixo '${prefix}' já está em uso por outro usuário.` });
+      }
+      proceedUpdate();
+    });
   } else {
-    db.run("UPDATE users SET name=?, email=?, role=?, is_active=? WHERE id=?",
-      [name, email, role, is_active ? true : false, req.params.id], callback);
+    proceedUpdate();
   }
 });
 
@@ -1004,8 +1028,13 @@ router.post("/approvals", authenticateToken, async (req, res) => {
     return res.status(400).json({ message: "E-mail e senha são obrigatórios para aprovação." });
   }
 
-  // Buscar o gerente específico pelo e-mail fornecido
-  db.get("SELECT id, name, password_hash, role FROM users WHERE email = ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL", [email], async (err, manager) => {
+  // Buscar o gerente específico pelo e-mail completo ou prefixo
+  const query = email.includes('@') 
+    ? "SELECT id, name, password_hash, role FROM users WHERE email = ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL"
+    : "SELECT id, name, password_hash, role FROM users WHERE email LIKE ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL";
+  const params = email.includes('@') ? [email] : [`${email}@%`];
+
+  db.get(query, params, async (err, manager) => {
     if (err) {
       console.error("Erro ao buscar gerente para aprovação:", err);
       return res.status(500).json({ message: "Erro interno ao processar aprovação." });

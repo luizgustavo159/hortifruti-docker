@@ -26,41 +26,76 @@ const { JWT_SECRET } = config;
  * @desc Autenticar usuário e retornar tokens
  */
 router.post("/login", validate(loginSchema), async (req, res) => {
-  const { email, password } = req.validated;
+  const { email: identifier, password } = req.validated;
 
   try {
-    db.get("SELECT * FROM users WHERE email = ? AND is_active = TRUE AND deleted_at IS NULL", [email], async (err, user) => {
+    // Busca flexível: por e-mail completo OU por prefixo (antes do @)
+    const query = identifier.includes('@') 
+      ? "SELECT * FROM users WHERE email = ? AND deleted_at IS NULL"
+      : "SELECT * FROM users WHERE email LIKE ? AND deleted_at IS NULL";
+    const params = identifier.includes('@') ? [identifier] : [`${identifier}@%`];
+
+    db.get(query, params, async (err, user) => {
       if (err) {
         console.error("Erro ao buscar usuário:", err);
-        createAuditLog("ERRO_LOGIN_DB", { error: err.message, email }, null, 'error', 'high');
+        createAuditLog("ERRO_LOGIN_DB", { error: err.message, identifier }, null, 'error', 'high');
         return res.status(500).json({ message: "Erro interno do servidor." });
       }
 
       if (!user) {
-        createAuditLog("LOGIN_FALHA_USUARIO_INEXISTENTE", { email }, null, 'warning', 'medium');
+        createAuditLog("LOGIN_FALHA_USUARIO_INEXISTENTE", { identifier }, null, 'warning', 'medium');
         return res.status(401).json({ message: "Credenciais inválidas." });
       }
 
-      const isMatch = await bcrypt.compare(password, user.password_hash);
-      if (!isMatch) {
-        db.run("INSERT INTO login_attempts (email, ip) VALUES (?, ?)", [email, req.ip]);
-        createAuditLog("LOGIN_FALHA_SENHA_INCORRETA", { email, user_id: user.id }, user.id, 'warning', 'medium');
-        return res.status(401).json({ message: "Credenciais inválidas." });
+      // Verificar se o usuário está bloqueado
+      if (!user.is_active) {
+        return res.status(403).json({ 
+          message: "Usuário bloqueado. Procure o administrador para redefinir sua senha.",
+          blocked: true 
+        });
       }
+
+      const isMatch = await bcrypt.compare(password, user.password_hash);
+      
+      if (!isMatch) {
+        const newCount = (user.login_attempts_count || 0) + 1;
+        
+        // Atualizar contagem de falhas
+        db.run("UPDATE users SET login_attempts_count = ? WHERE id = ?", [newCount, user.id]);
+        
+        db.run("INSERT INTO login_attempts (email, ip) VALUES (?, ?)", [user.email, req.ip]);
+        createAuditLog("LOGIN_FALHA_SENHA_INCORRETA", { email: user.email, attempts: newCount }, user.id, 'warning', 'medium');
+
+        if (newCount >= 10) {
+          db.run("UPDATE users SET is_active = FALSE, locked_at = CURRENT_TIMESTAMP WHERE id = ?", [user.id]);
+          createAuditLog("USUARIO_BLOQUEADO_FORCA_BRUTA", { email: user.email }, user.id, 'security', 'high');
+          return res.status(403).json({ 
+            message: "Muitas tentativas falhas. Usuário bloqueado.",
+            attempts: newCount,
+            blocked: true
+          });
+        }
+
+        return res.status(401).json({ 
+          message: "Credenciais inválidas.",
+          attempts: newCount 
+        });
+      }
+
+      // Login sucesso: resetar contagem de falhas
+      db.run("UPDATE users SET login_attempts_count = 0, locked_at = NULL WHERE id = ?", [user.id]);
 
       const accessToken = generateAccessToken(user.id, user.email, user.role);
       const refreshToken = generateRefreshToken(user.id, user.email, user.role);
 
-      // Salvar sessão no banco
       db.run("INSERT INTO sessions (user_id, token) VALUES (?, ?)", [user.id, accessToken]);
 
-      // Remover hash da senha antes de enviar
-      const { password_hash, ...userWithoutPassword } = user;
+      const { password_hash, login_attempts_count, locked_at, ...userWithoutSensitiveData } = user;
 
       res.json({
         accessToken,
         refreshToken,
-        user: userWithoutPassword
+        user: userWithoutSensitiveData
       });
     });
   } catch (error) {

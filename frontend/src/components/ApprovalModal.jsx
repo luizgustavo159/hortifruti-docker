@@ -44,13 +44,13 @@ export function ApprovalModal({ action, onApproved, onCancel, title, message }) 
         
         <form onSubmit={handleApprove}>
           <div className="form-group">
-            <label>Email do Superior</label>
+            <label>Email ou Usuário do Superior</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="superior@empresa.com"
+              placeholder="ex: admin ou admin@empresa.com"
             />
           </div>
           <div className="form-group">

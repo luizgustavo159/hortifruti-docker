@@ -20,7 +20,21 @@ export function Login() {
     try {
       await login(email, password);
     } catch (submitError) {
-      setError(submitError.message || "Falha ao autenticar. Verifique suas credenciais.");
+      const attempts = submitError.data?.attempts;
+      const isBlocked = submitError.data?.blocked;
+
+      if (isBlocked) {
+        alert("🚫 USUÁRIO BLOQUEADO\n\nEste usuário foi bloqueado por excesso de tentativas falhas ou por decisão administrativa.\n\nPor favor, procure o administrador do sistema para redefinir sua senha.");
+        setError("Usuário bloqueado por segurança.");
+      } else if (attempts === 5) {
+        alert("⚠️ AVISO DE SEGURANÇA\n\nVocê já errou a senha 5 vezes.\n\nMais 5 tentativas incorretas e seu usuário será BLOQUEADO automaticamente.");
+        setError("5 tentativas falhas. Atenção ao limite de 10.");
+      } else if (attempts === 9) {
+        alert("🚨 ÚLTIMA TENTATIVA!\n\nVocê errou a senha 9 vezes.\n\nSe errar agora, sua conta será BLOQUEADA por segurança e apenas um administrador poderá reativá-la.");
+        setError("ÚLTIMA TENTATIVA antes do bloqueio!");
+      } else {
+        setError(submitError.message || "Falha ao autenticar. Verifique suas credenciais.");
+      }
     } finally {
       setLoading(false);
     }
@@ -47,13 +61,13 @@ export function Login() {
 
         <form className="login-form" onSubmit={onSubmit}>
           <div className="form-group">
-            <label htmlFor="email">E-mail</label>
+            <label htmlFor="email">E-mail ou Usuário</label>
             <div className="input-with-icon">
               <Mail className="input-icon" size={18} />
               <input
                 id="email"
-                type="email"
-                placeholder="seu@email.com"
+                type="text"
+                placeholder="ex: luiz ou luiz@email.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
