@@ -973,38 +973,40 @@ router.get("/reports/hourly-sales", authenticateToken, requireRole("manager"), (
 
 // --- APROVAÇÕES ---
 router.post("/approvals", authenticateToken, async (req, res) => {
-  const { password, action, reason } = req.body;
+  const { email, password, action, reason } = req.body;
   const bcrypt = require("bcryptjs");
 
-  // Buscar o usuário logado para verificar se ele mesmo é gerente ou se informou senha de um gerente
-  db.get("SELECT * FROM users WHERE (role IN ('manager', 'admin')) AND is_active = TRUE", [], async (err, manager) => {
-    if (err || !manager) return res.status(403).json({ message: "Nenhum gerente ativo encontrado para aprovação." });
+  if (!email || !password) {
+    return res.status(400).json({ message: "E-mail e senha são obrigatórios para aprovação." });
+  }
 
-    // Aqui, em um sistema real, poderíamos pedir o e-mail do gerente também. 
-    // Para simplificar o fluxo de PDV, vamos validar se a senha fornecida pertence a QUALQUER gerente ativo.
-    // Ou melhor: buscar o gerente pelo e-mail se fornecido, ou validar a senha do próprio usuário se ele for gerente.
-    
-    db.all("SELECT password_hash, name, id FROM users WHERE role IN ('manager', 'admin') AND is_active = TRUE", [], async (errAll, managers) => {
-      let authorized = false;
-      let authorizedBy = null;
+  // Buscar o gerente específico pelo e-mail fornecido
+  db.get("SELECT id, name, password_hash, role FROM users WHERE email = ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL", [email], async (err, manager) => {
+    if (err) {
+      console.error("Erro ao buscar gerente para aprovação:", err);
+      return res.status(500).json({ message: "Erro interno ao processar aprovação." });
+    }
 
-      for (const m of managers) {
-        if (await bcrypt.compare(password, m.password_hash)) {
-          authorized = true;
-          authorizedBy = m;
-          break;
-        }
-      }
+    if (!manager) {
+      createAuditLog("TENTATIVA_APROVACAO_USUARIO_INVALIDO", { email, action }, req.user.id, 'security', 'high');
+      return res.status(403).json({ message: "Usuário não encontrado ou sem permissão de gerente." });
+    }
 
-      if (!authorized) {
-        createAuditLog("TENTATIVA_APROVACAO_FALHA", { action, reason }, req.user.id, 'security', 'high');
-        return res.status(403).json({ message: "Senha de gerente inválida." });
-      }
+    const isMatch = await bcrypt.compare(password, manager.password_hash);
+    if (!isMatch) {
+      createAuditLog("TENTATIVA_APROVACAO_SENHA_INCORRETA", { email, action, reason }, req.user.id, 'security', 'high');
+      return res.status(403).json({ message: "Senha de gerente inválida." });
+    }
 
-      const token = jwt.sign({ action, approved_by: authorizedBy.id, timestamp: Date.now() }, JWT_SECRET, { expiresIn: '5m' });
-      createAuditLog("APROVACAO_CONCEDIDA", { action, reason, approved_by: authorizedBy.name }, req.user.id, 'security', 'medium');
-      res.json({ token });
-    });
+    const token = jwt.sign({ 
+      action, 
+      approved_by: manager.id, 
+      approved_by_name: manager.name,
+      timestamp: Date.now() 
+    }, JWT_SECRET, { expiresIn: '5m' });
+
+    createAuditLog("APROVACAO_CONCEDIDA", { action, reason, approved_by: manager.name }, req.user.id, 'security', 'medium');
+    res.json({ token });
   });
 });
 
