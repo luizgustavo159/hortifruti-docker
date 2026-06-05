@@ -330,7 +330,7 @@ router.get("/sales/recent", authenticateToken, (req, res) => {
     const params = [];
 
     if (start && end) {
-        query += " WHERE s.created_at >= ? AND s.created_at <= ?";
+        query += " AND s.created_at >= ? AND s.created_at <= ?";
         params.push(start + "T00:00:00.000Z", end + "T23:59:59.999Z");
     }
 
@@ -625,7 +625,7 @@ router.delete("/customers/:id", authenticateToken, (req, res) => {
 
 // --- USUÁRIOS ---
 router.get("/users", authenticateToken, (req, res) => {
-  db.all("SELECT id, name, email, role, is_active, phone, permissions, created_at FROM users WHERE is_active = 1", [], (err, rows) => {
+  db.all("SELECT id, name, email, role, is_active, phone, permissions, created_at FROM users WHERE is_active = TRUE", [], (err, rows) => {
     if (err) return res.status(500).json({ message: "Erro ao buscar usuários." });
     res.json(rows);
   });
@@ -636,7 +636,7 @@ router.post("/users", authenticateToken, requireRole("admin"), async (req, res) 
   const bcrypt = require("bcryptjs");
   const password_hash = await bcrypt.hash(password, 10);
   db.get("INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?) RETURNING id",
-    [name, email, password_hash, role, is_active ? 1 : 0], (err, row) => {
+    [name, email, password_hash, role, is_active ? true : false], (err, row) => {
       if (err) return res.status(400).json({ message: "Erro ao criar usuário: " + err.message });
       res.status(201).json(row);
     });
@@ -648,13 +648,13 @@ router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, re
     const bcrypt = require("bcryptjs");
     const password_hash = await bcrypt.hash(password, 10);
     db.run("UPDATE users SET name=?, email=?, password_hash=?, role=?, is_active=? WHERE id=?",
-      [name, email, password_hash, role, is_active ? 1 : 0, req.params.id], (err) => {
+      [name, email, password_hash, role, is_active ? true : false, req.params.id], (err) => {
         if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
         res.json({ status: "ok" });
       });
   } else {
     db.run("UPDATE users SET name=?, email=?, role=?, is_active=? WHERE id=?",
-      [name, email, role, is_active ? 1 : 0, req.params.id], (err) => {
+      [name, email, role, is_active ? true : false, req.params.id], (err) => {
         if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
         res.json({ status: "ok" });
       });
@@ -662,7 +662,7 @@ router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, re
 });
 
 router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) => {
-  db.run("UPDATE users SET is_active = 0, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id], (err) => {
+  db.run("UPDATE users SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id], (err) => {
     if (err) return res.status(500).json({ message: "Erro ao desativar usuário." });
     createAuditLog("USUARIO_EXCLUIDO", { user_id: req.params.id }, req.user.id, 'security', 'medium');
     res.json({ status: "ok" });
@@ -671,7 +671,10 @@ router.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) 
 
 // --- RELATÓRIOS ---
 router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, res) => {
-    const { start, end } = req.query;
+    // Aplicar datas padrão se não informadas para evitar undefinedT00:00:00.000Z
+    const today = new Date().toISOString().slice(0, 10);
+    const start = req.query.start || today;
+    const end = req.query.end || today;
     const isoRange = [start + "T00:00:00.000Z", end + "T23:59:59.999Z"];
     
     db.get(`
@@ -708,7 +711,9 @@ router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, 
 });
 
 router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (req, res) => {
-    const { start, end } = req.query;
+    const today = new Date().toISOString().slice(0, 10);
+    const start = req.query.start || today;
+    const end = req.query.end || today;
     db.all(`
         SELECT u.name as name, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
         FROM sales s
@@ -722,7 +727,9 @@ router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (r
 });
 
 router.get("/reports/by-category", authenticateToken, requireRole("manager"), (req, res) => {
-    const { start, end } = req.query;
+    const today = new Date().toISOString().slice(0, 10);
+    const start = req.query.start || today;
+    const end = req.query.end || today;
     db.all(`
         SELECT c.name as category, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
         FROM sales s
@@ -737,7 +744,9 @@ router.get("/reports/by-category", authenticateToken, requireRole("manager"), (r
 });
 
 router.get("/reports/losses", authenticateToken, requireRole("manager"), (req, res) => {
-    const { start, end } = req.query;
+    const today = new Date().toISOString().slice(0, 10);
+    const start = req.query.start || today;
+    const end = req.query.end || today;
     db.all(`
         SELECT l.*, p.name as product_name, (l.quantity * p.avg_cost) as financial_loss
         FROM stock_losses l
@@ -857,7 +866,10 @@ router.get("/logs", authenticateToken, requireRole("manager"), (req, res) => {
         LEFT JOIN users u ON l.performed_by = u.id
         WHERE l.created_at BETWEEN ? AND ?
     `;
-    const params = [start + " 00:00:00", end + " 23:59:59"];
+    const today = new Date().toISOString().slice(0, 10);
+    const startDate = (start && start !== 'undefined') ? start : today;
+    const endDate = (end && end !== 'undefined') ? end : today;
+    const params = [startDate + "T00:00:00.000Z", endDate + "T23:59:59.999Z"];
 
     if (type && type !== 'all') {
         query += " AND l.type = ?";
@@ -889,7 +901,7 @@ router.get("/alerts", authenticateToken, (req, res) => {
             SELECT p.id, p.name, p.expiry_date, 'expiring' as alert_type
             FROM products p
             WHERE p.expiry_date IS NOT NULL 
-              AND p.expiry_date <= date('now', '+7 days') 
+              AND p.expiry_date <= (CURRENT_DATE + INTERVAL '7 days')
               AND p.deleted_at IS NULL
         `, [], (err2, expiring) => {
             if (err2) return res.status(500).json({ message: "Erro ao buscar alertas de vencimento." });
@@ -920,12 +932,14 @@ router.put("/settings", authenticateToken, requireRole("admin"), (req, res) => {
 
 // --- RELATÓRIOS (EXTRAS) ---
 router.get("/reports/performance", authenticateToken, requireRole("manager"), (req, res) => {
-    const { start, end } = req.query;
+    const today = new Date().toISOString().slice(0, 10);
+    const start = req.query.start || today;
+    const end = req.query.end || today;
     const params = [start + "T00:00:00.000Z", end + "T23:59:59.999Z"];
     
     db.all(`
         SELECT 
-            strftime('%H', created_at) as hour,
+            EXTRACT(HOUR FROM created_at)::int as hour,
             COUNT(*) as total_sales,
             SUM(final_total) as total_revenue
         FROM sales
@@ -963,14 +977,14 @@ router.post("/approvals", authenticateToken, async (req, res) => {
   const bcrypt = require("bcryptjs");
 
   // Buscar o usuário logado para verificar se ele mesmo é gerente ou se informou senha de um gerente
-  db.get("SELECT * FROM users WHERE (role IN ('manager', 'admin')) AND is_active = 1", [], async (err, manager) => {
+  db.get("SELECT * FROM users WHERE (role IN ('manager', 'admin')) AND is_active = TRUE", [], async (err, manager) => {
     if (err || !manager) return res.status(403).json({ message: "Nenhum gerente ativo encontrado para aprovação." });
 
     // Aqui, em um sistema real, poderíamos pedir o e-mail do gerente também. 
     // Para simplificar o fluxo de PDV, vamos validar se a senha fornecida pertence a QUALQUER gerente ativo.
     // Ou melhor: buscar o gerente pelo e-mail se fornecido, ou validar a senha do próprio usuário se ele for gerente.
     
-    db.all("SELECT password_hash, name, id FROM users WHERE role IN ('manager', 'admin') AND is_active = 1", [], async (errAll, managers) => {
+    db.all("SELECT password_hash, name, id FROM users WHERE role IN ('manager', 'admin') AND is_active = TRUE", [], async (errAll, managers) => {
       let authorized = false;
       let authorizedBy = null;
 

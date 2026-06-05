@@ -29,7 +29,7 @@ router.post("/login", validate(loginSchema), async (req, res) => {
   const { email, password } = req.validated;
 
   try {
-    db.get("SELECT * FROM users WHERE email = ? AND is_active = 1 AND deleted_at IS NULL", [email], async (err, user) => {
+    db.get("SELECT * FROM users WHERE email = ? AND is_active = TRUE AND deleted_at IS NULL", [email], async (err, user) => {
       if (err) {
         console.error("Erro ao buscar usuário:", err);
         createAuditLog("ERRO_LOGIN_DB", { error: err.message, email }, null, 'error', 'high');
@@ -83,7 +83,7 @@ router.post("/refresh", async (req, res) => {
   try {
     const decoded = verifyRefreshToken(refreshToken);
     
-    db.get("SELECT * FROM users WHERE id = ? AND is_active = 1 AND deleted_at IS NULL", [decoded.id], (err, user) => {
+    db.get("SELECT * FROM users WHERE id = ? AND is_active = TRUE AND deleted_at IS NULL", [decoded.id], (err, user) => {
       if (err || !user) {
         return res.status(401).json({ message: "Usuário inválido ou inativo." });
       }

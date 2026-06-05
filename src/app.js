@@ -42,8 +42,9 @@ const logger = pino({
 });
 app.use(pinoHttp({ logger, genReqId: () => crypto.randomUUID() }));
 
-// Health Check
+// Health Check — exposto em /health E em /api/health para compatibilidade com Dockerfile
 app.get("/health", (req, res) => res.json({ status: "ok" }));
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
 // Servir Frontend Estático
 app.use(express.static(path.join(__dirname, "..", "public")));

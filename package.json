@@ -26,5 +26,8 @@
     "pino-http": "^9.0.0",
     "redis": "^5.12.1",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "pino-pretty": "^11.0.0"
   }
 }

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'operator',
-  is_active INTEGER NOT NULL DEFAULT 1,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   permissions TEXT,
   locked_until TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS discounts (
   name TEXT NOT NULL,
   type TEXT NOT NULL,
   value NUMERIC(12,2) NOT NULL DEFAULT 0,
+  description TEXT,
   min_quantity INTEGER NOT NULL DEFAULT 0,
   buy_quantity INTEGER NOT NULL DEFAULT 0,
   get_quantity INTEGER NOT NULL DEFAULT 0,
@@ -175,6 +176,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details TEXT,
   performed_by INTEGER,
   approved_by INTEGER,
+  type TEXT NOT NULL DEFAULT 'info',
+  level TEXT NOT NULL DEFAULT 'low',
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(performed_by) REFERENCES users(id),
   FOREIGN KEY(approved_by) REFERENCES users(id)
