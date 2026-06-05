@@ -47,14 +47,12 @@ router.post("/login", validate(loginSchema), async (req, res) => {
         return res.status(401).json({ message: "Credenciais inválidas." });
       }
 
-      // Verificar se o usuário está em penalidade de tempo (trava progressiva)
-      if (user.locked_at) {
+      // Verificar se o ADMIN está em penalidade de tempo (trava progressiva exclusiva para Admin)
+      if (user.role === 'admin' && user.locked_at) {
         const lockedAt = new Date(user.locked_at).getTime();
         const now = new Date().getTime();
         const attempts = user.login_attempts_count || 0;
         
-        // Cálculo da penalidade: a cada 3 erros, dobra o tempo (30s, 60s, 120s...)
-        // 3-5 erros: 30s | 6-8 erros: 60s | 9-11 erros: 120s | 12+ erros: 240s...
         const penaltyLevel = Math.floor(attempts / 3);
         if (penaltyLevel > 0) {
           const waitSeconds = 30 * Math.pow(2, penaltyLevel - 1);
@@ -101,8 +99,8 @@ router.post("/login", validate(loginSchema), async (req, res) => {
           });
         }
 
-        // Retornar penalidade se atingiu múltiplo de 3
-        if (newCount >= 3) {
+        // Retornar penalidade apenas se for ADMIN e atingiu múltiplo de 3
+        if (user.role === 'admin' && newCount >= 3) {
           const penaltyLevel = Math.floor(newCount / 3);
           const waitSeconds = 30 * Math.pow(2, penaltyLevel - 1);
           return res.status(429).json({ 
