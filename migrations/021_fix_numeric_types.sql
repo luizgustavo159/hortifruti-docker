@@ -12,6 +12,8 @@ DROP VIEW IF EXISTS v_expiring_products CASCADE;
 DROP VIEW IF EXISTS v_daily_sales CASCADE;
 DROP VIEW IF EXISTS v_operator_performance CASCADE;
 DROP VIEW IF EXISTS v_category_performance CASCADE;
+DROP VIEW IF EXISTS v_sales_summary CASCADE;
+DROP VIEW IF EXISTS v_inventory_valuation CASCADE;
 
 -- Alterar a tabela products
 ALTER TABLE products ALTER COLUMN current_stock TYPE NUMERIC(12,3);
@@ -118,3 +120,20 @@ JOIN products p ON s.product_id = p.id
 JOIN categories c ON p.category_id = c.id
 WHERE s.cancelled_at IS NULL
 GROUP BY p.category_id, c.name;
+
+-- Recriar a view v_sales_summary (se existir)
+CREATE VIEW v_sales_summary AS
+SELECT 
+    DATE(created_at) as sale_date,
+    SUM(total_amount) as total_revenue,
+    SUM(quantity) as total_items
+FROM sales
+WHERE cancelled_at IS NULL
+GROUP BY DATE(created_at);
+
+-- Recriar a view v_inventory_valuation (se existir)
+CREATE VIEW v_inventory_valuation AS
+SELECT 
+    SUM(current_stock * avg_cost) as total_valuation
+FROM products
+WHERE deleted_at IS NULL;
