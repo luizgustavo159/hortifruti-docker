@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { apiFetch } from "../lib/api";
 import { getAuthUser } from "../lib/auth";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { RelogioGlobal } from "./RelogioGlobal";
@@ -49,6 +51,21 @@ const getNavItemsByRole = (role) => {
 export function Sidebar() {
   const { logout } = useAuth();
   const user = getAuthUser();
+  const [alerts, setAlerts] = useState([]);
+
+  useEffect(() => {
+    const checkAlerts = async () => {
+      try {
+        const data = await apiFetch("/alerts");
+        setAlerts(data || []);
+      } catch (err) {
+        console.error("Erro ao carregar alertas:", err);
+      }
+    };
+    checkAlerts();
+    const interval = setInterval(checkAlerts, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
   
   // Obter itens de navegação específicos para o role do usuário
   const items = getNavItemsByRole(user?.role || 'operator');
@@ -73,8 +90,18 @@ export function Sidebar() {
               to={item.to} 
               className={({ isActive }) => (isActive ? "active" : undefined)}
               end={item.to === "/admin"}
+              style={{ position: 'relative' }}
             >
               {item.label}
+              {item.to === "/estoque" && alerts.length > 0 && (
+                <span style={{ 
+                  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                  background: 'var(--danger)', color: 'white', fontSize: '10px', fontWeight: 'bold',
+                  padding: '2px 6px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  {alerts.length}
+                </span>
+              )}
             </NavLink>
           ))
         ) : (

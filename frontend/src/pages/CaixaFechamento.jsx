@@ -12,6 +12,7 @@ export function CaixaFechamento() {
   const [totalExpected, setTotalExpected] = useState(0);
   const [totalCounted, setTotalCounted] = useState(0);
   const [difference, setDifference] = useState(0);
+  const [isBlind, setIsBlind] = useState(true); // Default to blind close for security
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
 
@@ -121,6 +122,8 @@ export function CaixaFechamento() {
 
     const hasBreak = Math.abs(difference) > 0.01;
     
+    // In blind mode, we only require approval if they WANT to see the difference before closing
+    // or if the system detected a break and we want to force manager sign-off on closure.
     if (hasBreak && !approvalToken && !breakApprovalToken) {
       setShowBreakApprovalModal(true);
       return;
@@ -184,11 +187,12 @@ export function CaixaFechamento() {
         <ApprovalModal
           action="cash_close_break"
           title="Autorização de Quebra de Caixa"
-          message={`O caixa apresenta uma ${difference > 0 ? 'sobra' : 'falta'} de R$ ${Math.abs(difference).toFixed(2)}. Um gerente deve autorizar o fechamento com quebra.`}
+          message={`O caixa apresenta uma ${difference > 0 ? 'sobra' : 'falta'} de R$ ${Math.abs(difference).toFixed(2)}. Um gerente deve autorizar a revelação do saldo ou o fechamento com quebra.`}
           onApproved={(token) => {
             setBreakApprovalToken(token);
             setShowBreakApprovalModal(false);
-            handleCloseCaixa(null, token);
+            setIsBlind(false); // Reveal balance after approval
+            toast.success("Saldo revelado e autorizado!");
           }}
           onCancel={() => setShowBreakApprovalModal(false)}
         />
@@ -196,12 +200,14 @@ export function CaixaFechamento() {
       <div className="caixa-fechamento-container">
         {/* Resumo */}
         <div className="resumo-section">
+          {!isBlind && (
+            <div className="resumo-card">
+              <h3>Valor Esperado</h3>
+              <p className="valor">R$ {totalExpected.toFixed(2)}</p>
+            </div>
+          )}
           <div className="resumo-card">
-            <h3>Valor Esperado</h3>
-            <p className="valor">R$ {totalExpected.toFixed(2)}</p>
-          </div>
-          <div className="resumo-card">
-            <h3>Valor Contado</h3>
+            <h3>Valor Contado (Dinheiro)</h3>
             <input
               type="number"
               value={totalCounted}
@@ -209,17 +215,26 @@ export function CaixaFechamento() {
               placeholder="0.00"
               className="valor-input"
               step="0.01"
+              autoFocus
             />
           </div>
-          <div className={`resumo-card ${Math.abs(difference) < 0.01 ? 'balanced' : difference > 0 ? 'surplus' : 'deficit'}`}>
-            <h3>Diferença (Dinheiro)</h3>
-            <p className="valor">R$ {difference.toFixed(2)}</p>
-            <p className="status">
-              {Math.abs(difference) < 0.01 && '✓ Caixa Balanceado'}
-              {difference > 0.01 && '↑ Sobra'}
-              {difference < -0.01 && '↓ Falta'}
-            </p>
-          </div>
+          {!isBlind ? (
+            <div className={`resumo-card ${Math.abs(difference) < 0.01 ? 'balanced' : difference > 0 ? 'surplus' : 'deficit'}`}>
+              <h3>Diferença (Dinheiro)</h3>
+              <p className="valor">R$ {difference.toFixed(2)}</p>
+              <p className="status">
+                {Math.abs(difference) < 0.01 && '✓ Caixa Balanceado'}
+                {difference > 0.01 && '↑ Sobra'}
+                {difference < -0.01 && '↓ Falta'}
+              </p>
+            </div>
+          ) : (
+            <div className="resumo-card blind-info">
+              <h3>Modo Seguro</h3>
+              <p className="hint">Declare o valor exato em dinheiro que está no caixa para conferência.</p>
+              <button className="btn-reveal" onClick={() => setShowBreakApprovalModal(true)} style={{ fontSize: '10px', marginTop: '8px', opacity: 0.6 }}>Revelar Saldo (Requer Gerente)</button>
+            </div>
+          )}
         </div>
 
         {/* Resumo por Forma de Pagamento */}

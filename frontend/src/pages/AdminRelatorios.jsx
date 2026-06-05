@@ -62,7 +62,11 @@ export function AdminRelatorios() {
       }
 
       const reportData = await apiFetch(endpoint);
-      setData(Array.isArray(reportData) ? reportData : []);
+      if (reportType === "performance") {
+        setData(reportData);
+      } else {
+        setData(Array.isArray(reportData) ? reportData : []);
+      }
     } catch (loadError) {
       setError(loadError.message || "Falha ao carregar relatório.");
     } finally {
@@ -165,6 +169,7 @@ export function AdminRelatorios() {
               <option value="summary">Resumo Geral</option>
               <option value="by-operator">Por Operador</option>
               <option value="by-category">Por Categoria</option>
+              <option value="performance">Performance de Vendas</option>
             </select>
           </div>
 
@@ -203,6 +208,55 @@ export function AdminRelatorios() {
 
         {loading ? (
           <p className="loading">Carregando relatório...</p>
+        ) : reportType === "performance" && data ? (
+          <div className="performance-dashboard">
+            <div className="performance-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <div className="performance-card" style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px' }}>
+                <h3>📈 Top 10 Produtos por Lucro</h3>
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>Volume</th>
+                      <th>Receita</th>
+                      <th>Lucro Bruto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.topProducts?.map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.name}</td>
+                        <td>{p.volume}</td>
+                        <td>R$ {p.revenue.toFixed(2)}</td>
+                        <td style={{ color: 'var(--success)', fontWeight: 'bold' }}>R$ {p.profit.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="performance-card" style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px' }}>
+                <h3>🕒 Vendas por Hora</h3>
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>Hora</th>
+                      <th>Vendas</th>
+                      <th>Receita</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.hourly?.map((h, i) => (
+                      <tr key={i}>
+                        <td>{h.hour}:00</td>
+                        <td>{h.total_sales}</td>
+                        <td>R$ {h.total_revenue.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         ) : data.length > 0 ? (
           <div className="report-wrapper">
 <div className="table-responsive">

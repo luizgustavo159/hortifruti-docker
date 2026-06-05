@@ -876,6 +876,29 @@ router.get("/logs", authenticateToken, requireRole("manager"), (req, res) => {
     });
 });
 
+// --- ALERTAS ---
+router.get("/alerts", authenticateToken, (req, res) => {
+    db.all(`
+        SELECT p.id, p.name, p.current_stock, p.min_stock, 'low_stock' as alert_type
+        FROM products p
+        WHERE p.current_stock <= p.min_stock AND p.deleted_at IS NULL
+    `, [], (err, lowStock) => {
+        if (err) return res.status(500).json({ message: "Erro ao buscar alertas de estoque." });
+        
+        db.all(`
+            SELECT p.id, p.name, p.expiry_date, 'expiring' as alert_type
+            FROM products p
+            WHERE p.expiry_date IS NOT NULL 
+              AND p.expiry_date <= date('now', '+7 days') 
+              AND p.deleted_at IS NULL
+        `, [], (err2, expiring) => {
+            if (err2) return res.status(500).json({ message: "Erro ao buscar alertas de vencimento." });
+            
+            res.json([...lowStock, ...expiring]);
+        });
+    });
+});
+
 // --- CONFIGURAÇÕES ---
 router.get("/settings", authenticateToken, (req, res) => {
   db.all("SELECT * FROM settings", [], (err, rows) => {
@@ -896,6 +919,42 @@ router.put("/settings", authenticateToken, requireRole("admin"), (req, res) => {
 });
 
 // --- RELATÓRIOS (EXTRAS) ---
+router.get("/reports/performance", authenticateToken, requireRole("manager"), (req, res) => {
+    const { start, end } = req.query;
+    const params = [start + "T00:00:00.000Z", end + "T23:59:59.999Z"];
+    
+    db.all(`
+        SELECT 
+            strftime('%H', created_at) as hour,
+            COUNT(*) as total_sales,
+            SUM(final_total) as total_revenue
+        FROM sales
+        WHERE created_at >= ? AND created_at <= ? AND cancelled_at IS NULL
+        GROUP BY hour
+        ORDER BY hour
+    `, params, (err, hourly) => {
+        if (err) return res.status(500).json({ message: "Erro ao gerar performance horária." });
+        
+        db.all(`
+            SELECT 
+                p.name,
+                COUNT(s.id) as volume,
+                SUM(s.final_total) as revenue,
+                SUM(s.final_total - (s.quantity * p.avg_cost)) as profit
+            FROM sales s
+            JOIN products p ON s.product_id = p.id
+            WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
+            GROUP BY p.id
+            ORDER BY profit DESC
+            LIMIT 10
+        `, params, (err2, topProducts) => {
+            if (err2) return res.status(500).json({ message: "Erro ao gerar top produtos." });
+            
+            res.json({ hourly, topProducts });
+        });
+    });
+});
+
 router.get("/reports/hourly-sales", authenticateToken, requireRole("manager"), (req, res) => { res.json([]); });
 
 // --- APROVAÇÕES ---

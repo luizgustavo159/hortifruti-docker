@@ -37,8 +37,26 @@ export function Estoque() {
   const [movement, setMovement] = useState({ type: "inbound", quantity: "", reason: "Compra", unit_cost: "" });
   const [exportOptions, setExportOptions] = useState({ type: "all", category_id: "", product_id: "" });
   const [selectedProducts, setSelectedProducts] = useState(new Set());
+  const [alerts, setAlerts] = useState([]);
 
   const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [prods, cats, sups, suggestions, alertData] = await Promise.all([
+        apiFetch("/products"),
+        apiFetch("/categories"),
+        apiFetch("/suppliers"),
+        apiFetch("/stock/restock-suggestions"),
+        apiFetch("/alerts")
+      ]);
+      setProducts(Array.isArray(prods) ? prods : []);
+      setCategories(Array.isArray(cats) ? cats : []);
+      setSuppliers(Array.isArray(sups) ? sups : []);
+      setRestockSuggestions(Array.isArray(suggestions) ? suggestions : []);
+      setAlerts(Array.isArray(alertData) ? alertData : []);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }, []);
     setLoading(true);
     try {
       const [prods, cats, sups, suggestions] = await Promise.all([
@@ -380,8 +398,23 @@ export function Estoque() {
 
   return (
     <PageShell title="Consultoria de Estoque" subtitle="Gerencie seu hortifruti com inteligência">
-      <div className="stock-container">
-        <div className="card-grid">
+      {alerts.length > 0 && (
+        <div className="alerts-banner" style={{ background: 'var(--danger-light)', border: '1px solid var(--danger)', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
+          <h4 style={{ color: 'var(--danger)', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            ⚠️ Atenção: {alerts.length} alertas detectados
+          </h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {alerts.map((a, i) => (
+              <span key={i} style={{ fontSize: '12px', background: 'white', padding: '4px 8px', borderRadius: '4px', border: '1px solid #eee' }}>
+                <strong>{a.name}</strong>: {a.alert_type === 'low_stock' ? 'Estoque Baixo' : 'Próximo ao Vencimento'}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="inventory-controls">
+        <div className="search-bar">id">
           <div className="card"><h3>Itens Críticos</h3><strong className="value-large critical">{restockSuggestions.length}</strong></div>
           <div className="card"><h3>Valor em Estoque</h3><strong className="value-large">R$ {products.reduce((acc, p) => acc + (p.current_stock * (p.avg_cost || 0)), 0).toFixed(2)}</strong></div>
           <div className="card"><h3>Giro Médio</h3><strong className="value-large">Alta</strong></div>
