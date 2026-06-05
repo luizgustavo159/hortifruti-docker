@@ -100,10 +100,21 @@ router.post("/products", authenticateToken, requireRole("supervisor"), validate(
 
 router.put("/products/:id/price", authenticateToken, requireRole("supervisor"), (req, res) => {
     const { price } = req.body;
-    db.run("UPDATE products SET price = ? WHERE id = ?", [price, req.params.id], (err) => {
-        if (err) return res.status(500).json({ message: "Erro ao atualizar preço." });
-        db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (errGet, product) => {
-            res.json(product || { status: "ok" });
+    db.get("SELECT name, price FROM products WHERE id = ?", [req.params.id], (errGetOld, oldProduct) => {
+        db.run("UPDATE products SET price = ? WHERE id = ?", [price, req.params.id], (err) => {
+            if (err) {
+                createAuditLog("ERRO_ATUALIZAR_PRECO", { error: err.message, product_id: req.params.id }, req.user.id, 'error', 'medium');
+                return res.status(500).json({ message: "Erro ao atualizar preço." });
+            }
+            createAuditLog("PRECO_ALTERADO", { 
+                product_id: req.params.id, 
+                name: oldProduct?.name, 
+                old_price: oldProduct?.price, 
+                new_price: price 
+            }, req.user.id, 'info', 'medium');
+            db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (errGet, product) => {
+                res.json(product || { status: "ok" });
+            });
         });
     });
 });
@@ -253,15 +264,22 @@ router.put("/discounts/:id", authenticateToken, requireRole("manager"), (req, re
     WHERE id = ?
   `, [name, type, value, description, target_type, target_value, min_quantity, buy_quantity, get_quantity, starts_at, ends_at, starts_time, ends_time, days_of_week, stacking_rule, priority, active, req.params.id], 
   (err) => {
-    if (err) return res.status(400).json({ message: "Erro ao atualizar desconto." });
+    if (err) {
+        createAuditLog("ERRO_ATUALIZAR_DESCONTO", { error: err.message, discount_id: req.params.id }, req.user.id, 'error', 'medium');
+        return res.status(500).json({ message: "Erro ao atualizar desconto." });
+    }
+    createAuditLog("DESCONTO_ATUALIZADO", { discount_id: req.params.id, name }, req.user.id, 'info', 'low');
     res.json({ status: "ok" });
   });
 });
 
 router.delete("/discounts/:id", authenticateToken, requireRole("manager"), (req, res) => {
-  db.run("DELETE FROM discounts WHERE id = ?", [req.params.id], (err) => {
-    if (err) return res.status(500).json({ message: "Erro ao excluir desconto." });
-    res.json({ status: "ok" });
+  db.get("SELECT name FROM discounts WHERE id = ?", [req.params.id], (errGet, discount) => {
+    db.run("DELETE FROM discounts WHERE id = ?", [req.params.id], (err) => {
+      if (err) return res.status(500).json({ message: "Erro ao excluir desconto." });
+      createAuditLog("DESCONTO_EXCLUIDO", { discount_id: req.params.id, name: discount?.name }, req.user.id, 'warning', 'medium');
+      res.json({ status: "ok" });
+    });
   });
 });
 
@@ -530,6 +548,7 @@ router.put("/categories/:id", authenticateToken, requireRole("supervisor"), (req
     const { name, description } = req.body;
     db.run("UPDATE categories SET name=?, description=? WHERE id=?", [name, description, req.params.id], (err) => {
         if (err) return res.status(400).json({ message: "Erro ao atualizar categoria." });
+        createAuditLog("CATEGORIA_ATUALIZADA", { category_id: req.params.id, name }, req.user.id, 'info', 'low');
         res.json({ status: "ok" });
     });
 });
@@ -553,6 +572,7 @@ router.put("/suppliers/:id", authenticateToken, requireRole("supervisor"), (req,
     const { name, contact, phone, email } = req.body;
     db.run("UPDATE suppliers SET name=?, contact=?, phone=?, email=? WHERE id=?", [name, contact, phone, email, req.params.id], (err) => {
         if (err) return res.status(400).json({ message: "Erro ao atualizar fornecedor." });
+        createAuditLog("FORNECEDOR_ATUALIZADO", { supplier_id: req.params.id, name }, req.user.id, 'info', 'low');
         res.json({ status: "ok" });
     });
 });
@@ -644,20 +664,20 @@ router.post("/users", authenticateToken, requireRole("admin"), async (req, res) 
 
 router.put("/users/:id", authenticateToken, requireRole("admin"), async (req, res) => {
   const { name, email, password, role, is_active } = req.body;
+  const callback = (err) => {
+    if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
+    createAuditLog("USUARIO_ATUALIZADO", { target_user_id: req.params.id, name, role }, req.user.id, 'security', 'medium');
+    res.json({ status: "ok" });
+  };
+
   if (password) {
     const bcrypt = require("bcryptjs");
     const password_hash = await bcrypt.hash(password, 10);
     db.run("UPDATE users SET name=?, email=?, password_hash=?, role=?, is_active=? WHERE id=?",
-      [name, email, password_hash, role, is_active ? true : false, req.params.id], (err) => {
-        if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
-        res.json({ status: "ok" });
-      });
+      [name, email, password_hash, role, is_active ? true : false, req.params.id], callback);
   } else {
     db.run("UPDATE users SET name=?, email=?, role=?, is_active=? WHERE id=?",
-      [name, email, role, is_active ? true : false, req.params.id], (err) => {
-        if (err) return res.status(400).json({ message: "Erro ao atualizar usuário." });
-        res.json({ status: "ok" });
-      });
+      [name, email, role, is_active ? true : false, req.params.id], callback);
   }
 });
 
@@ -926,8 +946,12 @@ router.put("/settings", authenticateToken, requireRole("admin"), (req, res) => {
     Object.keys(settings).forEach(key => {
       tx.run("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value", [key, settings[key]]);
     });
+    createAuditLog("CONFIGURACOES_ALTERADAS", { keys: Object.keys(settings) }, req.user.id, 'system', 'medium');
     finish(null);
-  }, (err) => res.json({ status: "ok" }));
+  }, (err) => {
+    if (err) return res.status(500).json({ message: "Erro ao salvar configurações." });
+    res.json({ status: "ok" });
+  });
 });
 
 // --- RELATÓRIOS (EXTRAS) ---
