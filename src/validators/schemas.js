@@ -2,7 +2,8 @@ const { z } = require('zod');
 
 // ============ AUTH SCHEMAS ============
 const loginSchema = z.object({
-  email: z.string().email('Email inválido').toLowerCase(),
+  // Aceita e-mail completo OU apenas o prefixo (ex: 'admin')
+  email: z.string().min(1, 'Identificador é obrigatório').toLowerCase(),
   password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
 });
 
