@@ -472,9 +472,28 @@ router.post("/sales", authenticateToken, (req, res) => {
       };
 
       validateFiado(() => {
-        const processItem = (idx) => {
-          if (idx >= items.length) return finish(null);
-          const item = items[idx];
+        // Calcular total bruto de todos os itens para desconto proporcional
+        let totalBruto = 0;
+        const itemsWithPrice = [];
+        
+        const calculateTotalAndProcess = (itemIdx) => {
+          if (itemIdx >= items.length) {
+            processAllItems(0);
+            return;
+          }
+          
+          const it = items[itemIdx];
+          tx.get("SELECT price FROM products WHERE id = ?", [it.product_id], (errPrice, prod) => {
+            if (errPrice || !prod) return finish(new Error(`Erro ao buscar preço do produto ${it.product_id}`));
+            itemsWithPrice.push({ ...it, price: prod.price });
+            totalBruto += prod.price * it.quantity;
+            calculateTotalAndProcess(itemIdx + 1);
+          });
+        };
+        
+        const processAllItems = (idx) => {
+          if (idx >= itemsWithPrice.length) return finish(null);
+          const item = itemsWithPrice[idx];
           
           tx.get("SELECT * FROM products WHERE id = ?", [item.product_id], (err, p) => {
             if (!p) return finish(new Error(`Produto ID ${item.product_id} não encontrado`));
@@ -483,14 +502,14 @@ router.post("/sales", authenticateToken, (req, res) => {
             }
 
             const subtotal = p.price * item.quantity;
-            const totalGeralBruto = items.reduce((acc, it) => acc + (p.id === it.product_id ? p.price * it.quantity : 0), 0); // Simplificado para o item
-            const itemProportionalDiscount = manualDiscountAmount > 0 ? (subtotal / items.reduce((a, b) => a + b.quantity, 0)) : 0; // Proporcional simples
-            const finalTotal = subtotal - (manualDiscountAmount / items.length);
+            // Desconto proporcional baseado no subtotal do item em relação ao total bruto
+            const itemProportionalDiscount = totalBruto > 0 ? (subtotal / totalBruto) * manualDiscountAmount : 0;
+            const finalTotal = subtotal - itemProportionalDiscount;
 
             // Registrar Venda
             tx.run(
               "INSERT INTO sales (product_id, quantity, total, discount_amount, final_total, payment_method, sold_by, customer_id, amount_received, change_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-              [item.product_id, item.quantity, subtotal, manualDiscountAmount / items.length, finalTotal, payment_method, req.user.id, customer_id, amount_received || 0, change_amount || 0],
+              [item.product_id, item.quantity, subtotal, itemProportionalDiscount, finalTotal, payment_method, req.user.id, customer_id, amount_received || 0, change_amount || 0],
               (errS) => {
                 if (errS) return finish(errS);
                 
@@ -506,7 +525,7 @@ router.post("/sales", authenticateToken, (req, res) => {
                     const consumeBatches = (bIdx) => {
                       if (remaining <= 0 || bIdx >= batches.length) {
                         createAuditLog("VENDA_REALIZADA", { product_id: item.product_id, qty: item.quantity, total: finalTotal }, req.user.id, 'sale', 'low');
-                        return processItem(idx + 1);
+                        return processAllItems(idx + 1);
                       }
                       const batch = batches[bIdx];
                       const take = Math.min(batch.current_quantity, remaining);
@@ -523,7 +542,7 @@ router.post("/sales", authenticateToken, (req, res) => {
             );
           });
         };
-        processItem(0);
+        calculateTotalAndProcess(0);
       });
     });
   }, (err) => {

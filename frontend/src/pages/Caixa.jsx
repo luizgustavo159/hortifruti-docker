@@ -108,9 +108,9 @@ export function Caixa() {
       setDiscounts(Array.isArray(disc) ? disc : []);
       setCustomers(Array.isArray(custs) ? custs : []);
       
-      // Conexão automática com a balança
-      if (!scale.connected) {
-        scale.connect().catch(e => console.log("Balança não detectada na inicialização"));
+      // Balança: tentativa de conexão silenciosa (apenas se já autorizada)
+      if (!scale.connected && !scale.connecting) {
+        scale.connect({ silent: true }).catch(() => {});
       }
     } catch (err) {
       setError("Falha ao carregar dados: " + err.message);
@@ -264,15 +264,20 @@ export function Caixa() {
     if (!caixaAberto || cartItems.length === 0) return;
     setProcessingPayment(true);
     try {
+      const payload = {
+        items: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, discount_id: item.discount_id })),
+        payment_method: paymentMethod,
+        customer_id: selectedCustomer?.id || null,
+        manual_discount: parseFloat(manualDiscount) || 0,
+        amount_received: parseFloat(amountReceived) || 0,
+        change_amount: 0
+      };
+      if (tempApprovalToken) {
+        payload.approval_token = tempApprovalToken;
+      }
       await apiFetch("/sales", {
         method: "POST",
-        body: JSON.stringify({
-          items: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, discount_id: item.discount_id })),
-          payment_method: paymentMethod,
-          customer_id: selectedCustomer?.id || null,
-          manual_discount: parseFloat(manualDiscount) || 0,
-          approval_token: tempApprovalToken
-        }),
+        body: JSON.stringify(payload),
       });
       
       setSuccessMessage("Venda finalizada!");

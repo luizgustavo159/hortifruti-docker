@@ -48,7 +48,22 @@ export function useScale() {
     setError("");
 
     try {
-      const port = await navigator.serial.requestPort();
+      let port;
+      
+      // Se for uma tentativa automática (silenciosa), busca portas já autorizadas
+      if (options.silent) {
+        const ports = await navigator.serial.getPorts();
+        if (ports.length > 0) {
+          port = ports[0];
+        } else {
+          setConnecting(false);
+          return false;
+        }
+      } else {
+        // Se for manual, solicita a seleção da porta
+        port = await navigator.serial.requestPort();
+      }
+
       await port.open({
         baudRate: options.baudRate || 9600,
         dataBits: options.dataBits || 8,
