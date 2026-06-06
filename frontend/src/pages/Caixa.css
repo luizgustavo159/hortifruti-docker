@@ -197,6 +197,15 @@
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   color: var(--text-primary);
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.cash-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .btn-finalize {

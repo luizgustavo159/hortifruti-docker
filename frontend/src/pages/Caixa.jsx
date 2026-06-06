@@ -455,8 +455,7 @@ export function Caixa() {
             <label>Forma de Pagamento</label>
             <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
               <option value="cash">Dinheiro</option>
-              <option value="credit_card">Cartão de Crédito</option>
-              <option value="debit_card">Cartão de Débito</option>
+              <option value="card">Cartão</option>
               <option value="pix">PIX</option>
               <option value="fiado">Fiado (Caderneta)</option>
             </select>

@@ -22,8 +22,9 @@ export function CaixaFocusMode() {
   const [tempApprovalToken, setTempApprovalToken] = useState(null);
   const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
   const [showSalesHistory, setShowSalesHistory] = useState(false);
+  const [amountReceived, setAmountReceived] = useState('');
 
-  // Balança
+  // Balça
   const scale = useScale();
   const [scaleModalProduct, setScaleModalProduct] = useState(null);
   const [manualWeight, setManualWeight] = useState('');
@@ -258,11 +259,13 @@ export function CaixaFocusMode() {
         discount_id: item.discount_id,
         calculated_discount: calculateItemDiscount(item),
       }));
+      const amountRec = parseFloat(amountReceived) || 0;
+      const changeAmt = selectedPayment === 'cash' ? Math.max(0, amountRec - finalTotal) : 0;
       const payload = { 
         items: saleItems, 
         payment_method: selectedPayment,
-        amount_received: selectedPayment === 'cash' ? (parseFloat(manualWeight) || 0) : 0, // Simplificado para modo foco
-        change_amount: 0
+        amount_received: amountRec,
+        change_amount: changeAmt
       };
       if (parseFloat(manualDiscount) > 0) {
         payload.manual_discount = parseFloat(manualDiscount);
@@ -278,6 +281,7 @@ export function CaixaFocusMode() {
       setSearchTerm('');
       setSelectedPayment('cash');
       setManualDiscount('');
+      setAmountReceived('');
       setTempApprovalToken(null);
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -599,11 +603,41 @@ export function CaixaFocusMode() {
             <label>Forma de Pagamento:</label>
             <select value={selectedPayment} onChange={(e) => setSelectedPayment(e.target.value)}>
               <option value="cash">Dinheiro</option>
-              <option value="credit">Crédito</option>
-              <option value="debit">Débito</option>
+              <option value="card">Cartão</option>
               <option value="pix">PIX</option>
+              <option value="fiado">Fiado (Caderneta)</option>
             </select>
           </div>
+          
+          {selectedPayment === "cash" && (
+            <div style={{ marginTop: "8px" }}>
+              <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>Valor Recebido (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={amountReceived}
+                onChange={(e) => setAmountReceived(e.target.value)}
+                placeholder="0.00"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "6px",
+                  background: "var(--bg-primary)",
+                  color: "var(--text-primary)",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  boxSizing: "border-box"
+                }}
+              />
+              {parseFloat(amountReceived) > finalTotal && (
+                <div style={{ marginTop: "6px", color: "#10b981", fontWeight: "bold", fontSize: "12px" }}>
+                  Troco: R$ {(parseFloat(amountReceived) - finalTotal).toFixed(2)}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="focus-actions">
             <button className="btn-clear" onClick={handleClearCart} disabled={cart.length === 0}>
