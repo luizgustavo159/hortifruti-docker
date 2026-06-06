@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useScale } from '../hooks/useScale';
 import { RelogioGlobal } from '../components/RelogioGlobal';
+import { History } from 'lucide-react';
+import { SalesHistoryModal } from '../components/SalesHistoryModal';
 import './CaixaFocusMode.css';
 
 export function CaixaFocusMode() {
@@ -19,6 +21,7 @@ export function CaixaFocusMode() {
   const [manualDiscount, setManualDiscount] = useState('');
   const [tempApprovalToken, setTempApprovalToken] = useState(null);
   const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
+  const [showSalesHistory, setShowSalesHistory] = useState(false);
 
   // Balança
   const scale = useScale();
@@ -64,9 +67,9 @@ export function CaixaFocusMode() {
         setDiscounts(Array.isArray(discData) ? discData : (discData?.data || []));
       }
 
-      // Conexão automática com a balança no Modo Foco
+      // Conexão automática com a balança no Modo Foco (Silenciosa)
       if (!scale.connected) {
-        scale.connect().catch(e => console.log("Balança não detectada no Modo Foco"));
+        scale.connect({ silent: true }).catch(() => {});
       }
     } catch (err) {
       setError('Erro ao carregar dados: ' + err.message);
@@ -255,7 +258,12 @@ export function CaixaFocusMode() {
         discount_id: item.discount_id,
         calculated_discount: calculateItemDiscount(item),
       }));
-      const payload = { items: saleItems, payment_method: selectedPayment };
+      const payload = { 
+        items: saleItems, 
+        payment_method: selectedPayment,
+        amount_received: selectedPayment === 'cash' ? (parseFloat(manualWeight) || 0) : 0, // Simplificado para modo foco
+        change_amount: 0
+      };
       if (parseFloat(manualDiscount) > 0) {
         payload.manual_discount = parseFloat(manualDiscount);
         payload.approval_token = tempApprovalToken;
@@ -359,6 +367,8 @@ export function CaixaFocusMode() {
           <button className="exit-btn" onClick={handleExitFocusMode}>Sair</button>
         </div>
       </div>
+
+      {showSalesHistory && <SalesHistoryModal onClose={() => setShowSalesHistory(false)} />}
 
       {error && <div className="focus-error">{error}</div>}
       {successMessage && <div className="focus-success">{successMessage}</div>}

@@ -233,6 +233,7 @@ router.post("/stock/loss", authenticateToken, (req, res) => {
         createAuditLog("ERRO_REGISTRAR_PERDA", { product_id, error: err.message }, req.user.id, 'error', 'high');
         return res.status(500).json({ message: "Erro ao registrar perda: " + err.message });
       }
+      createAuditLog("PERDA_ESTOQUE_REGISTRADA", { product_id, quantity, reason }, req.user.id, 'stock', 'medium');
       res.json({ status: "ok" });
     });
 });
@@ -287,7 +288,21 @@ router.delete("/discounts/:id", authenticateToken, requireRole("manager"), (req,
 router.get("/pos/cash-session/current", authenticateToken, (req, res) => {
   db.get("SELECT * FROM cash_sessions WHERE operator_id = ? AND closed_at IS NULL", [req.user.id], (err, row) => {
     if (err) return res.status(500).json({ message: "Erro ao buscar sessão de caixa." });
-    res.json(row || null);
+    if (!row) return res.json(null);
+
+    // Buscar resumo de vendas por forma de pagamento para esta sessão
+    db.all(`
+      SELECT payment_method, SUM(final_total) as total 
+      FROM sales 
+      WHERE sold_by = ? AND created_at >= ? AND cancelled_at IS NULL
+      GROUP BY payment_method
+    `, [req.user.id, row.opened_at], (errS, sales) => {
+      const summary = {};
+      if (sales) {
+        sales.forEach(s => { summary[s.payment_method] = parseFloat(s.total); });
+      }
+      res.json({ ...row, sales_summary: summary });
+    });
   });
 });
 
@@ -302,10 +317,11 @@ router.post("/pos/cash-session/open", authenticateToken, (req, res) => {
 });
 
 router.post("/pos/cash-session/close", authenticateToken, (req, res) => {
-  const { closing_amount, notes } = req.body;
-  db.run("UPDATE cash_sessions SET closed_at = CURRENT_TIMESTAMP, closing_amount = ?, notes = ? WHERE operator_id = ? AND closed_at IS NULL",
-    [closing_amount, notes, req.user.id], (err) => {
+  const { closing_amount, notes, approval_token } = req.body;
+  db.run("UPDATE cash_sessions SET closed_at = CURRENT_TIMESTAMP, closing_amount = ?, notes = ?, approval_token = ? WHERE operator_id = ? AND closed_at IS NULL",
+    [closing_amount, notes, approval_token, req.user.id], (err) => {
       if (err) return res.status(400).json({ message: "Erro ao fechar caixa." });
+      createAuditLog("CAIXA_FECHADO", { closing_amount, notes, approved: !!approval_token }, req.user.id, 'system', 'medium');
       res.json({ status: "ok" });
     });
 });
@@ -330,6 +346,7 @@ router.post("/pos/cash-session/movement", authenticateToken, (req, res) => {
     db.run("INSERT INTO cash_movements (session_id, type, amount, reason, performed_by) VALUES (?, ?, ?, ?, ?)",
       [session.id, type, amount, reason, req.user.id], (errM) => {
         if (errM) return res.status(400).json({ message: "Erro ao registrar movimento." });
+        createAuditLog("MOVIMENTACAO_CAIXA_MANUAL", { type, amount, reason, session_id: session.id }, req.user.id, 'financial', 'medium');
         res.json({ status: "ok" });
       });
   });
@@ -358,6 +375,11 @@ router.get("/sales/recent", authenticateToken, (req, res) => {
 
 router.delete("/sales/:id", authenticateToken, requireRole("supervisor"), (req, res) => {
   const saleId = req.params.id;
+  const approvalToken = req.headers['x-approval-token'];
+
+  if (!approvalToken) {
+    return res.status(403).json({ message: "Token de aprovação obrigatório para cancelar venda." });
+  }
 
   db.withTransaction((tx, finish) => {
     // 1. Buscar detalhes da venda
@@ -598,6 +620,7 @@ router.put("/suppliers/:id", authenticateToken, requireRole("supervisor"), (req,
 router.delete("/suppliers/:id", authenticateToken, requireRole("manager"), (req, res) => {
     db.run("DELETE FROM suppliers WHERE id=?", [req.params.id], (err) => {
         if (err) return res.status(500).json({ message: "Erro ao excluir fornecedor." });
+        createAuditLog("FORNECEDOR_EXCLUIDO", { supplier_id: req.params.id }, req.user.id, 'system', 'low');
         res.json({ status: "ok" });
     });
 });
@@ -760,11 +783,11 @@ router.get("/reports/summary", authenticateToken, requireRole("manager"), (req, 
             COUNT(*) as total_sales,
             SUM(s.final_total) as total_revenue,
             COALESCE(SUM(s.quantity * p.avg_cost), 0) as total_cost,
-            COALESCE((SELECT SUM(l.quantity * pr.avg_cost) FROM stock_losses l JOIN products pr ON l.product_id = pr.id WHERE l.created_at >= $1 AND l.created_at <= $2), 0) as total_losses_value
+            COALESCE((SELECT SUM(l.quantity * pr.avg_cost) FROM stock_losses l JOIN products pr ON l.product_id = pr.id WHERE l.created_at >= ? AND l.created_at <= ?), 0) as total_losses_value
         FROM sales s
         JOIN products p ON s.product_id = p.id
-        WHERE s.created_at >= $3 AND s.created_at <= $4 AND s.cancelled_at IS NULL
-    `, [...isoRange, ...isoRange], (err, row) => {
+        WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
+    `, [isoRange[0], isoRange[1], isoRange[0], isoRange[1]], (err, row) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar resumo: " + err.message });
         
         const revenue = parseFloat(row.total_revenue || 0);
@@ -792,13 +815,13 @@ router.get("/reports/by-operator", authenticateToken, requireRole("manager"), (r
     const today = new Date().toISOString().slice(0, 10);
     const start = req.query.start || today;
     const end = req.query.end || today;
-    db.all(`
-        SELECT u.name as name, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
-        FROM sales s
-        JOIN users u ON s.sold_by = u.id
-        WHERE s.created_at BETWEEN ? AND ? AND s.cancelled_at IS NULL
-        GROUP BY u.id
-    `, [start + " 00:00:00", end + " 23:59:59"], (err, rows) => {
+	    db.all(`
+	        SELECT u.name as name, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
+	        FROM sales s
+	        JOIN users u ON s.sold_by = u.id
+	        WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
+	        GROUP BY u.id, u.name
+	    `, [start + "T00:00:00.000Z", end + "T23:59:59.999Z"], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar relatório por operador." });
         res.json(rows);
     });
@@ -808,14 +831,14 @@ router.get("/reports/by-category", authenticateToken, requireRole("manager"), (r
     const today = new Date().toISOString().slice(0, 10);
     const start = req.query.start || today;
     const end = req.query.end || today;
-    db.all(`
-        SELECT c.name as category, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
-        FROM sales s
-        JOIN products p ON s.product_id = p.id
-        JOIN categories c ON p.category_id = c.id
-        WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
-        GROUP BY c.id
-    `, [start + "T00:00:00.000Z", end + "T23:59:59.999Z"], (err, rows) => {
+	    db.all(`
+	        SELECT c.name as category, COUNT(s.id) as total_items, SUM(s.final_total) as total_revenue
+	        FROM sales s
+	        JOIN products p ON s.product_id = p.id
+	        JOIN categories c ON p.category_id = c.id
+	        WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
+	        GROUP BY c.id, c.name
+	    `, [start + "T00:00:00.000Z", end + "T23:59:59.999Z"], (err, rows) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar relatório por categoria." });
         res.json(rows);
     });
@@ -856,26 +879,26 @@ router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
     db.all(`
         WITH combined_history AS (
             SELECT 
-                'venda'::text as type, 
+                'venda' as type, 
                 s.final_total as amount, 
                 s.created_at, 
                 s.payment_method, 
-                string_agg(p.name::text, ', ') as items
-	            FROM sales s
-	            JOIN products p ON s.product_id = p.id
-	            WHERE s.customer_id = ?::integer AND s.cancelled_at IS NULL
-	            GROUP BY s.id, s.final_total, s.created_at, s.payment_method
+                string_agg(p.name, ', ') as items
+		            FROM sales s
+		            JOIN products p ON s.product_id = p.id
+		            WHERE s.customer_id = ? AND s.cancelled_at IS NULL
+		            GROUP BY s.id, s.final_total, s.created_at, s.payment_method
             
             UNION ALL
             
             SELECT 
-                'pagamento'::text as type, 
+                'pagamento' as type, 
                 cp.amount, 
                 cp.created_at, 
                 cp.payment_method, 
-                'Pagamento de Dívida'::text as items
+                'Pagamento de Dívida' as items
             FROM customer_payments cp
-            WHERE cp.customer_id = ?::integer
+            WHERE cp.customer_id = ?
         )
         SELECT * FROM combined_history ORDER BY created_at DESC
     `, [customerId, customerId], (err, rows) => {
@@ -1000,7 +1023,7 @@ router.get("/settings", authenticateToken, (req, res) => {
 
 router.put("/settings", authenticateToken, requireRole("admin"), (req, res) => {
   const settings = req.body;
-  runWithTransaction((tx, finish) => {
+    db.withTransaction((tx, finish) => {
     Object.keys(settings).forEach(key => {
       tx.run("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value", [key, settings[key]]);
     });
@@ -1019,31 +1042,31 @@ router.get("/reports/performance", authenticateToken, requireRole("manager"), (r
     const end = req.query.end || today;
     const params = [start + "T00:00:00.000Z", end + "T23:59:59.999Z"];
     
-    db.all(`
-        SELECT 
-            EXTRACT(HOUR FROM created_at)::int as hour,
-            COUNT(*) as total_sales,
-            SUM(final_total) as total_revenue
-        FROM sales
-        WHERE created_at >= ? AND created_at <= ? AND cancelled_at IS NULL
-        GROUP BY hour
-        ORDER BY hour
-    `, params, (err, hourly) => {
+	    db.all(`
+	        SELECT 
+	            EXTRACT(HOUR FROM created_at) as hour,
+	            COUNT(*) as total_sales,
+	            SUM(final_total) as total_revenue
+	        FROM sales
+	        WHERE created_at >= ? AND created_at <= ? AND cancelled_at IS NULL
+	        GROUP BY hour
+	        ORDER BY hour
+	    `, [params[0], params[1]], (err, hourly) => {
         if (err) return res.status(500).json({ message: "Erro ao gerar performance horária." });
         
-        db.all(`
-            SELECT 
-                p.name,
-                COUNT(s.id) as volume,
-                SUM(s.final_total) as revenue,
-                SUM(s.final_total - (s.quantity * p.avg_cost)) as profit
-            FROM sales s
-            JOIN products p ON s.product_id = p.id
-            WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
-            GROUP BY p.id
-            ORDER BY profit DESC
-            LIMIT 10
-        `, params, (err2, topProducts) => {
+    db.all(`
+        SELECT 
+            p.name,
+            COUNT(s.id) as volume,
+            SUM(s.final_total) as revenue,
+            SUM(s.final_total - (s.quantity * p.avg_cost)) as profit
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.created_at >= ? AND s.created_at <= ? AND s.cancelled_at IS NULL
+        GROUP BY p.id, p.name, p.avg_cost
+        ORDER BY profit DESC
+        LIMIT 10
+    `, [params[0], params[1]], (err2, topProducts) => {
             if (err2) return res.status(500).json({ message: "Erro ao gerar top produtos." });
             
             res.json({ hourly, topProducts });

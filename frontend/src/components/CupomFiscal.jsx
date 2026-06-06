@@ -125,9 +125,11 @@ export function CupomFiscal({ sale, lojaInfo }) {
             <span>Forma de Pagamento:</span>
             <span className="payment-method">
               {sale.payment_method === 'cash' && 'Dinheiro'}
-              {sale.payment_method === 'credit' && 'Crédito'}
-              {sale.payment_method === 'debit' && 'Débito'}
+              {sale.payment_method === 'credit_card' && 'Cartão de Crédito'}
+              {sale.payment_method === 'debit_card' && 'Cartão de Débito'}
+              {sale.payment_method === 'card' && 'Cartão'}
               {sale.payment_method === 'pix' && 'PIX'}
+              {sale.payment_method === 'fiado' && 'Fiado (Caderneta)'}
             </span>
           </p>
         </div>

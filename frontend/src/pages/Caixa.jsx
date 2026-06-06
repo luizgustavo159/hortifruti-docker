@@ -264,13 +264,16 @@ export function Caixa() {
     if (!caixaAberto || cartItems.length === 0) return;
     setProcessingPayment(true);
     try {
+      const amountRec = parseFloat(amountReceived) || 0;
+      const changeAmt = Math.max(0, amountRec - finalTotal);
+      
       const payload = {
         items: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, discount_id: item.discount_id })),
         payment_method: paymentMethod,
         customer_id: selectedCustomer?.id || null,
         manual_discount: parseFloat(manualDiscount) || 0,
-        amount_received: parseFloat(amountReceived) || 0,
-        change_amount: 0
+        amount_received: amountRec,
+        change_amount: changeAmt
       };
       if (tempApprovalToken) {
         payload.approval_token = tempApprovalToken;

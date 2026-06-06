@@ -129,6 +129,8 @@ router.post("/login", validate(loginSchema), async (req, res) => {
 
       const { password_hash, login_attempts_count, locked_at, ...userWithoutSensitiveData } = user;
 
+      createAuditLog("LOGIN_SUCESSO", { email: user.email, role: user.role }, user.id, 'security', 'low');
+
       res.json({
         accessToken,
         refreshToken,
@@ -204,8 +206,15 @@ router.post("/logout", async (req, res) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const token = authHeader.replace("Bearer ", "");
-    await addToBlacklist(token);
-    db.run("UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE token = ?", [token]);
+    
+    // Tentar identificar o usuário pelo token para o log
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
+      if (!err && decoded) {
+        createAuditLog("LOGOUT_REALIZADO", { email: decoded.email }, decoded.id, 'security', 'low');
+      }
+      await addToBlacklist(token);
+      db.run("UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE token = ?", [token]);
+    });
   }
   res.json({ message: "Logout realizado com sucesso." });
 });
