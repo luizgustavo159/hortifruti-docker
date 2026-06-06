@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useScale } from '../hooks/useScale';
 import { RelogioGlobal } from '../components/RelogioGlobal';
-import { History } from 'lucide-react';
+import { History, User } from 'lucide-react';
 import { SalesHistoryModal } from '../components/SalesHistoryModal';
+import { ApprovalModal } from '../components/ApprovalModal';
 import './CaixaFocusMode.css';
 
 export function CaixaFocusMode() {
@@ -23,6 +24,9 @@ export function CaixaFocusMode() {
   const [showManualDiscountApproval, setShowManualDiscountApproval] = useState(false);
   const [showSalesHistory, setShowSalesHistory] = useState(false);
   const [amountReceived, setAmountReceived] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // Balça
   const scale = useScale();
@@ -54,19 +58,15 @@ export function CaixaFocusMode() {
         setTimeout(() => navigate('/caixa'), 3000);
         return;
       }
-      const promises = [apiFetch('/products')];
-      promises.push(apiFetch('/discounts'));
-      const results = await Promise.allSettled(promises);
-      if (results[0].status === 'fulfilled') {
-        const prodData = results[0].value;
-        setProducts(Array.isArray(prodData) ? prodData : (prodData?.data || []));
-      } else {
-        throw new Error(results[0].reason?.message || 'Falha ao carregar produtos');
-      }
-      if (results[1]?.status === 'fulfilled') {
-        const discData = results[1].value;
-        setDiscounts(Array.isArray(discData) ? discData : (discData?.data || []));
-      }
+      const [prodData, discData, custData] = await Promise.all([
+        apiFetch('/products'),
+        apiFetch('/discounts'),
+        apiFetch('/customers')
+      ]);
+      
+      setProducts(Array.isArray(prodData) ? prodData : (prodData?.data || []));
+      setDiscounts(Array.isArray(discData) ? discData : (discData?.data || []));
+      setCustomers(Array.isArray(custData) ? custData : (custData?.data || []));
 
       // Conexão automática com a balança no Modo Foco (Silenciosa)
       if (!scale.connected) {
@@ -264,6 +264,7 @@ export function CaixaFocusMode() {
       const payload = { 
         items: saleItems, 
         payment_method: selectedPayment,
+        customer_id: selectedCustomer?.id || null,
         amount_received: amountRec,
         change_amount: changeAmt
       };
@@ -282,6 +283,7 @@ export function CaixaFocusMode() {
       setSelectedPayment('cash');
       setManualDiscount('');
       setAmountReceived('');
+      setSelectedCustomer(null);
       setTempApprovalToken(null);
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -314,7 +316,9 @@ export function CaixaFocusMode() {
   }, [cart, selectedPayment, processingPayment]);
 
   const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.sku === searchTerm ||
+    p.barcode === searchTerm
   );
 
   if (loading) return <div className="focus-loading">Carregando...</div>;
@@ -373,6 +377,14 @@ export function CaixaFocusMode() {
       </div>
 
       {showSalesHistory && <SalesHistoryModal onClose={() => setShowSalesHistory(false)} />}
+      
+      {showManualDiscountApproval && (
+        <ApprovalModal 
+          action="manual_discount" 
+          onApproved={(token) => { setTempApprovalToken(token); setShowManualDiscountApproval(false); }} 
+          onCancel={() => { setManualDiscount(''); setShowManualDiscountApproval(false); }} 
+        />
+      )}
 
       {error && <div className="focus-error">{error}</div>}
       {successMessage && <div className="focus-success">{successMessage}</div>}
@@ -500,7 +512,27 @@ export function CaixaFocusMode() {
 
         {/* Carrinho */}
         <div className="focus-cart">
-          <h2>CARRINHO ({cart.length})</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>CARRINHO ({cart.length})</h2>
+          </div>
+
+          <div className="focus-customer-select" style={{ marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+              <User size={18} color="var(--text-secondary)" />
+              <select 
+                value={selectedCustomer?.id || ""} 
+                onChange={e => setSelectedCustomer(customers.find(c => c.id === parseInt(e.target.value)))}
+                style={{ flex: 1, background: 'transparent', border: 'none', color: 'white', fontSize: '13px', outline: 'none', cursor: 'pointer' }}
+              >
+                <option value="" style={{ background: '#1e293b' }}>Consumidor Final</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id} style={{ background: '#1e293b' }}>
+                    {c.name} (Saldo: R$ {Number(c.balance || 0).toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="focus-cart-items">
             {cart.length === 0 ? (
               <p className="empty-cart">Carrinho vazio</p>
