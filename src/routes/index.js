@@ -402,15 +402,16 @@ router.delete("/sales/:id", authenticateToken, requireRole("supervisor"), (req, 
           }
 
           function proceed() {
-            // 4. Se for Fiado, estornar a dívida do cliente
-            if (sale.payment_method.toLowerCase() === "fiado" && sale.customer_id) {
-              tx.run("UPDATE customers SET current_debt = current_debt - ? WHERE id = ?", [sale.final_total, sale.customer_id], (errD) => {
-                if (errD) return finish(errD);
-                finalize();
-              });
-            } else {
-              finalize();
-            }
+	            // 4. Se for Fiado, estornar a dívida do cliente
+	            // IMPORTANTE: O estorno deve ser feito com base no valor real da dívida (final_total)
+	            if (sale.payment_method.toLowerCase() === "fiado" && sale.customer_id) {
+	              tx.run("UPDATE customers SET current_debt = current_debt - ? WHERE id = ?", [sale.final_total, sale.customer_id], (errD) => {
+	                if (errD) return finish(errD);
+	                finalize();
+	              });
+	            } else {
+	              finalize();
+	            }
           }
 
           function finalize() {
@@ -466,9 +467,9 @@ router.post("/sales", authenticateToken, (req, res) => {
 
       // 2. Validar Limite de Fiado (se aplicável)
       const validateFiado = (callback) => {
-        if (payment_method.toLowerCase() === "fiado") {
-          if (!customer_id) return finish(new Error("Cliente é obrigatório para vendas em Fiado."));
-          tx.get("SELECT credit_limit, current_debt, name FROM customers WHERE id = ?", [customer_id], (errC, customer) => {
+	          if (payment_method === "fiado") {
+	            if (!customer_id) return finish(new Error("Cliente é obrigatório para vendas em Fiado."));
+	            tx.get("SELECT credit_limit, current_debt, name FROM customers WHERE id = ?", [customer_id], (errC, customer) => {
             if (errC || !customer) return finish(new Error("Cliente não encontrado."));
             
             // Calcular total da venda para validar limite
@@ -864,7 +865,7 @@ router.get("/reports/losses", authenticateToken, requireRole("manager"), (req, r
 router.get("/caderneta", authenticateToken, (req, res) => {
     db.all(`
         SELECT c.*, 
-	               (SELECT SUM(final_total) FROM sales WHERE customer_id = c.id AND payment_method = 'Fiado' AND cancelled_at IS NULL) as total_fiado,
+		               (SELECT SUM(final_total) FROM sales WHERE customer_id = c.id AND LOWER(payment_method) = 'fiado' AND cancelled_at IS NULL) as total_fiado,
                (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) as last_purchase
         FROM customers c
         ORDER BY c.current_debt DESC, c.name ASC
@@ -883,11 +884,11 @@ router.get("/caderneta/:id/history", authenticateToken, (req, res) => {
                 s.final_total as amount, 
                 s.created_at, 
                 s.payment_method, 
-                string_agg(p.name, ', ') as items
-		            FROM sales s
-		            JOIN products p ON s.product_id = p.id
-		            WHERE s.customer_id = ? AND s.cancelled_at IS NULL
-		            GROUP BY s.id, s.final_total, s.created_at, s.payment_method
+	                string_agg(p.name, ', ') as items
+			            FROM sales s
+			            JOIN products p ON s.product_id = p.id
+			            WHERE s.customer_id = ? AND s.cancelled_at IS NULL
+			            GROUP BY s.id, s.final_total, s.created_at, s.payment_method, s.document_number
             
             UNION ALL
             
@@ -1085,11 +1086,12 @@ router.post("/approvals", authenticateToken, async (req, res) => {
     return res.status(400).json({ message: "E-mail e senha são obrigatórios para aprovação." });
   }
 
-  // Buscar o gerente específico pelo e-mail completo ou prefixo
-  const query = email.includes('@') 
-    ? "SELECT id, name, password_hash, role FROM users WHERE email = ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL"
-    : "SELECT id, name, password_hash, role FROM users WHERE email LIKE ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL";
-  const params = email.includes('@') ? [email] : [`${email}@%`];
+	  // Buscar o gerente específico pelo e-mail completo ou prefixo
+	  // Suporta busca por e-mail completo ou prefixo (ex: 'admin' busca 'admin@empresa.com')
+	  const query = email.includes('@') 
+	    ? "SELECT id, name, password_hash, role FROM users WHERE email = ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL"
+	    : "SELECT id, name, password_hash, role FROM users WHERE email LIKE ? AND role IN ('manager', 'admin') AND is_active = TRUE AND deleted_at IS NULL";
+	  const params = email.includes('@') ? [email] : [`${email}@%`];
 
   db.get(query, params, async (err, manager) => {
     if (err) {

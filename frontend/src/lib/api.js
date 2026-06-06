@@ -47,10 +47,18 @@ export async function apiFetch(path, options = {}) {
       clearUser();
     }
     let message = data?.message;
-    if (!message && data?.errors && Array.isArray(data.errors)) {
-      message = data.errors.map(e => e.msg).join(" ");
+    
+    // Suporte para erros de validação do Zod (backend middleware)
+    if (!message && data?.details && Array.isArray(data.details)) {
+      message = data.details.map(d => `${d.field}: ${d.message}`).join(", ");
     }
-    if (!message) message = "Erro na requisição.";
+    
+    // Suporte para outros formatos de erro de validação
+    if (!message && data?.errors && Array.isArray(data.errors)) {
+      message = data.errors.map(e => e.msg || e.message).join(" ");
+    }
+    
+    if (!message) message = data?.error || "Erro na requisição.";
     const error = new Error(message);
     error.status = response.status;
     error.data = data;
